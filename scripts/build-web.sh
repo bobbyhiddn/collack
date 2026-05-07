@@ -53,12 +53,18 @@ LOVE_JS_BIN="$NODE_CACHE/node_modules/.bin/love.js"
 
 echo "[web] love.js compile complete → $OUT"
 
-# love.js outputs an index.html that includes its own UI shell. We optionally inject viewport + safe-area CSS for mobile.
-if [ -f "$OUT/index.html" ]; then
-    # Idempotent: only add viewport if not present.
-    if ! grep -q 'name="viewport"' "$OUT/index.html"; then
-        sed -i 's|<head>|<head>\n<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">|' "$OUT/index.html"
-    fi
+# Replace the stock love.js index.html with our responsive shell. The stock
+# template uses a fixed 800x600 loadingCanvas that draws offscreen on mobile
+# portrait viewports (and a pink/cyan theme/bg.png that dominates the layout).
+# Our web-shell/index.html is viewport-aware, centers both canvases via flex,
+# uses a solid black background, and replaces the loadingCanvas progress with
+# a DOM-rendered "Loading…" overlay.
+SHELL_HTML="$ROOT/web-shell/index.html"
+if [ -f "$SHELL_HTML" ]; then
+    cp "$SHELL_HTML" "$OUT/index.html"
+    echo "[web] installed responsive shell → $OUT/index.html"
+else
+    echo "[web] WARN: web-shell/index.html missing; using stock love.js template" >&2
 fi
 
 ls -lh "$OUT"
