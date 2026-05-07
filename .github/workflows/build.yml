@@ -1,0 +1,136 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      build_ios:
+        description: 'Run the iOS TestFlight build (burns macOS minutes)'
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  # -----------------------------------------------------------------
+  # logic-test: pure-Lua unit tests, no LÖVE runtime needed.
+  # -----------------------------------------------------------------
+  logic-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Lua 5.1
+        run: sudo apt-get update && sudo apt-get install -y lua5.1
+      - name: Run logic tests
+        run: lua5.1 tests/test_logic.lua
+
+  # -----------------------------------------------------------------
+  # web + desktop matrix: both run on ubuntu-latest in parallel.
+  # -----------------------------------------------------------------
+  build:
+    needs: logic-test
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [web, desktop]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js (web target)
+        if: matrix.target == 'web'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Linux build prereqs
+        run: sudo apt-get update && sudo apt-get install -y zip unzip curl
+
+      - name: Build web
+        if: matrix.target == 'web'
+        run: ./scripts/build-web.sh
+
+      - name: Build desktop (Linux + Windows)
+        if: matrix.target == 'desktop'
+        run: ./scripts/build-desktop.sh --windows
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: collack-spike-${{ matrix.target }}
+          path: |
+            dist/web
+            dist/desktop
+            dist/collack-spike.love
+          if-no-files-found: ignore
+          retention-days: 14
+
+  # -----------------------------------------------------------------
+  # iOS — gated. Only runs when manually dispatched with build_ios=true,
+  # or when a PR carries the 'ios-build' label. Keeps macOS minutes down.
+  # -----------------------------------------------------------------
+  ios:
+    needs: build
+    if: |
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.build_ios == 'true') ||
+      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ios-build'))
+    runs-on: macos-latest
+    environment: ios
+    env:
+      MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+      MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
+      GIT_AUTHORIZATION: ${{ secrets.GIT_AUTHORIZATION }}
+      TEMP_KEYCHAIN_PASSWORD: ${{ secrets.TEMP_KEYCHAIN_PASSWORD }}
+      APPLE_KEY_ID: ${{ secrets.APPLE_KEY_ID }}
+      APPLE_ISSUER_ID: ${{ secrets.APPLE_ISSUER_ID }}
+      APPLE_KEY_CONTENT: ${{ secrets.APPLE_KEY_CONTENT }}
+      DEVELOPER_APP_IDENTIFIER: ${{ secrets.DEVELOPER_APP_IDENTIFIER }}
+      DEVELOPER_PORTAL_TEAM_ID: ${{ secrets.DEVELOPER_PORTAL_TEAM_ID }}
+      APP_STORE_CONNECT_TEAM_ID: ${{ secrets.APP_STORE_CONNECT_TEAM_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup Ruby (for Fastlane)
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.2.6'
+          bundler-cache: true
+          working-directory: 'capacitor/ios/App'
+
+      - name: Build web bundle
+        run: ./scripts/build-web.sh
+
+      - name: Wrap in Capacitor
+        run: ./scripts/build-ios.sh
+
+      - name: Setup Keychain
+        run: |
+          security create-keychain -p "$TEMP_KEYCHAIN_PASSWORD" build.keychain
+          security list-keychains -s build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "$TEMP_KEYCHAIN_PASSWORD" build.keychain
+          security set-keychain-settings
+
+      - name: Install iOS deps (CocoaPods)
+        working-directory: capacitor/ios/App
+        run: |
+          bundle install
+          pod install
+
+      - name: Deploy to TestFlight via Fastlane
+        working-directory: capacitor/ios/App
+        run: bundle exec fastlane closed_beta
+
+      - name: Clean up keychain
+        if: always()
+        run: security delete-keychain build.keychain || true

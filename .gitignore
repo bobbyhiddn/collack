@@ -1,0 +1,28 @@
+# Build outputs
+dist/
+.node_cache/
+.love_cache/
+
+# Capacitor generated artifacts (regenerate from ios-template/)
+capacitor/node_modules/
+capacitor/dist/
+capacitor/ios/App/Pods/
+capacitor/ios/App/Podfile.lock
+capacitor/ios/App/App/public/
+capacitor/ios/App/App/capacitor.config.json
+# (the canonical capacitor config lives at capacitor/capacitor.config.json;
+#  the per-app one inside ios/App/App is cap-sync output.)
+
+# OS / editor cruft
+.DS_Store
+*.swp
+*~
+.vscode/
+.idea/
+
+# Lua build artifacts (none expected, but)
+*.luac
+
+# CI / lockfiles we don't want to source-control yet
+package-lock.json
+capacitor/package-lock.json

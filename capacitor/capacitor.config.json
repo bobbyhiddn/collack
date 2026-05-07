@@ -1,0 +1,26 @@
+{
+  "appId": "io.bobbyhiddn.collack",
+  "appName": "Collack Spike",
+  "webDir": "dist",
+  "bundledWebRuntime": false,
+  "server": {
+    "iosScheme": "file",
+    "androidScheme": "file",
+    "hostname": "app",
+    "cleartext": true,
+    "allowNavigation": ["*"]
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchAutoHide": true,
+      "launchShowDuration": 1500,
+      "backgroundColor": "#000000",
+      "spinnerColor": "#FFFFFF"
+    }
+  },
+  "ios": {
+    "orientation": "landscape",
+    "contentInset": "always",
+    "limitsNavigationsToAppBoundDomains": false
+  }
+}
