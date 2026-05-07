@@ -3,15 +3,12 @@ dist/
 .node_cache/
 .love_cache/
 
-# Capacitor generated artifacts (regenerate from ios-template/)
+# Capacitor generated artifacts (regenerated from ios-template/ on every build)
 capacitor/node_modules/
 capacitor/dist/
-capacitor/ios/App/Pods/
-capacitor/ios/App/Podfile.lock
-capacitor/ios/App/App/public/
-capacitor/ios/App/App/capacitor.config.json
-# (the canonical capacitor config lives at capacitor/capacitor.config.json;
-#  the per-app one inside ios/App/App is cap-sync output.)
+capacitor/ios/
+# (capacitor/ios-template/ is source-controlled; capacitor/ios/ is the
+#  cap-sync working copy that build-ios.sh reseeds on every run.)
 
 # OS / editor cruft
 .DS_Store
