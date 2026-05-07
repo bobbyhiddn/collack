@@ -1,0 +1,34 @@
+# Read by BuildKit from the build-context root (repo root) for `flyctl deploy`.
+# Mirrors deploy/fly/.dockerignore — the Fly image only needs dist/web/.
+# Keep them in sync if you tweak either.
+
+# VCS / editor
+.git
+.gitignore
+.github
+.vscode
+.idea
+
+# Source tree (not needed at runtime)
+src
+tests
+scripts
+assets
+README.md
+REPORT.md
+FRAMEWORK-PATTERNS.md
+
+# Other build outputs (we only want dist/web/)
+dist/desktop
+dist/love
+capacitor
+
+# Caches
+.love_cache
+.node_cache
+node_modules
+
+# OS / tmp
+.DS_Store
+*.swp
+*.log

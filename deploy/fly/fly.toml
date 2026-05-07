@@ -1,0 +1,25 @@
+# fly.toml — Collack web spike (love.js bundle behind nginx).
+#
+# Static site. Free/hobby tier: one shared-cpu-1x machine, auto-stops when idle,
+# no volumes, no dedicated IP. Built from repo root via deploy/fly/Dockerfile,
+# which COPYs dist/web/ into nginx's html root.
+
+app = "collack-spike"
+primary_region = "sjc"
+
+# NOTE: no [build] section here — pass --dockerfile=deploy/fly/Dockerfile to
+# `flyctl deploy` so the build context stays at the repo root (where dist/web/
+# lives). fly.toml-relative dockerfile paths double the prefix.
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ["app"]
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"
+  cpus = 1
