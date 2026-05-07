@@ -2,12 +2,14 @@
 # build-web.sh — compile src/ via love.js into a runnable browser bundle.
 #
 # Pinned versions:
-#   LÖVE         : 11.5
-#   love.js (npm): 11.4.1   ← latest published; npm release lags LÖVE proper
-#                            (the Emscripten runtime is 11.4 but it can compile
-#                            11.5 .love files; if 11.5 LÖVE-only APIs are used,
-#                            either pin LÖVE source to 11.4 or build love.js
-#                            from Davidobot/love.js master.)
+#   LÖVE         : 11.4 (see src/conf.lua — runtime parity with love.js)
+#   love.js (npm): 11.4.1   ← latest published; embeds the LÖVE 11.4 runtime.
+#                            Declaring t.version = "11.5" in conf.lua triggered
+#                            indirect WASM calls to functions absent in 11.4
+#                            (RuntimeError: null function on init). Pinning to
+#                            11.4 fixes the demo. To use 11.5 LÖVE features
+#                            here, build Davidobot/love.js master against
+#                            LÖVE 11.5 (requires Emscripten in build image).
 #
 # Output: dist/web/{index.html, *.js, *.wasm, *.data}
 #
@@ -20,7 +22,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SRC="$ROOT/src"
 OUT="$ROOT/dist/web"
-LOVE_VERSION="11.5"
+LOVE_VERSION="11.4"
 LOVE_JS_VERSION="11.4.1"  # latest published on npm (see header note)
 
 mkdir -p "$OUT"
