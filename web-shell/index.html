@@ -79,6 +79,12 @@
         padding: 0;
         margin: 0;
         outline: none;
+        /* Without this iOS treats a paddle drag as a scroll/pinch gesture and
+           swallows the touchmove stream before SDL ever sees it. */
+        touch-action: none;
+        -webkit-user-select: none;
+        user-select: none;
+        -webkit-touch-callout: none;
       }
 
       /* Hide the stock loadingCanvas — it draws offscreen text on mobile.
@@ -191,8 +197,16 @@
         if ([32, 37, 38, 39, 40].indexOf(e.keyCode) > -1) e.preventDefault();
       }, false);
 
+      // Tell the game whether this device has a touchscreen, so it can show
+      // "drag / tap" hints instead of keyboard ones on the very first frame.
+      // The game cannot work this out for itself: love.system.getOS() reports
+      // "Web" under love.js, including inside the Capacitor iOS wrapper.
+      var HAS_TOUCH = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+      var LOVE_ARGS = ["./game.love"];
+      if (HAS_TOUCH) LOVE_ARGS.push("--touch");
+
       var Module = {
-        arguments: ["./game.love"],
+        arguments: LOVE_ARGS,
         INITIAL_MEMORY: 67108864,
         printErr: console.error.bind(console),
         canvas: (function() {
