@@ -30,6 +30,33 @@ jobs:
         run: lua5.1 tests/test_logic.lua
 
   # -----------------------------------------------------------------
+  # battle-test: the headless battle simulation in battle/. Pure Lua,
+  # no LÖVE runtime, no display. Covers sequential resolution order,
+  # blowback hitting friendly marbles, both win conditions, and the
+  # seed-determinism check.
+  #
+  # Deliberately NOT in the `build` job's `needs`: the brick-breaker
+  # spike is live on Shore, and battle-engine work must never be able
+  # to block its build or deploy. A failure here still fails the check
+  # run and blocks the PR.
+  # -----------------------------------------------------------------
+  battle-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Lua 5.1
+        run: sudo apt-get update && sudo apt-get install -y lua5.1
+      - name: Run battle simulation tests
+        run: lua5.1 battle/tests/run_all.lua
+      - name: Verify the CLI harness runs a battle from a seed
+        run: lua5.1 battle/cli.lua --seed 20260726 --quiet
+      - name: Verify the same seed replays identically across processes
+        run: |
+          lua5.1 battle/cli.lua --seed 20260726 > /tmp/battle-run-1.log
+          lua5.1 battle/cli.lua --seed 20260726 > /tmp/battle-run-2.log
+          diff /tmp/battle-run-1.log /tmp/battle-run-2.log
+
+  # -----------------------------------------------------------------
   # web + desktop matrix: both run on ubuntu-latest in parallel.
   # -----------------------------------------------------------------
   build:
