@@ -20,11 +20,8 @@ harness.run({
     require("battle.tests.test_vslice_contract"),
     require("battle.tests.test_data_model"),
     require("battle.tests.test_event_protocol"),
-    require("battle.tests.test_content"),
-    require("battle.tests.test_quality_vs_quantity"),
-    require("battle.tests.test_resolution"),
-    require("battle.tests.test_blowback"),
-    require("battle.tests.test_win_conditions"),
+    require("battle.tests.test_physics"),
+    require("battle.tests.test_continuous_battle"),
     require("battle.tests.test_determinism"),
     require("battle.tests.test_purity"),
 })

@@ -114,8 +114,8 @@ function M.build(def, sling, owner_id)
             release = core_def.release,
         },
         shells = built_shells,
-        -- Momentum is how many collisions the marble can push through before it
-        -- comes to rest. More shells = more mass = further into the formation.
+        -- Momentum contributes to canonical launch speed and physical mass.
+        -- More shells make a heavier, more persistent shot.
         momentum = #built_shells + (sling.momentum_bonus or 0),
         damage_bonus = sling.damage_bonus or 0,
         scatter = sling.scatter or 0,

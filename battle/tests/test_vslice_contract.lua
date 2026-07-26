@@ -1,6 +1,4 @@
--- Contract tests for the migration target. These do not pretend the current
--- discrete engine implements the slice; they pin the boundary downstream code
--- must implement.
+-- Contract tests shared by draft, setup, continuous battle, and presentation.
 
 local here = (arg and arg[0] and arg[0]:match("^(.*)[/\\][^/\\]*$")) or "."
 package.path = table.concat({

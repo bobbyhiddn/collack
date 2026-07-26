@@ -1,7 +1,6 @@
--- Stable, implementation-light contracts for the product-shaped vertical slice.
--- The current discrete prototype does not implement this state machine. New
--- work imports these values rather than silently choosing different counts,
--- phases, timing or seed coupling.
+-- Stable, implementation-light contracts for the product-shaped vertical
+-- slice. Draft/setup work and the continuous battle import these values rather
+-- than silently choosing different counts, phases, timing, or seed coupling.
 
 local M = {}
 

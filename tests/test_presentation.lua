@@ -1,5 +1,4 @@
--- Plain-Lua tests for the event-only presentation projection. No LÖVE runtime
--- is required.
+-- Plain-Lua tests for snapshot projection and canonical-frame replay.
 
 package.path = table.concat({
     "./src/?.lua",
@@ -26,147 +25,123 @@ local function eq(actual, expected, message)
         message, tostring(expected), tostring(actual)))
 end
 
--- This intentionally accepts only the data types a normal event serializer
--- can preserve. It also ensures the projection receives no engine-owned table.
-local function serialization_round_trip(value)
-    local value_type = type(value)
-    if value_type ~= "table" then
-        assert(value_type == "nil" or value_type == "number"
-            or value_type == "string" or value_type == "boolean",
-            "event protocol contains non-serializable " .. value_type)
-        return value
+local function serializable(value, seen)
+    local kind = type(value)
+    if kind ~= "table" then
+        return kind == "nil" or kind == "number" or kind == "string" or kind == "boolean"
     end
-    local copy = {}
+    seen = seen or {}
+    if seen[value] then return false end
+    seen[value] = true
     for key, item in pairs(value) do
-        copy[serialization_round_trip(key)] = serialization_round_trip(item)
+        if not serializable(key, seen) or not serializable(item, seen) then return false end
     end
-    return copy
+    seen[value] = nil
+    return true
 end
 
-local function first_launch(events, side)
-    for _, event in ipairs(events) do
-        if event.type == "launch" and event.side == side then return event end
+local battle = engine.new({
+    seed = presentation.DEFAULT_SEED,
+    sides = setup.default_matchup(),
+    max_exchanges = 1,
+    max_exchange_ticks = 180,
+})
+engine.drain_events(battle)
+local previous = engine.snapshot(battle)
+local live_events = engine.step(battle, engine.FIXED_DT)
+local current = engine.snapshot(battle)
+local projected = presentation.project(current, previous, 0.5)
+
+eq(projected.schema_version, 2, "projection schema is versioned")
+eq(projected.seed, presentation.DEFAULT_SEED, "projection keeps battle seed")
+eq(projected.tick, 1, "projection identifies the completed tick")
+eq(projected.exchange, 1, "projection identifies the live exchange")
+eq(projected.screen, "battle", "unfinished snapshot projects the battle screen")
+eq(projected.sides.A.name, current.sides.A.name, "A display name comes from snapshot")
+eq(projected.sides.B.name, current.sides.B.name, "B display name comes from snapshot")
+eq(projected.sides.A.bricks_alive, current.sides.A.bricks_alive,
+    "brick counts come from canonical snapshot")
+eq(#projected.sides.A.queue, #current.sides.A.queue,
+    "queue comes from canonical snapshot")
+ok(#projected.entities > 20, "projection exposes renderer-ready physical entities")
+ok(serializable(projected), "presentation state is serializer-safe")
+
+local active
+for _, entity in ipairs(projected.entities) do
+    if entity.type == "marble" and entity.owner == "A" and entity.state == "flying" then
+        active = entity
+        break
     end
-    return nil
 end
-
-local first = presentation.new(presentation.DEFAULT_SEED)
-ok(#first.events > 40, "canonical engine produced an animatable event log")
-eq(first.events[1].type, "battle_start", "event stream begins with battle_start")
-eq(first.events[#first.events].type, "battle_end", "event stream ends with battle_end")
-eq(first.cursor, 0, "adapter begins before the first event")
-eq(first.events[1].initial_state.protocol_version, 1,
-    "battle_start identifies the initial-state protocol")
-eq(first.view.sides.A.bricks_alive,
-    first.events[1].initial_state.sides.A.bricks_alive,
-    "A initial display comes from battle_start")
-eq(first.view.sides.B.bricks_alive,
-    first.events[1].initial_state.sides.B.bricks_alive,
-    "B initial display comes from battle_start")
-eq(first.battle, nil, "presentation retains no mutable battle snapshot")
-
-local declared_first = first.view.sides.A.queue[1]
-local launch = first_launch(first.events, "A")
-ok(launch ~= nil, "A has a launch in the canonical log")
-if launch then
-    eq(launch.marble, declared_first, "displayed queue order matches player-declared order")
-end
-
-local replay = presentation.replay(first)
-eq(replay.seed, first.seed, "replay keeps the seed")
-eq(replay.log_text, first.log_text, "replay keeps the byte-identical engine log")
-eq(replay.result.winner, first.result.winner, "replay keeps the winner")
-eq(#replay.events, #first.events, "replay keeps the event count")
-ok(replay.events ~= first.events, "replay owns a deep-copied event sequence")
-ok(replay.events[1].initial_state ~= first.events[1].initial_state,
-    "replay does not share its initial-state payload")
-
-local next_seed = presentation.next_seed(first)
-eq(next_seed.seed, first.seed + 1, "new seed advances deterministically")
-ok(next_seed.log_text ~= first.log_text, "new seed produces a distinct canonical log")
-
-presentation.to_end(first)
-presentation.to_end(replay)
-eq(first.cursor, #first.events, "to_end consumes every event")
-eq(first.view.finished, true, "battle_end marks the display finished")
-eq(first.view.outcome, first.result.outcome, "displayed outcome matches event result")
-eq(first.view.winner, first.result.winner, "displayed winner matches event result")
-eq(first.view.seq, replay.view.seq, "same-seed adapters finish on the same event")
-eq(first.view.winner, replay.view.winner, "same-seed adapters render the same winner")
-
--- Build projections from serializer-safe copies only, then compare their final
--- state to the independently retained canonical engine outcome.
-for _, seed in ipairs({ 1, 42, 9125, 20260726 }) do
-    local battle = engine.new_battle({ seed = seed, sides = setup.default_matchup() })
-    local engine_result = engine.run(battle)
-    local decoded_events = serialization_round_trip(battle.log.events)
-    local projected = presentation.from_events(decoded_events)
-
-    local original_name = projected.view.sides.A.name
-    decoded_events[1].initial_state.sides.A.name = "mutated after decode"
-    eq(projected.view.sides.A.name, original_name,
-        "seed " .. seed .. ": projection owns its decoded initial state")
-
-    presentation.to_end(projected)
-    eq(projected.view.outcome, engine_result.outcome,
-        "seed " .. seed .. ": projected outcome matches engine")
-    eq(projected.view.winner, engine_result.winner,
-        "seed " .. seed .. ": projected winner matches engine")
-    eq(projected.view.reason, engine_result.reason,
-        "seed " .. seed .. ": projected reason matches engine")
-    eq(projected.view.volley, engine_result.volleys,
-        "seed " .. seed .. ": projected volley count matches engine")
-    eq(projected.view.sides.A.bricks_alive, battle.sides.A.formation.alive,
-        "seed " .. seed .. ": A projected brick count matches engine")
-    eq(projected.view.sides.B.bricks_alive, battle.sides.B.formation.alive,
-        "seed " .. seed .. ": B projected brick count matches engine")
-    eq(projected.view.sides.A.marbles_alive, #battle.sides.A.roster,
-        "seed " .. seed .. ": A projected marble count matches engine")
-    eq(projected.view.sides.B.marbles_alive, #battle.sides.B.roster,
-        "seed " .. seed .. ": B projected marble count matches engine")
-end
-
-local shell_events = 0
-local effect_events = 0
-local effect_types = {
-    absorb = true, reflect = true, regenerate = true, fortify = true,
-    status_applied = true, magnetic = true, shatter = true, chain_detonate = true,
-    vault = true, splice = true, dummy = true, aegis = true, void = true,
-    mirror = true, temporal = true, ricochet = true,
-}
-for _, event in ipairs(first.events) do
-    if event.type == "shell_damaged" or event.type == "shell_crushed"
-        or event.type == "shell_break" then
-        shell_events = shell_events + 1
+ok(active ~= nil, "active physical marble is projected")
+if active then
+    local now, before
+    for _, item in ipairs(current.sides.A.marbles) do
+        if item.uid == active.uid then now = item end
     end
-    if effect_types[event.type] then effect_events = effect_events + 1 end
+    for _, item in ipairs(previous.sides.A.marbles) do
+        if item.uid == active.uid then before = item end
+    end
+    ok(active.x >= math.min(before.x, now.x) and active.x <= math.max(before.x, now.x),
+        "render x interpolates between completed snapshots")
+    ok(active.y >= math.min(before.y, now.y) and active.y <= math.max(before.y, now.y),
+        "render y interpolates between completed snapshots")
 end
-ok(shell_events > 0, "event log exposes shell damage for presentation")
-ok(effect_events > 0, "event log exposes brick/sling effects for presentation")
-ok(#first.view.feed <= 6, "adapter bounds its visible event feed")
+
+projected.sides.A.bricks[1].hp = -100
+local clean = presentation.project(current, previous, 0.5)
+ok(clean.sides.A.bricks[1].hp >= 0, "projection owns its brick values")
+ok(clean.world.fields ~= current.world.fields, "projection owns field values")
+
+local cues = presentation.cues(live_events)
+eq(#cues, #live_events, "every exact-tick event can produce a view cue")
+ok(cues[1].tick ~= nil, "cue retains canonical tick")
+ok(type(cues[1].text) == "string", "cue supplies accessibility text")
+
+engine.run(battle)
+local recording = engine.recording(battle)
+local replay = presentation.from_recording(recording)
+eq(replay.cursor, 1, "recording replay begins at its first canonical frame")
+eq(replay.recording.fixed_dt, engine.FIXED_DT, "replay retains recorded timing")
+ok(replay.recording ~= recording, "replay deep-copies recording container")
+ok(replay.recording.frames ~= recording.frames, "replay deep-copies canonical frames")
+
+local first_tick = replay.recording.frames[1].tick
+recording.frames[1].tick = -99
+eq(replay.recording.frames[1].tick, first_tick,
+    "caller mutation cannot change replay-owned frames")
+presentation.replay_step(replay, 1)
+eq(replay.cursor, 2, "replay step advances one recorded frame")
+local replay_view = presentation.replay_project(replay)
+eq(replay_view.tick, replay.recording.frames[2].tick,
+    "replay projection renders the recorded frame")
+presentation.replay_seek(replay, 0)
+eq(replay.cursor, 1, "replay seeks from canonical frame ticks")
+presentation.replay_seek(replay, 1000000)
+eq(replay.cursor, #replay.recording.frames, "replay can seek to the final frame")
+replay_view = presentation.replay_project(replay)
+eq(replay_view.screen, "result", "final recorded frame projects result screen")
+eq(replay_view.result.reason, battle.result.reason,
+    "recording replay displays canonical outcome")
 
 local handle = io.open("src/presentation.lua", "r")
-ok(handle ~= nil, "presentation adapter source is readable")
+ok(handle ~= nil, "presentation source is readable")
 if handle then
     local source = handle:read("*a")
     handle:close()
     local banned = {
-        { "love.", "adapter has no LÖVE dependency" },
-        { "math.random", "adapter has no independent randomness" },
-        { "os.time", "adapter has no wall-clock seed" },
-        { "damage_brick", "adapter does not implement brick damage" },
-        { "resolve_collision", "adapter does not implement collisions" },
-        { "battle.content", "adapter does not interpret content rules" },
-        { "battle.sides", "adapter never reads a mutable battle snapshot" },
-        { "snapshot_side", "adapter has no engine-object snapshot helper" },
+        { "love.", "projector has no LÖVE dependency" },
+        { 'require("battle.engine")', "projector never steps a battle" },
+        { "damage_brick", "projector does not implement damage" },
+        { "resolve_collision", "projector does not implement collisions" },
+        { "math.random", "projector has no randomness" },
+        { "os.time", "projector has no wall-clock state" },
     }
-    for _, item in ipairs(banned) do
-        ok(not source:find(item[1], 1, true), item[2])
-    end
-    ok(source:find('require("battle.engine")', 1, true) ~= nil,
-        "adapter delegates battle execution to the canonical engine")
-    ok(source:find("function M.from_events", 1, true) ~= nil,
-        "adapter exposes an events-only replay constructor")
+    for _, item in ipairs(banned) do ok(not source:find(item[1], 1, true), item[2]) end
+    ok(source:find("function M.project", 1, true) ~= nil,
+        "projector exposes snapshot API")
+    ok(source:find("function M.from_recording", 1, true) ~= nil,
+        "projector exposes recorded-frame replay API")
 end
 
 if failures == 0 then

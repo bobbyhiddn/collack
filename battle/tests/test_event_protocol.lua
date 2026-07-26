@@ -36,7 +36,7 @@ function M.run(t)
     local battle = engine.new_battle({ seed = 9125, sides = setup.default_matchup() })
     local event = battle.log.events[1]
     t:eq(event.type, "battle_start", "first event initializes the battle")
-    t:eq(event.initial_state.protocol_version, 1, "initial-state protocol is versioned")
+    t:eq(event.initial_state.protocol_version, 2, "continuous initial-state protocol is versioned")
     t:ok(serializable(event, {}), "battle_start contains serializer-safe values only")
 
     for _, id in ipairs({ "A", "B" }) do

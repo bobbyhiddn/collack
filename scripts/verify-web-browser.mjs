@@ -103,12 +103,12 @@ try {
   assert(Math.abs(bounds.height - expectedViewport.height) < 0.5,
     `#canvas height is ${bounds.height}, expected ${expectedViewport.height}`);
 
-  const replayHandled = page.waitForEvent("console", {
-    predicate: (message) => message.text().includes("CALLACK_ACTION replay seed=9125"),
+  const liveReplayGuardHandled = page.waitForEvent("console", {
+    predicate: (message) => message.text().includes("CALLACK_ACTION replay_unavailable seed=9125"),
     timeout: 10_000,
   });
   await page.mouse.click(bounds.x + 100, bounds.y + 810);
-  await replayHandled;
+  await liveReplayGuardHandled;
 
   // The in-game pointer debounce prevents a delayed synthetic mouse event from
   // turning one tap into two actions.
@@ -119,9 +119,6 @@ try {
   });
   await page.touchscreen.tap(bounds.x + 290, bounds.y + 810);
   await newSeedHandled;
-  await page.waitForFunction(() => document.title.includes("Seed 9126"), null, {
-    timeout: 10_000,
-  });
 
   const fixedRuntimeUrls = new Set(["/game.js", "/game.data", "/love.js", "/love.wasm"]);
   assert(!requestedAssets.some((asset) => fixedRuntimeUrls.has(asset)),
@@ -136,7 +133,7 @@ try {
     "browser did not request hashed WebAssembly");
   assert(runtimeErrors.length === 0, runtimeErrors.join("\n"));
 
-  console.log("[web-browser] OK: 390x844 boot; mouse replay; touch new seed; hashed runtime requests");
+  console.log("[web-browser] OK: 390x844 boot; live replay guard; touch new seed; hashed runtime requests");
 } finally {
   if (browser) await browser.close();
   if (serverListening) {

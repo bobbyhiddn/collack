@@ -1,417 +1,264 @@
--- Pure presentation adapter over battle/. It runs the canonical deterministic
--- engine to obtain an event sequence, then initializes and advances display
--- state solely from that sequence. No combat rule or mutable engine snapshot is
--- retained here, and this module runs under plain Lua for headless replay tests.
-
-local engine = require("battle.engine")
-local setup = require("battle.setup")
+-- src/presentation.lua -- value-only projection and recorded-frame replay.
+--
+-- The canonical engine owns movement and outcomes.  This module only
+-- interpolates two BattleFrame values and turns exact-tick events into cues.
 
 local M = {}
 
+M.SCHEMA_VERSION = 2
 M.DEFAULT_SEED = 9125
-M.EVENT_SECONDS = 0.16
 
-local function deep_copy(source, seen)
+local function copy(source, seen)
     if type(source) ~= "table" then return source end
     seen = seen or {}
-    if seen[source] then error("event sequences must not contain cycles") end
+    if seen[source] then error("presentation values cannot contain cycles") end
     seen[source] = true
     local out = {}
-    for key, value in pairs(source) do
-        out[deep_copy(key, seen)] = deep_copy(value, seen)
-    end
+    for key, value in pairs(source) do out[copy(key, seen)] = copy(value, seen) end
     seen[source] = nil
     return out
 end
 
-local function project_side(source)
-    assert(type(source) == "table", "battle_start is missing a side snapshot")
+local function clamp(value, lo, hi)
+    if value < lo then return lo end
+    if value > hi then return hi end
+    return value
+end
+
+local function lerp(left, right, alpha)
+    return left + (right - left) * alpha
+end
+
+local function by_id(items, key)
+    local out = {}
+    for _, item in ipairs(items or {}) do out[item[key or "id"]] = item end
+    return out
+end
+
+local function project_side(previous, current, alpha)
+    local prior_marbles = previous and by_id(previous.marbles, "uid") or {}
     local side = {
-        id = source.id,
-        name = source.name,
-        sling_id = source.sling_id,
-        sling_name = source.sling_name,
-        rows = source.rows,
-        cols = source.cols,
-        bricks_alive = source.bricks_alive,
-        marbles_alive = source.marbles_alive,
+        id = current.id,
+        name = current.name,
+        sling_id = current.sling_id,
+        sling_name = current.sling_name,
+        rows = current.rows,
+        cols = current.cols,
+        bricks_alive = current.bricks_alive,
+        marbles_alive = current.marbles_alive,
         grid = {},
+        bricks = {},
         marbles = {},
-        queue = {},
+        marble_list = {},
+        queue = copy(current.queue),
+        bag = copy(current.bag),
         active = nil,
+        active_list = {},
     }
-
-    for row = 1, side.rows do
-        side.grid[row] = {}
+    for row = 1, side.rows do side.grid[row] = {} end
+    for _, source in ipairs(current.bricks or {}) do
+        local brick = copy(source)
+        brick.hp_ratio = brick.max_hp > 0 and brick.hp / brick.max_hp or 0
+        side.grid[brick.row][brick.col] = brick
+        side.bricks[#side.bricks + 1] = brick
     end
-    for _, brick in ipairs(source.bricks or {}) do
-        side.grid[brick.row][brick.col] = {
-            id = brick.id,
-            name = brick.name,
-            family = brick.family,
-            behaviour = brick.behaviour,
-            hp = brick.hp,
-            max_hp = brick.max_hp,
-            alive = brick.alive,
-            flash = nil,
-        }
-    end
-
-    for _, source_marble in ipairs(source.marbles or {}) do
-        local marble = {
-            uid = source_marble.uid,
-            name = source_marble.name,
-            rarity = source_marble.rarity,
-            core = source_marble.core,
-            lane = source_marble.lane,
-            state = source_marble.state,
-            alive = source_marble.alive,
-            shells = {},
-            statuses = {},
-            flash = nil,
-        }
-        for _, shell in ipairs(source_marble.shells or {}) do
-            marble.shells[#marble.shells + 1] = deep_copy(shell)
+    for _, source in ipairs(current.marbles or {}) do
+        local marble = copy(source)
+        local prior = prior_marbles[marble.uid]
+        if prior and prior.x and marble.x then
+            marble.render_x = lerp(prior.x, marble.x, alpha)
+            marble.render_y = lerp(prior.y, marble.y, alpha)
+        else
+            marble.render_x, marble.render_y = marble.x, marble.y
         end
+        local durability, maximum = 0, 0
+        for _, shell in ipairs(marble.shells or {}) do
+            durability = durability + math.max(0, shell.durability)
+            maximum = maximum + shell.max_durability
+        end
+        marble.shell_ratio = maximum > 0 and durability / maximum or 0
         side.marbles[marble.uid] = marble
-    end
-    for _, uid in ipairs(source.queue or {}) do
-        side.queue[#side.queue + 1] = uid
+        side.marble_list[#side.marble_list + 1] = marble
+        if marble.alive and (marble.state == "flying" or marble.state == "blown") then
+            side.active_list[#side.active_list + 1] = marble
+            side.active = side.active or marble
+        end
     end
     return side
 end
 
-local function view_from_start(event)
-    assert(event and event.type == "battle_start",
-        "event sequence must begin with battle_start")
-    local initial = event.initial_state
-    assert(type(initial) == "table" and initial.protocol_version == 1,
-        "battle_start has no supported initial-state payload")
-    assert(type(initial.sides) == "table",
-        "battle_start initial-state payload has no sides")
-    return {
-        seed = event.seed,
-        volley = 0,
-        seq = 0,
-        current = nil,
-        feed = {},
-        finished = false,
-        outcome = nil,
-        winner = nil,
-        reason = nil,
-        sides = {
-            A = project_side(initial.sides.A),
-            B = project_side(initial.sides.B),
+--- Project two completed canonical frames into a renderer-owned value.
+--- `alpha` is render interpolation only and cannot affect either frame.
+function M.project(current, previous, alpha)
+    assert(type(current) == "table" and current.schema_version,
+        "presentation.project needs a BattleFrame")
+    previous = previous or current
+    alpha = clamp(tonumber(alpha) or 1, 0, 1)
+    local state = {
+        schema_version = M.SCHEMA_VERSION,
+        screen = current.result and "result" or "battle",
+        seed = current.seed,
+        tick = current.tick,
+        time = current.time,
+        exchange = current.exchange,
+        volley = current.exchange,
+        alpha = alpha,
+        arena = copy(current.arena),
+        world = {
+            width = current.world.width,
+            height = current.world.height,
+            fields = copy(current.world.fields),
         },
+        sides = {},
+        entities = {},
+        effect_cues = {},
+        finished = current.result ~= nil,
+        result = copy(current.result),
+        outcome = current.result and current.result.outcome or nil,
+        winner = current.result and current.result.winner or nil,
+        reason = current.result and current.result.reason or nil,
     }
-end
-
-local function result_from_events(events)
-    for index = #events, 1, -1 do
-        local event = events[index]
-        if event.type == "battle_end" then
-            return {
-                outcome = event.outcome,
-                winner = event.winner ~= "none" and event.winner or nil,
-                reason = event.reason,
-                volleys = event.volleys,
+    state.sides.A = project_side(previous.sides and previous.sides.A, current.sides.A, alpha)
+    state.sides.B = project_side(previous.sides and previous.sides.B, current.sides.B, alpha)
+    for _, side_id in ipairs({ "A", "B" }) do
+        local side = state.sides[side_id]
+        for _, brick in ipairs(side.bricks) do
+            state.entities[#state.entities + 1] = {
+                type = "brick", owner = side_id, id = brick.body_id,
+                art_id = "brick." .. brick.id, behaviour = brick.behaviour,
+                family = brick.family, x = brick.x, y = brick.y,
+                width = brick.width, height = brick.height,
+                hp_ratio = brick.hp_ratio, alive = brick.alive,
             }
         end
-    end
-    return nil
-end
-
-local function remove_uid(list, uid)
-    for index = 1, #list do
-        if list[index] == uid then
-            table.remove(list, index)
-            return
+        for _, marble in ipairs(side.marble_list) do
+            if marble.alive and marble.render_x then
+                state.entities[#state.entities + 1] = {
+                    type = "marble", owner = side_id, id = marble.body_id,
+                    uid = marble.uid, art_id = "marble." .. marble.rarity,
+                    x = marble.render_x, y = marble.render_y,
+                    radius = marble.radius, state = marble.state,
+                    shell_ratio = marble.shell_ratio, statuses = copy(marble.statuses),
+                }
+            end
         end
     end
-end
-
-local function contains_uid(list, uid)
-    for _, candidate in ipairs(list) do
-        if candidate == uid then return true end
-    end
-    return false
-end
-
-local function find_marble(view, uid)
-    local marble = view.sides.A.marbles[uid]
-    if marble then return marble, view.sides.A end
-    marble = view.sides.B.marbles[uid]
-    if marble then return marble, view.sides.B end
-    return nil, nil
-end
-
-local function brick_at(view, side_id, row, col)
-    local side = view.sides[side_id]
-    if not side or not side.grid[row] then return nil end
-    return side.grid[row][col]
+    return state
 end
 
 local function readable(value)
     return tostring(value or ""):gsub("_", " ")
 end
 
-function M.event_text(model, event)
-    local side = model.view.sides[event.side]
-    local actor = side and side.name or "Arena"
+function M.event_text(event, names)
+    names = names or { A = "A", B = "B" }
+    local actor = names[event.side] or "Arena"
     if event.type == "battle_start" then
-        return string.format("Battle seeded %d: both formations locked", event.seed)
-    elseif event.type == "volley_start" then
-        return string.format("Volley %d: simultaneous commitment", event.volley)
+        return string.format("Battle seeded %d", event.seed)
+    elseif event.type == "exchange_start" or event.type == "volley_start" then
+        return string.format("Exchange %d: both sides launch", event.exchange or event.volley)
     elseif event.type == "launch" then
-        return string.format("%s launches %s from lane %d", actor, event.name, event.lane)
-    elseif event.type == "launch_aborted" then
-        return string.format("%s launch aborted: %s", actor, readable(event.reason))
+        return string.format("%s launches %s", actor, event.name)
     elseif event.type == "collision" then
-        return string.format("%s hits %s at %d,%d for %d", actor,
-            readable(event.brick), event.row, event.col, event.damage)
-    elseif event.type == "brick_damaged" then
-        return string.format("%s's %s has %d HP", actor, readable(event.brick), event.hp_left)
+        return string.format("%s hits %s for %d", actor, readable(event.brick), event.damage)
     elseif event.type == "brick_destroyed" then
-        return string.format("%s loses %s - %d bricks remain", actor,
-            readable(event.brick), event.bricks_left)
-    elseif event.type == "shell_damaged" or event.type == "shell_crushed" then
-        return string.format("%s shell takes damage - %d durability", actor, event.durability_left)
+        return string.format("%s loses %s", actor, readable(event.brick))
     elseif event.type == "shell_break" then
-        return string.format("%s shell breaks - %d layers remain", actor, event.shells_left)
-    elseif event.type == "marble_destroyed" then
-        return string.format("%s loses %s - core recovered", actor, event.name)
+        return string.format("%s shell breaks", actor)
     elseif event.type == "core_release" then
-        return string.format("%s releases %s at lane %d", actor, readable(event.release), event.col)
+        return string.format("%s releases %s", actor, readable(event.release))
     elseif event.type == "blowback" then
-        return string.format("%s blowback reaches %d lane(s)", actor, event.radius)
-    elseif event.type == "blowback_displace" then
-        return string.format("%s marble shoved lane %d to %d", actor, event.from, event.to)
+        return string.format("%s release pushes %d marble(s)", actor, #(event.affected or {}))
     elseif event.type == "status_applied" then
-        return string.format("%s applies %s", actor, readable(event.status))
-    elseif event.type == "status_tick" then
-        return string.format("%s marble suffers %s", actor, readable(event.status))
-    elseif event.type == "cascade_end" then
-        return string.format("%s cascade ends: %s", actor, readable(event.reason))
+        return string.format("%s gains %s", actor, readable(event.status))
     elseif event.type == "battle_end" then
-        if event.outcome == "draw" then
-            return "Final: draw - " .. readable(event.reason)
-        end
-        local winner = model.view.sides[event.winner]
-        return "Final: " .. (winner and winner.name or event.winner) .. " wins"
+        if event.outcome == "draw" then return "Draw: " .. readable(event.reason) end
+        return string.format("%s wins", names[event.winner] or event.winner)
     end
-    return actor .. " triggers " .. readable(event.type)
+    return actor .. ": " .. readable(event.type)
 end
 
-local function push_feed(model, event)
-    local feed = model.view.feed
-    feed[#feed + 1] = {
-        seq = event.seq,
-        side = event.side,
-        type = event.type,
-        text = M.event_text(model, event),
-    }
-    while #feed > 6 do table.remove(feed, 1) end
-end
-
---- Apply one canonical log event to display-only state.
-function M.apply_event(model, event)
-    local view = model.view
-    for _, side_id in ipairs({ "A", "B" }) do
-        local side = view.sides[side_id]
-        for row = 1, side.rows do
-            for col = 1, side.cols do
-                local brick = side.grid[row][col]
-                if brick then brick.flash = nil end
-            end
-        end
-        for _, marble in pairs(side.marbles) do marble.flash = nil end
-    end
-    view.current = event
-    view.seq = event.seq
-
-    if event.type == "volley_start" then
-        view.volley = event.volley
-    elseif event.type == "launch" then
-        local side = view.sides[event.side]
-        local marble = side.marbles[event.marble]
-        remove_uid(side.queue, event.marble)
-        if marble then
-            marble.state = "flying"
-            marble.lane = nil
-        end
-        side.active = {
-            uid = event.marble,
-            name = event.name,
-            row = 0,
-            col = event.entry_col,
-            target_row = event.target_row,
-            target_col = event.target_col,
-            shot = event.shot,
+function M.cues(events)
+    local cues = {}
+    for _, event in ipairs(events or {}) do
+        local cue = {
+            seq = event.seq,
+            tick = event.tick,
+            type = event.type,
+            owner = event.side,
+            x = event.x,
+            y = event.y,
+            text = M.event_text(event),
         }
-    elseif event.type == "collision" then
-        local side = view.sides[event.side]
-        if side.active and side.active.uid == event.marble then
-            side.active.row = event.row
-            side.active.col = event.col
-        end
-    elseif event.type == "cascade_end" then
-        local side = view.sides[event.side]
-        side.active = nil
-        view.last_cascade = {
-            side = event.side,
-            reason = event.reason,
-            row = event.row,
-            col = event.col,
-        }
-    elseif event.type == "rack_return" then
-        local side = view.sides[event.side]
-        local marble = side.marbles[event.marble]
-        if marble then
-            marble.state = "ready"
-            marble.lane = event.lane
-            if not contains_uid(side.queue, event.marble) then
-                side.queue[#side.queue + 1] = event.marble
-            end
-        end
-    elseif event.type == "brick_damaged" then
-        local brick = brick_at(view, event.side, event.row, event.col)
-        if brick then
-            brick.hp = event.hp_left
-            brick.flash = "damage"
-        end
-    elseif event.type == "brick_destroyed" then
-        local side = view.sides[event.side]
-        local brick = brick_at(view, event.side, event.row, event.col)
-        if brick then
-            brick.alive = false
-            brick.hp = 0
-            brick.flash = "destroyed"
-        end
-        side.bricks_alive = event.bricks_left
-    elseif event.type == "regenerate" or event.type == "temporal" then
-        local brick = brick_at(view, event.side, event.row, event.col)
-        if brick then
-            brick.hp = event.hp_left
-            brick.flash = "heal"
-        end
-    elseif event.type == "shell_damaged" or event.type == "shell_crushed" then
-        local marble = find_marble(view, event.marble)
-        if marble and marble.shells[1] then
-            marble.shells[1].durability = event.durability_left
-            marble.flash = "damage"
-        end
-    elseif event.type == "shell_break" then
-        local marble = find_marble(view, event.marble)
-        if marble and #marble.shells > event.shells_left then
-            table.remove(marble.shells, 1)
-            marble.flash = "break"
-        end
-    elseif event.type == "marble_destroyed" then
-        local marble, side = find_marble(view, event.marble)
-        if marble then
-            marble.alive = false
-            marble.state = "destroyed"
-            marble.lane = nil
-        end
-        if side then
-            remove_uid(side.queue, event.marble)
-            if side.active and side.active.uid == event.marble then side.active = nil end
-            side.marbles_alive = event.marbles_left
-        end
-    elseif event.type == "blowback_displace" then
-        local marble = find_marble(view, event.marble)
-        if marble then marble.lane = event.to end
-    elseif event.type == "status_applied" then
-        local marble = find_marble(view, event.marble)
-        if marble then marble.statuses[event.status] = event.duration end
-    elseif event.type == "status_tick" then
-        local marble = find_marble(view, event.marble)
-        if marble then
-            local left = (marble.statuses[event.status] or 1) - 1
-            marble.statuses[event.status] = left > 0 and left or nil
-        end
-    elseif event.type == "battle_end" then
-        view.finished = true
-        view.outcome = event.outcome
-        view.winner = event.winner ~= "none" and event.winner or nil
-        view.reason = event.reason
+        if event.type == "collision" then cue.effect = "impact"
+        elseif event.type == "brick_destroyed" then cue.effect = "brick_break"
+        elseif event.type == "shell_break" then cue.effect = "shell_break"
+        elseif event.type == "core_release" or event.type == "blowback" then cue.effect = "release"
+        elseif event.type == "status_applied" then cue.effect = event.status
+        elseif event.type == "wall_collision" or event.type == "ricochet" then cue.effect = "ricochet"
+        elseif event.type == "battle_end" then cue.effect = "result"
+        else cue.effect = "audit" end
+        cues[#cues + 1] = cue
     end
-
-    push_feed(model, event)
+    return cues
 end
 
---- Build a presentation from canonical events alone. The sequence is copied so
---- callers may discard or mutate their decoded/engine-owned representation.
-function M.from_events(events)
-    assert(type(events) == "table" and #events > 0,
-        "from_events needs a non-empty event sequence")
-    local copied_events = deep_copy(events)
-    local first = copied_events[1]
-    local model = {
-        seed = first.seed,
-        view = view_from_start(first),
-        cursor = 0,
-        elapsed = M.EVENT_SECONDS,
-        interval = M.EVENT_SECONDS,
+--- Construct playback from canonical recorded frames.  Playback never calls
+--- battle.step; it seeks and interpolates immutable frame values.
+function M.from_recording(recording)
+    assert(type(recording) == "table" and #recording.frames > 0,
+        "from_recording needs canonical frames")
+    local owned = copy(recording)
+    return {
+        schema_version = M.SCHEMA_VERSION,
+        recording = owned,
+        cursor = 1,
+        event_cursor = 0,
+        elapsed = 0,
+        interval = owned.frame_interval * owned.fixed_dt,
         playing = true,
-        events = copied_events,
+        finished = #owned.frames == 1,
     }
-    model.result = result_from_events(copied_events)
-    return model
 end
 
-function M.new(seed)
-    seed = math.floor(tonumber(seed) or M.DEFAULT_SEED)
-    local battle = engine.new_battle({
-        seed = seed,
-        sides = setup.default_matchup(),
-    })
-    engine.run(battle)
-    local model = M.from_events(battle.log.events)
-    model.log_text = battle.log:text()
-    return model
-end
-
-function M.step(model, count)
+function M.replay_step(replay, count)
     count = count or 1
-    local last = nil
-    for _ = 1, count do
-        if model.cursor >= #model.events then
-            model.playing = false
-            break
-        end
-        model.cursor = model.cursor + 1
-        last = model.events[model.cursor]
-        M.apply_event(model, last)
+    replay.cursor = math.min(#replay.recording.frames, replay.cursor + count)
+    if replay.cursor >= #replay.recording.frames then
+        replay.playing = false
+        replay.finished = true
     end
-    if model.cursor >= #model.events then model.playing = false end
-    return last
+    return replay.recording.frames[replay.cursor]
 end
 
-function M.update(model, dt)
-    if not model.playing then return end
-    model.elapsed = model.elapsed + math.max(0, tonumber(dt) or 0)
-    while model.elapsed >= model.interval and model.playing do
-        model.elapsed = model.elapsed - model.interval
-        M.step(model, 1)
+function M.replay_update(replay, dt, speed)
+    if not replay.playing then return end
+    replay.elapsed = replay.elapsed + math.max(0, tonumber(dt) or 0) * (speed or 1)
+    while replay.elapsed >= replay.interval and replay.playing do
+        replay.elapsed = replay.elapsed - replay.interval
+        M.replay_step(replay, 1)
     end
 end
 
-function M.replay(model)
-    local replay = M.from_events(model.events)
-    replay.log_text = model.log_text
-    return replay
+function M.replay_seek(replay, tick)
+    local frames = replay.recording.frames
+    local selected = 1
+    for index, frame in ipairs(frames) do
+        if frame.tick > tick then break end
+        selected = index
+    end
+    replay.cursor = selected
+    replay.elapsed = 0
+    replay.finished = selected >= #frames
+    replay.playing = not replay.finished
+    return frames[selected]
 end
 
-function M.next_seed(model)
-    local seed = model.seed + 1
-    if seed >= 2147483647 then seed = 1 end
-    return M.new(seed)
-end
-
-function M.to_end(model)
-    while model.cursor < #model.events do M.step(model, 1) end
-    return model
+function M.replay_project(replay)
+    local current = replay.recording.frames[replay.cursor]
+    local previous = replay.recording.frames[math.max(1, replay.cursor - 1)]
+    local alpha = replay.interval > 0 and replay.elapsed / replay.interval or 1
+    return M.project(current, previous, alpha)
 end
 
 return M

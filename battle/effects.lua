@@ -13,15 +13,15 @@ local M = {}
 --
 --   damage_reduction  incoming collision damage prevented
 --   shell_wear        extra durability removed from the attacking shell
---   momentum_delta    added to the attacker's remaining cascade momentum
+--   momentum_delta    launch-speed impulse applied after physical contact
 --   heal_after_hit    HP restored when the brick survives a collision
 --   protect_adjacent  damage reduction granted to orthogonal neighbours
---   reflect           reverse travel and lateral trajectory on survival
---   steer             "inward" bends trajectory toward the formation centre
+--   reflect           amplify physical rebound on survival
+--   steer             "inward" supplies a radial attraction field
 --   status            status placed on the attacking marble
 --   death_splash      damage dealt to orthogonal neighbours on destruction
 --   collision_splash  damage dealt to orthogonal neighbours on every hit
---   skip_rows         additional rows crossed after a surviving collision
+--   skip_rows         legacy content magnitude translated to vault impulse
 --   harmless          the collision does not wear the attacking shell
 --   negate_once       first damaging collision is prevented
 --   break_shell       destroy the current shell after it deals damage
