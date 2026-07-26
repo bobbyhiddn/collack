@@ -17,6 +17,7 @@ package.path = table.concat({
 local harness = require("battle.tests.harness")
 
 harness.run({
+    require("battle.tests.test_vslice_contract"),
     require("battle.tests.test_data_model"),
     require("battle.tests.test_event_protocol"),
     require("battle.tests.test_content"),

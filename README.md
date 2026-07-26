@@ -4,6 +4,12 @@ Callack is a deterministic two-player marble-and-brick auto battler built with
 LÖVE/Lua. The pure engine in `battle/` resolves fixed-grid, volley-locked
 battles; `src/` is a thin controller and renderer that animates its event log.
 
+The current executable is a discrete exhibition prototype. The accepted
+product migration is defined by
+[`ADR 0005`](docs/decisions/0005-continuous-vertical-slice.md) and the
+[`Battle Engine vertical slice`](docs/specs/battle-engine-vertical-slice.md):
+draft, setup, canonical continuous autobattle and recorded-state result/replay.
+
 ## Quick start
 
 ```bash

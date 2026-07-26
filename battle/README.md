@@ -4,6 +4,12 @@ Headless, deterministic, pure Lua. No `love.*`, no graphics, no input. This runs
 under plain `lua` or `luajit` from the command line so CI can test it without a
 display.
 
+> **Migration status:** this directory currently contains the discrete
+> exhibition prototype. It is not the target combat model. ADR 0005 and
+> `docs/specs/battle-engine-vertical-slice.md` replace its event-log-first
+> boundary with a 120 Hz continuous world; `battle/vslice_contract.lua` pins
+> the downstream state, draft, setup, timing and seed contracts.
+
 Callack is a **two-player auto battler**. Each player has a brick formation and a
 sling loaded with marbles, and fires at the opponent. There is no paddle.
 
