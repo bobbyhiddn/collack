@@ -119,8 +119,12 @@ function M.build(def, sling, owner_id)
         momentum = #built_shells + (sling.momentum_bonus or 0),
         damage_bonus = sling.damage_bonus or 0,
         scatter = sling.scatter or 0,
+        ricochet = sling.ricochet == true,
+        precision = sling.precision == true,
+        effect_power = sling.effect_power or 0,
         sling_id = sling.id,
         lane = nil,
+        statuses = {},
         state = "ready", -- ready | flying | destroyed
     }
 end

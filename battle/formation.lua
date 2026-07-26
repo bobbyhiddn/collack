@@ -40,10 +40,11 @@ function M.build(layout)
                 grid[row][col] = {
                     id = def.id,
                     name = def.name,
+                    family = def.family or "basic",
                     behaviour = def.behaviour,
                     hp = def.hp,
                     max_hp = def.hp,
-                    chain_damage = def.chain_damage or 0,
+                    aegis_spent = false,
                     row = row,
                     col = col,
                     alive = true,

@@ -12,15 +12,27 @@ M.LAYOUTS = {
     -- A conventional wedge: soft front, absorbers in the middle, kegs tucked
     -- where a chain reaction can take the whole middle out.
     wedge = {
-        { "chalk_block", "plain_block", "basalt_absorber", "mirror_pane", "basalt_absorber", "plain_block", "chalk_block" },
-        { ".",           "plain_block", "powder_keg",      "plain_block", "powder_keg",      "plain_block", "."           },
-        { ".",           ".",           "mirror_pane",     "plain_block", "mirror_pane",     ".",           "."           },
+        { "training_dummy", "plain_block", "basalt_absorber", "aegis_keystone", "basalt_absorber", "plain_block", "training_dummy" },
+        { ".", "granite_fortifier", "venom_glass", "temporal_anchor", "shatter_crystal", "granite_fortifier", "." },
+        { ".", ".", "prismatic_mirror", "powder_keg", "splice_node", ".", "." },
     },
     -- Mirrors on the outside, so wide shots get thrown back out.
     bastion = {
-        { "mirror_pane",  "chalk_block",      "plain_block", "plain_block", "plain_block", "chalk_block",      "mirror_pane"  },
-        { "basalt_absorber", ".",             "plain_block", "powder_keg",  "plain_block", ".",             "basalt_absorber" },
-        { ".",            "plain_block",      "plain_block", "plain_block", "plain_block", "plain_block",      "."            },
+        { "mirror_pane", "chalk_block", "rime_block", "moss_regenerator", "lodestone_block", "chalk_block", "mirror_pane" },
+        { "granite_fortifier", ".", "void_prism", "vault_arch", "void_prism", ".", "granite_fortifier" },
+        { ".", "splice_node", "aegis_keystone", "plain_block", "aegis_keystone", "powder_keg", "." },
+    },
+    -- Ten deliberately positioned quality bricks. Fortifiers shield the rare
+    -- anchors beside them while the two void prisms punish repeated attacks.
+    quality_ten = {
+        { "aegis_keystone", ".", "temporal_anchor", ".", ".", ".", ".", "temporal_anchor", ".", "aegis_keystone" },
+        { "granite_fortifier", "void_prism", "granite_fortifier", ".", ".", ".", ".", "granite_fortifier", "void_prism", "granite_fortifier" },
+        { ".", ".", ".", ".", ".", ".", ".", ".", ".", "." },
+    },
+    weak_thirty = {
+        { "chalk_block", "chalk_block", "chalk_block", "chalk_block", "chalk_block", "chalk_block", "chalk_block", "chalk_block", "chalk_block", "chalk_block" },
+        { "chalk_block", "chalk_block", "chalk_block", "chalk_block", "chalk_block", "chalk_block", "chalk_block", "chalk_block", "chalk_block", "chalk_block" },
+        { "chalk_block", "chalk_block", "chalk_block", "chalk_block", "chalk_block", "chalk_block", "chalk_block", "chalk_block", "chalk_block", "chalk_block" },
     },
 }
 
@@ -77,15 +89,37 @@ function M.default_matchup()
     return {
         A = {
             name = "Fen",
-            sling = "tuned_sling",
+            sling = "ricochet",
             formation = M.LAYOUTS.wedge,
             marbles = hand("warden_rare", "geode_uncommon", "quartz_common", "chalk_common"),
         },
         B = {
             name = "Bram",
-            sling = "heavy_sling",
+            sling = "effect_amplifier",
             formation = M.LAYOUTS.bastion,
             marbles = hand("lodestone_epic", "drifter_common", "geode_uncommon", "chalk_common"),
+        },
+    }
+end
+
+--- Constructed quality-versus-quantity proof. Both players receive the same
+--- ordered legendary hand and precision sling, leaving brick choice and
+--- placement as the only asymmetric inputs.
+function M.quality_vs_quantity()
+    return {
+        A = {
+            name = "Tenfold",
+            sling = "precision",
+            formation = M.LAYOUTS.quality_ten,
+            marbles = hand("cinder_legendary", "cinder_legendary", "cinder_legendary",
+                "cinder_legendary", "cinder_legendary"),
+        },
+        B = {
+            name = "Thirty Chalk",
+            sling = "precision",
+            formation = M.LAYOUTS.weak_thirty,
+            marbles = hand("cinder_legendary", "cinder_legendary", "cinder_legendary",
+                "cinder_legendary", "cinder_legendary"),
         },
     }
 end

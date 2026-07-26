@@ -2,6 +2,8 @@
 dist/
 .node_cache/
 .love_cache/
+node_modules/
+.playwright-browsers/
 
 # Capacitor generated artifacts (regenerated from ios-template/ on every build)
 capacitor/node_modules/
@@ -20,6 +22,5 @@ capacitor/ios/
 # Lua build artifacts (none expected, but)
 *.luac
 
-# CI / lockfiles we don't want to source-control yet
-package-lock.json
+# Capacitor's generated lockfile is not part of the preserved wrapper scaffold.
 capacitor/package-lock.json

@@ -40,17 +40,73 @@ function Log:add(volley, side, kind, fields)
     return event
 end
 
+local function format_number(value)
+    if value == math.floor(value) then
+        return string.format("%d", value)
+    end
+    -- No engine value is fractional today; if one ever is, pin the
+    -- formatting so it cannot drift between platforms.
+    return string.format("%.6f", value)
+end
+
+local function sorted_keys(value)
+    local keys = {}
+    for key in pairs(value) do keys[#keys + 1] = key end
+    table.sort(keys, function(left, right)
+        local left_type, right_type = type(left), type(right)
+        if left_type ~= right_type then return left_type < right_type end
+        if left_type == "number" or left_type == "string" then return left < right end
+        if left_type == "boolean" then return left == false and right == true end
+        error("event payload table keys must be scalar values")
+    end)
+    return keys
+end
+
+local function is_array(keys)
+    for index, key in ipairs(keys) do
+        if key ~= index then return false end
+    end
+    return true
+end
+
+local function format_nested(value, visiting)
+    local value_type = type(value)
+    if value_type == "number" then return format_number(value) end
+    if value_type == "boolean" then return value and "true" or "false" end
+    if value_type == "string" then return string.format("%q", value) end
+    if value_type ~= "table" then
+        error("unsupported nested event value type: " .. value_type)
+    end
+    if visiting[value] then error("event payload tables must not contain cycles") end
+    visiting[value] = true
+
+    local keys = sorted_keys(value)
+    local parts = {}
+    if is_array(keys) then
+        for _, item in ipairs(value) do
+            parts[#parts + 1] = format_nested(item, visiting)
+        end
+        visiting[value] = nil
+        return "[" .. table.concat(parts, ",") .. "]"
+    end
+
+    for _, key in ipairs(keys) do
+        parts[#parts + 1] = format_nested(key, visiting)
+            .. ":" .. format_nested(value[key], visiting)
+    end
+    visiting[value] = nil
+    return "{" .. table.concat(parts, ",") .. "}"
+end
+
 local function format_value(value)
     if type(value) == "number" then
-        if value == math.floor(value) then
-            return string.format("%d", value)
-        end
-        -- No engine value is fractional today; if one ever is, pin the
-        -- formatting so it cannot drift between platforms.
-        return string.format("%.6f", value)
+        return format_number(value)
     end
     if type(value) == "boolean" then
         return value and "true" or "false"
+    end
+    if type(value) == "table" then
+        return format_nested(value, {})
     end
     return tostring(value)
 end

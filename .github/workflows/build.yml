@@ -35,10 +35,8 @@ jobs:
   # blowback hitting friendly marbles, both win conditions, and the
   # seed-determinism check.
   #
-  # Deliberately NOT in the `build` job's `needs`: the brick-breaker
-  # spike is live on Shore, and battle-engine work must never be able
-  # to block its build or deploy. A failure here still fails the check
-  # run and blocks the PR.
+  # battle/ is shipped by every client build, so its headless suite gates
+  # packaging alongside the presentation-adapter suite.
   # -----------------------------------------------------------------
   battle-test:
     runs-on: ubuntu-latest
@@ -60,7 +58,7 @@ jobs:
   # web + desktop matrix: both run on ubuntu-latest in parallel.
   # -----------------------------------------------------------------
   build:
-    needs: logic-test
+    needs: [logic-test, battle-test]
     strategy:
       fail-fast: false
       matrix:
@@ -76,11 +74,34 @@ jobs:
           node-version: '20'
 
       - name: Install Linux build prereqs
-        run: sudo apt-get update && sudo apt-get install -y zip unzip curl
+        run: sudo apt-get update && sudo apt-get install -y zip unzip curl shellcheck
 
       - name: Build web
         if: matrix.target == 'web'
         run: ./scripts/build-web.sh
+
+      - name: Verify reproducible web artifacts
+        if: matrix.target == 'web'
+        run: bash scripts/verify-web-reproducible.sh
+
+      - name: Verify shell scripts
+        run: |
+          bash -n scripts/*.sh
+          shellcheck scripts/*.sh
+
+      - name: Install packaged-browser verifier
+        if: matrix.target == 'web'
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: .playwright-browsers
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Verify packaged browser at mobile viewport
+        if: matrix.target == 'web'
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: .playwright-browsers
+        run: npm run verify:web
 
       - name: Build desktop (Linux + Windows)
         if: matrix.target == 'desktop'
@@ -127,18 +148,21 @@ jobs:
         with:
           node-version: '20'
 
+      - name: Build web bundle
+        run: ./scripts/build-web.sh
+
+      - name: Wrap in Capacitor
+        run: ./scripts/build-ios.sh
+
+      - name: Verify generated iOS scaffold
+        run: test -f capacitor/ios/App/Gemfile
+
       - name: Setup Ruby (for Fastlane)
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.2.6'
           bundler-cache: true
           working-directory: 'capacitor/ios/App'
-
-      - name: Build web bundle
-        run: ./scripts/build-web.sh
-
-      - name: Wrap in Capacitor
-        run: ./scripts/build-ios.sh
 
       - name: Setup Keychain
         run: |

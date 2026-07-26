@@ -20,10 +20,13 @@ CACHE="$ROOT/.love_cache"
 
 mkdir -p "$DESKTOP" "$CACHE"
 
-# 1. Build the .love archive (pure zip of src/).
+# 1. Build presentation plus the canonical battle modules.
 LOVE_ARCHIVE="$DIST/collack-spike.love"
 rm -f "$LOVE_ARCHIVE"
 ( cd "$SRC" && zip -9 -r "$LOVE_ARCHIVE" . -x '*.DS_Store' >/dev/null )
+( cd "$ROOT" && zip -9 -r "$LOVE_ARCHIVE" battle \
+    -x 'battle/tests/*' 'battle/cli.lua' 'battle/README.md' '*.DS_Store' >/dev/null )
+unzip -tqq "$LOVE_ARCHIVE"
 echo "[desktop] built $LOVE_ARCHIVE"
 
 # 2. Fetch LÖVE Linux AppImage runtime (cached).
