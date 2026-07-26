@@ -1,0 +1,146 @@
+-- battle/marble.lua — marble construction and the rules that constrain it.
+--
+-- A marble is a core wrapped in an ORDERED array of shells, outermost first.
+-- shells[1] is the layer that takes the next hit. When it breaks it is removed
+-- and shells[2] becomes shells[1]. When the array empties the core is exposed,
+-- which is precisely the moment the marble stops existing as a combat unit.
+--
+-- Two invariants are enforced here rather than trusted:
+--   1. shell count is at least 1 and at most the rarity's cap;
+--   2. a live marble always has at least one shell, so the core is never
+--      exposed during play (see marble.assert_core_covered).
+
+local cores = require("battle.content.cores")
+local shells = require("battle.content.shells")
+
+local M = {}
+
+-- Rarity shell caps, straight from the spec.
+M.SHELL_CAP = {
+    common = 1,
+    uncommon = 2,
+    rare = 3,
+    epic = 4,
+    legendary = 5,
+}
+
+-- Rarity ordering, used to check a core is legal for the marble's rarity.
+M.RARITY_ORDER = { "common", "uncommon", "rare", "epic", "legendary" }
+
+local rarity_rank = {}
+for index, name in ipairs(M.RARITY_ORDER) do
+    rarity_rank[name] = index
+end
+
+function M.rarity_rank(rarity)
+    return rarity_rank[rarity]
+end
+
+local next_uid = 0
+local function alloc_uid()
+    next_uid = next_uid + 1
+    return next_uid
+end
+
+--- Reset the uid counter. Called at the start of every battle so that uids are
+--- a function of the battle alone; otherwise a process that runs two battles
+--- would produce different uids the second time and the log would not be
+--- reproducible across runs.
+function M.reset_uids()
+    next_uid = 0
+end
+
+--- Build a live marble from a definition table:
+---   { name, rarity, core = "<core id>", shells = { "<shell id>", ... } }
+--- shells are listed OUTERMOST FIRST.
+--- sling is applied at build time and baked into the resulting stats.
+function M.build(def, sling, owner_id)
+    local cap = M.SHELL_CAP[def.rarity]
+    if not cap then
+        error("unknown rarity: " .. tostring(def.rarity))
+    end
+
+    local shell_ids = def.shells or {}
+    if #shell_ids < 1 then
+        error(string.format("marble %q has no shells; the core would be exposed", tostring(def.name)))
+    end
+    if #shell_ids > cap then
+        error(string.format(
+            "marble %q is %s and may carry at most %d shell(s), got %d",
+            tostring(def.name), def.rarity, cap, #shell_ids))
+    end
+
+    local core_def = cores.by_id[def.core]
+    if not core_def then
+        error("unknown core: " .. tostring(def.core))
+    end
+    if rarity_rank[core_def.min_rarity] > rarity_rank[def.rarity] then
+        error(string.format(
+            "core %q needs rarity %s or better, marble %q is %s",
+            core_def.id, core_def.min_rarity, tostring(def.name), def.rarity))
+    end
+    -- The spec's rule, enforced: only uncommon and above carry a release
+    -- effect. Commons get baseline blowback, which every core gets anyway.
+    if def.rarity == "common" and core_def.release ~= nil then
+        error(string.format("common marble %q may not carry a release effect", tostring(def.name)))
+    end
+
+    sling = sling or {}
+    local built_shells = {}
+    for index, shell_id in ipairs(shell_ids) do
+        local shell_def = shells.by_id[shell_id]
+        if not shell_def then
+            error("unknown shell: " .. tostring(shell_id))
+        end
+        built_shells[index] = {
+            id = shell_def.id,
+            mineral = shell_def.mineral,
+            pattern = shell_def.pattern,
+            collision = shell_def.collision,
+            durability = shell_def.durability + (sling.durability_bonus or 0),
+            max_durability = shell_def.durability + (sling.durability_bonus or 0),
+        }
+    end
+
+    return {
+        uid = alloc_uid(),
+        name = def.name,
+        rarity = def.rarity,
+        owner = owner_id,
+        core = {
+            id = core_def.id,
+            name = core_def.name,
+            trajectory = core_def.trajectory + (sling.aim or 0),
+            release = core_def.release,
+        },
+        shells = built_shells,
+        -- Momentum is how many collisions the marble can push through before it
+        -- comes to rest. More shells = more mass = further into the formation.
+        momentum = #built_shells + (sling.momentum_bonus or 0),
+        damage_bonus = sling.damage_bonus or 0,
+        scatter = sling.scatter or 0,
+        sling_id = sling.id,
+        lane = nil,
+        state = "ready", -- ready | flying | destroyed
+    }
+end
+
+--- Outermost shell, or nil if the core is exposed (which must never happen for
+--- a marble still in a rack).
+function M.outer_shell(marble)
+    return marble.shells[1]
+end
+
+function M.shell_count(marble)
+    return #marble.shells
+end
+
+--- Invariant check used by the engine and by the tests.
+function M.assert_core_covered(marble)
+    if #marble.shells < 1 then
+        error(string.format("marble %s (uid %d) has an exposed core while still in play",
+            tostring(marble.name), marble.uid))
+    end
+end
+
+return M
