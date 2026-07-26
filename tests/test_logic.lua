@@ -58,6 +58,55 @@ logic.reset(w4)
 assert_eq(w4.status, "playing", "reset restores playing")
 assert_eq(w4.bricks_remaining, 27, "reset restores brick count")
 
+-- pointer aiming centres the paddle on the pointer and clamps to the field
+local w5 = logic.new_world()
+logic.set_paddle_center(w5, 400)
+assert_eq(w5.paddle.x, 400 - w5.paddle.w / 2, "paddle centred on pointer")
+logic.set_paddle_center(w5, -500)
+assert_eq(w5.paddle.x, 0, "paddle clamped left by pointer")
+logic.set_paddle_center(w5, 99999)
+assert_eq(w5.paddle.x, 800 - w5.paddle.w, "paddle clamped right by pointer")
+
+-- pointer_press while playing aims, and does NOT restart
+local w6 = logic.new_world()
+w6.score = 70
+local restarted = logic.pointer_press(w6, 200)
+assert_eq(restarted, false, "press while playing does not restart")
+assert_eq(w6.paddle.x, 200 - w6.paddle.w / 2, "press while playing aims paddle")
+assert_eq(w6.score, 70, "press while playing keeps score")
+
+-- pointer_press on a finished round restarts it: the only restart path a
+-- touch-only device has (R and SPACE are keyboard-bound).
+local w7 = logic.new_world()
+w7.marble.y = 5000
+logic.update(w7, 0.016)
+assert_eq(w7.status, "lost", "w7 is lost before the tap")
+w7.score = 120
+assert_eq(logic.pointer_press(w7, 400), true, "tap after loss reports a restart")
+assert_eq(w7.status, "playing", "tap after loss restarts the round")
+assert_eq(w7.score, 0, "tap after loss clears the score")
+assert_eq(w7.bricks_remaining, 27, "tap after loss restores the bricks")
+
+-- same for a won round
+local w8 = logic.new_world()
+for _, b in ipairs(w8.bricks) do b.alive = false end
+w8.bricks_remaining = 0
+logic.update(w8, 0.016)
+assert_eq(w8.status, "won", "w8 is won before the tap")
+assert_eq(logic.pointer_press(w8, 400), true, "tap after win reports a restart")
+assert_eq(w8.status, "playing", "tap after win restarts the round")
+
+-- pointer_move aims while playing, and is ignored on a finished round so a
+-- stray drag across the game-over screen cannot silently restart it
+local w9 = logic.new_world()
+assert_eq(logic.pointer_move(w9, 300), true, "drag while playing moves paddle")
+assert_eq(w9.paddle.x, 300 - w9.paddle.w / 2, "drag while playing aims paddle")
+w9.status = "lost"
+local frozen = w9.paddle.x
+assert_eq(logic.pointer_move(w9, 600), false, "drag after loss reports no move")
+assert_eq(w9.paddle.x, frozen, "drag after loss leaves paddle alone")
+assert_eq(w9.status, "lost", "drag after loss does not restart")
+
 if failures == 0 then
     print("OK: all logic tests passed")
     os.exit(0)

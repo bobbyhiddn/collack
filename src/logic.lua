@@ -69,6 +69,33 @@ function M.move_paddle(world, direction, dt)
     if p.x + p.w > FIELD_W then p.x = FIELD_W - p.w end
 end
 
+-- Aim the paddle so its centre sits at field-x `cx`, clamped to the field.
+-- Shared by touch, mouse and any future pointer source.
+function M.set_paddle_center(world, cx)
+    local p = world.paddle
+    p.x = math.max(0, math.min(cx - p.w / 2, FIELD_W - p.w))
+end
+
+-- Pointer press (touch or mouse-down) at field-x `cx`.
+-- On a finished round this restarts it — the only restart path a touch-only
+-- device has, since R and SPACE are keyboard-bound. Returns true if it restarted.
+function M.pointer_press(world, cx)
+    if world.status ~= "playing" then
+        M.reset(world)
+        return true
+    end
+    M.set_paddle_center(world, cx)
+    return false
+end
+
+-- Pointer drag at field-x `cx`. Ignored on a finished round so a stray drag
+-- across the game-over screen cannot silently restart it. Returns true if it moved.
+function M.pointer_move(world, cx)
+    if world.status ~= "playing" then return false end
+    M.set_paddle_center(world, cx)
+    return true
+end
+
 function M.update(world, dt)
     if world.status ~= "playing" then return end
 
