@@ -1,47 +1,44 @@
-# Collack Framework Spike
+# Callack Auto-Battler
 
-> Spike: Love2D source → browser + iOS + Linux/Windows desktop, via love.js + Capacitor.
-> Adapted from `bobbyhiddn/GoAF` and `bobbyhiddn/capacitor-asteroids`.
-> See **[REPORT.md](REPORT.md)** for the GO/NO-GO verdict and **[FRAMEWORK-PATTERNS.md](FRAMEWORK-PATTERNS.md)** for the framework spec.
+Callack is a deterministic two-player marble-and-brick auto battler built with
+LÖVE/Lua. The pure engine in `battle/` resolves fixed-grid, volley-locked
+battles; `src/` is a thin controller and renderer that animates its event log.
 
 ## Quick start
 
 ```bash
-# Run pure-logic tests (no LÖVE required):
-lua tests/test_logic.lua
+# Headless engine and presentation tests:
+lua5.1 battle/tests/run_all.lua
+lua5.1 tests/test_logic.lua
 
-# Build everything:
-./scripts/build-web.sh         # → dist/web/
-./scripts/build-desktop.sh     # → dist/desktop/collack-spike.x86_64
-./scripts/build-desktop.sh --windows  # also produces dist/desktop/collack-spike-win64.zip
-./scripts/build-ios.sh         # → capacitor/ios/App/   (Xcode project)
+# Inspect a deterministic battle:
+lua5.1 battle/cli.lua --seed 9125
 
-# Run the web build locally:
-(cd dist/web && python3 -m http.server 8000) && open http://localhost:8000
-
-# Run the Linux build:
-./dist/desktop/collack-spike.x86_64
+# Build targets:
+./scripts/build-web.sh
+./scripts/build-desktop.sh
+./scripts/build-desktop.sh --windows
+./scripts/build-ios.sh
 ```
 
-## Repo map
+The web result is written to `dist/web/`. Serve that directory with any static
+HTTP server. The in-canvas controls replay the fixed seed or advance to a new
+seed; keyboard equivalents are `R` and `N`, with Space to pause and Right Arrow
+to single-step.
+
+## Repository map
 
 ```
-src/                    LÖVE source — the only thing that changes when swapping games.
-scripts/                Build scripts for each target.
-capacitor/              Capacitor wrapper. ios-template/ seeds ios/ on first build.
-.github/workflows/      CI: matrix(web,desktop) on ubuntu, gated ios on macos.
-tests/                  Pure-Lua tests (no LÖVE).
-dist/                   Build outputs (gitignored).
-FRAMEWORK-PATTERNS.md   How the framework works + how to swap the game.
-REPORT.md               Spike GO/NO-GO record.
+battle/                 Canonical deterministic pure-Lua simulation and content
+src/                    LÖVE event-log adapter UI; no combat rules
+tests/                  Plain-Lua presentation/replay tests
+scripts/                love.js, desktop, and Capacitor packaging
+web-shell/              Responsive 390x844 browser shell
+capacitor/              Preserved mobile wrapper and iOS scaffold
+docs/decisions/          Settled engine and simulation decisions
 ```
 
-## Pinned versions
+## Runtime pins
 
-| | |
-|---|---|
-| LÖVE | 11.5 |
-| love.js (npm) | 11.4.1 (lags LÖVE; runtime is 11.4) |
-| Capacitor | 6.x |
-
-See `FRAMEWORK-PATTERNS.md § 1` for the full version table and `§ 3` for love.js flag rationale.
+The web build uses `love.js@11.4.1`, which embeds LÖVE 11.4. Desktop packaging
+uses LÖVE 11.5. Capacitor remains on the existing 6.x scaffold.

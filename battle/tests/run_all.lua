@@ -18,6 +18,8 @@ local harness = require("battle.tests.harness")
 
 harness.run({
     require("battle.tests.test_data_model"),
+    require("battle.tests.test_content"),
+    require("battle.tests.test_quality_vs_quantity"),
     require("battle.tests.test_resolution"),
     require("battle.tests.test_blowback"),
     require("battle.tests.test_win_conditions"),

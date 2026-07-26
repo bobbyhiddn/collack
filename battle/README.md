@@ -44,17 +44,15 @@ never replace it.
 Collisions spend durability. At zero the shell breaks and the next one inward
 becomes outermost.
 
-**Brick** — a static formation element with behaviour, not just hit points:
+**Brick** — a static formation element with behaviour, not just hit points.
+The shipped families are defensive (`absorb`, `reflect`, `regenerate`,
+`fortify`), effects (`poison`, `freeze`, `magnetic`, `shatter`), utility
+(`chain`, `vault`, `splice`, `dummy`), and rare (`aegis`, `void`, `mirror`,
+`temporal`). All resolve through the shared profiles in `effects.lua`.
 
-| archetype | behaviour |
-|---|---|
-| `plain_block`, `chalk_block` | inert — the control. Takes damage, dies, does nothing else. |
-| `basalt_absorber` | soaks 1 off every hit and grinds an extra point of durability off the shell. |
-| `mirror_pane` | if it survives the hit, throws the marble back and flips its trajectory. |
-| `powder_keg` | detonates on death into its orthogonal neighbours, which can chain. |
-
-**Sling** — modifies every marble in the hand: damage, durability, momentum,
-aim, and scatter. Applied once at build time and baked into the marble's stats.
+**Sling** — modifies every marble in the hand. The named archetypes are volley,
+momentum, ricochet, spread, precision, and effect amplifier; each changes a
+different part of commitment, targeting, cascade movement, or effect strength.
 
 ## How a battle runs
 

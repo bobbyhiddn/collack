@@ -1,8 +1,8 @@
 <!doctype html>
 <!--
   Responsive shell for the Collack love.js bundle.
-  Replaces the stock love.js index.html (which uses a fixed 800x600 loadingCanvas
-  that renders offscreen on mobile portrait viewports). This template is copied
+  Replaces the stock love.js index.html with a phone-native portrait stage.
+  This template is copied
   into dist/web/ by scripts/build-web.sh AFTER love.js generates its output, so
   it intentionally overrides theme/love.css via inline <style>.
 -->
@@ -14,7 +14,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#000000">
-    <title>Collack Spike</title>
+    <title>Callack Auto-Battler</title>
 
     <!-- love.js still ships theme/love.css; override the bits that fight responsiveness. -->
     <link rel="stylesheet" type="text/css" href="theme/love.css">
@@ -31,6 +31,7 @@
         color: #ddd;
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
         overflow: hidden;
+        box-sizing: border-box;
       }
 
       body {
@@ -43,19 +44,14 @@
         padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
       }
 
-      h1 {
-        font-size: 1.1rem;
-        font-weight: 600;
-        margin: 0 0 0.5rem 0;
-        color: #ddd;
-      }
-
-      /* The canvas stage: takes the available viewport, locked to the game's 4:3
-         logical resolution (800x600). Both canvases share the slot. */
+      /* The stage keeps the 390x844 game surface pixel-perfect on a phone and
+         scales it uniformly into desktop windows. */
       #stage {
         position: relative;
-        width: min(100vw, calc(100vh * 4 / 3));
-        height: min(100vh, calc(100vw * 3 / 4));
+        width: min(100vw, calc(100vh * 390 / 844));
+        width: min(100dvw, calc(100dvh * 390 / 844));
+        height: min(100vh, calc(100vw * 844 / 390));
+        height: min(100dvh, calc(100dvw * 844 / 390));
         max-width: 100vw;
         max-height: 100vh;
         display: flex;
@@ -73,14 +69,14 @@
         height: 100%;
         max-width: 100%;
         max-height: 100%;
-        aspect-ratio: 4 / 3;
+        aspect-ratio: 390 / 844;
         background: #000;
         border: 0;
         padding: 0;
         margin: 0;
         outline: none;
-        /* Without this iOS treats a paddle drag as a scroll/pinch gesture and
-           swallows the touchmove stream before SDL ever sees it. */
+        image-rendering: pixelated;
+        /* Let the two in-canvas controls receive taps without a page gesture. */
         touch-action: none;
         -webkit-user-select: none;
         user-select: none;
@@ -121,47 +117,9 @@
       }
       @keyframes spin { to { transform: rotate(360deg); } }
 
-      footer {
-        position: fixed;
-        bottom: env(safe-area-inset-bottom);
-        left: 0;
-        right: 0;
-        font-size: 11px;
-        color: #666;
-        text-align: center;
-        padding: 6px 10px;
-        background: rgba(0,0,0,0.4);
-        line-height: 1.3;
-      }
-      footer a { color: #8ec3e3; text-decoration: none; }
-      footer button {
-        font-size: 11px;
-        padding: 2px 8px;
-        margin-left: 6px;
-        background: #222;
-        color: #ddd;
-        border: 1px solid #444;
-        border-radius: 3px;
-        cursor: pointer;
-      }
-      footer button:hover { background: #333; }
-
-      /* Tighter on narrow portrait. */
-      @media (max-width: 480px) {
-        h1 { font-size: 0.95rem; margin-bottom: 0.35rem; }
-        footer { font-size: 10px; padding: 4px 8px; }
-      }
-      /* On short landscape (typical phone landscape), drop the title to give
-         the canvas the whole viewport. */
-      @media (max-height: 480px) {
-        h1 { display: none; }
-        footer { font-size: 9px; padding: 2px 6px; }
-      }
     </style>
   </head>
   <body>
-    <h1>Collack Spike</h1>
-
     <div id="stage">
       <!-- love.js expects both canvases in the DOM. loadingCanvas is hidden via CSS;
            we use the DOM #loading element for progress instead. -->
@@ -174,16 +132,9 @@
     </div>
 
     <script type='text/javascript'>
-      function goFullScreen(){
-        var canvas = document.getElementById("canvas");
-        if(canvas.requestFullScreen)        canvas.requestFullScreen();
-        else if(canvas.webkitRequestFullScreen) canvas.webkitRequestFullScreen();
-        else if(canvas.mozRequestFullScreen)    canvas.mozRequestFullScreen();
-      }
-
       // Stock love.js shell expects drawLoadingText() on the loadingCanvas.
       // We redirect it to the DOM #loading-text element so progress is visible
-      // on mobile (the original 800x600 loadingCanvas drew offscreen-right).
+      // on mobile (the stock loadingCanvas can draw progress offscreen).
       function drawLoadingText(text) {
         var el = document.getElementById('loading-text');
         if (el) el.textContent = text || 'Loading…';
@@ -197,10 +148,6 @@
         if ([32, 37, 38, 39, 40].indexOf(e.keyCode) > -1) e.preventDefault();
       }, false);
 
-      // Tell the game whether this device has a touchscreen, so it can show
-      // "drag / tap" hints instead of keyboard ones on the very first frame.
-      // The game cannot work this out for itself: love.system.getOS() reports
-      // "Web" under love.js, including inside the Capacitor iOS wrapper.
       var HAS_TOUCH = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
       var LOVE_ARGS = ["./game.love"];
       if (HAS_TOUCH) LOVE_ARGS.push("--touch");
@@ -250,10 +197,5 @@
     </script>
     <script type="text/javascript" src="game.js"></script>
     <script async type="text/javascript" src="love.js" onload="applicationLoad(this)"></script>
-
-    <footer>
-      Built with <a href="https://github.com/Davidobot/love.js">love.js</a>
-      <button onclick="goFullScreen();">Fullscreen</button>
-    </footer>
   </body>
 </html>

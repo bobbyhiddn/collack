@@ -35,10 +35,8 @@ jobs:
   # blowback hitting friendly marbles, both win conditions, and the
   # seed-determinism check.
   #
-  # Deliberately NOT in the `build` job's `needs`: the brick-breaker
-  # spike is live on Shore, and battle-engine work must never be able
-  # to block its build or deploy. A failure here still fails the check
-  # run and blocks the PR.
+  # battle/ is shipped by every client build, so its headless suite gates
+  # packaging alongside the presentation-adapter suite.
   # -----------------------------------------------------------------
   battle-test:
     runs-on: ubuntu-latest
@@ -60,7 +58,7 @@ jobs:
   # web + desktop matrix: both run on ubuntu-latest in parallel.
   # -----------------------------------------------------------------
   build:
-    needs: logic-test
+    needs: [logic-test, battle-test]
     strategy:
       fail-fast: false
       matrix:

@@ -6,6 +6,98 @@
 
 local M = {}
 
+-- Brick behaviour profiles. Content names a behaviour; the engine interprets
+-- this shared vocabulary at its existing collision/death phases. Keeping the
+-- mechanics as data avoids a separate handler (and subtly different damage
+-- ordering) for every brick family.
+--
+--   damage_reduction  incoming collision damage prevented
+--   shell_wear        extra durability removed from the attacking shell
+--   momentum_delta    added to the attacker's remaining cascade momentum
+--   heal_after_hit    HP restored when the brick survives a collision
+--   protect_adjacent  damage reduction granted to orthogonal neighbours
+--   reflect           reverse travel and lateral trajectory on survival
+--   steer             "inward" bends trajectory toward the formation centre
+--   status            status placed on the attacking marble
+--   death_splash      damage dealt to orthogonal neighbours on destruction
+--   collision_splash  damage dealt to orthogonal neighbours on every hit
+--   skip_rows         additional rows crossed after a surviving collision
+--   harmless          the collision does not wear the attacking shell
+--   negate_once       first damaging collision is prevented
+--   break_shell       destroy the current shell after it deals damage
+--   rewind            restore pre-collision HP when the brick survives
+M.brick = {
+    inert = {},
+    absorb = {
+        damage_reduction = 1,
+        shell_wear = 1,
+    },
+    reflect = {
+        reflect = true,
+    },
+    regenerate = {
+        heal_after_hit = 1,
+    },
+    fortify = {
+        protect_adjacent = 1,
+    },
+    poison = {
+        status = "poison",
+        status_power = 1,
+    },
+    freeze = {
+        status = "freeze",
+        status_power = 1,
+        momentum_delta = -1,
+    },
+    magnetic = {
+        steer = "inward",
+    },
+    shatter = {
+        shell_wear = 2,
+    },
+    chain = {
+        death_splash = 2,
+    },
+    vault = {
+        momentum_delta = 1,
+        skip_rows = 1,
+    },
+    splice = {
+        collision_splash = 1,
+    },
+    dummy = {
+        harmless = true,
+    },
+    aegis = {
+        negate_once = true,
+    },
+    void = {
+        break_shell = true,
+    },
+    mirror = {
+        reflect = true,
+        shell_wear = 1,
+    },
+    temporal = {
+        rewind = true,
+    },
+}
+
+-- Status effects share one vocabulary as well. Statuses live on a marble and
+-- tick at the start of its next launch; no wall clock or frame timing enters
+-- the simulation.
+M.status = {
+    poison = {
+        launch_shell_wear = 1,
+        duration = 2,
+    },
+    freeze = {
+        launch_momentum = -1,
+        duration = 1,
+    },
+}
+
 -- Collision profiles, referenced by shell.collision.
 --   damage         — base damage dealt to the brick.
 --   momentum_cost  — momentum spent by the collision (1 = normal).
@@ -122,6 +214,24 @@ function M.collision_profile(collision_id)
     local profile = M.collision[collision_id]
     if not profile then
         error("unknown collision effect: " .. tostring(collision_id))
+    end
+    return profile
+end
+
+--- Resolve a brick behaviour into its declarative effect profile.
+function M.brick_profile(behaviour)
+    local profile = M.brick[behaviour]
+    if not profile then
+        error("unknown brick behaviour: " .. tostring(behaviour))
+    end
+    return profile
+end
+
+--- Resolve a marble status into its launch-time profile.
+function M.status_profile(status_id)
+    local profile = M.status[status_id]
+    if not profile then
+        error("unknown marble status: " .. tostring(status_id))
     end
     return profile
 end

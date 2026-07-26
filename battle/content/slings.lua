@@ -1,8 +1,8 @@
 -- battle/content/slings.lua — hardcoded sling definitions.
 --
--- A sling modifies EVERY marble in the hand it is loaded with. The modifiers
--- are applied once, at marble-build time, so a marble's printed stats already
--- include its sling. Nothing re-reads the sling mid-battle.
+-- A sling modifies EVERY marble in the hand it is loaded with. Marble-local
+-- modifiers are applied once at build time. shots_per_volley belongs to the
+-- player because it changes commitment cadence, not marble stats.
 --
 --   damage_bonus     — added to every collision's damage.
 --   durability_bonus — added to every shell's durability.
@@ -49,6 +49,75 @@ local SLINGS = {
         momentum_bonus = 2,
         aim = 1,
         scatter = 1,
+    },
+    {
+        id = "volley",
+        name = "Volley Sling",
+        archetype = "volley",
+        shots_per_volley = 2,
+        damage_bonus = 0,
+        durability_bonus = 0,
+        momentum_bonus = 0,
+        aim = 0,
+        scatter = 0,
+    },
+    {
+        id = "momentum",
+        name = "Momentum Sling",
+        archetype = "momentum",
+        shots_per_volley = 1,
+        damage_bonus = 0,
+        durability_bonus = 0,
+        momentum_bonus = 3,
+        aim = 0,
+        scatter = 0,
+    },
+    {
+        id = "ricochet",
+        name = "Ricochet Sling",
+        archetype = "ricochet",
+        shots_per_volley = 1,
+        damage_bonus = 0,
+        durability_bonus = 0,
+        momentum_bonus = 1,
+        aim = 0,
+        scatter = 0,
+        ricochet = true,
+    },
+    {
+        id = "spread",
+        name = "Spread Sling",
+        archetype = "spread",
+        shots_per_volley = 1,
+        damage_bonus = 0,
+        durability_bonus = 0,
+        momentum_bonus = 1,
+        aim = 0,
+        scatter = 2,
+    },
+    {
+        id = "precision",
+        name = "Precision Sling",
+        archetype = "precision",
+        shots_per_volley = 1,
+        damage_bonus = 0,
+        durability_bonus = 0,
+        momentum_bonus = 1,
+        aim = 0,
+        scatter = 0,
+        precision = true,
+    },
+    {
+        id = "effect_amplifier",
+        name = "Effect Amplifier",
+        archetype = "effect_amplifier",
+        shots_per_volley = 1,
+        damage_bonus = 0,
+        durability_bonus = 0,
+        momentum_bonus = 1,
+        aim = 0,
+        scatter = 0,
+        effect_power = 1,
     },
 }
 
