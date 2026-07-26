@@ -1,0 +1,307 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1680" height="900" viewBox="0 0 1680 900" role="img" aria-labelledby="title desc" data-contract-version="1">
+  <title id="title">Callack 390 by 844 vertical-slice phone layouts</title>
+  <desc id="desc">Authored reference compositions for draft, formation and order, dual-arena battle, and result.</desc>
+  <defs>
+    <pattern id="felt" width="16" height="16" patternUnits="userSpaceOnUse">
+      <rect width="16" height="16" fill="#18271F"/>
+      <path d="M2 5l3 1M11 2l2 2M7 12l4-1M1 15l2-1" stroke="#DAC8A7" stroke-opacity=".06" stroke-width="1"/>
+    </pattern>
+    <pattern id="wood" width="32" height="12" patternUnits="userSpaceOnUse">
+      <rect width="32" height="12" fill="#4A3022"/>
+      <path d="M0 3c8-2 18 3 32 0M0 9c12 2 19-2 32 0" fill="none" stroke="#75492E" stroke-opacity=".45"/>
+    </pattern>
+    <g id="marble-common">
+      <circle r="22" fill="#0C0907" opacity=".35" transform="translate(2 3)"/>
+      <circle r="21" fill="#D8D0B8" stroke="#B7AA92" stroke-width="2"/>
+      <circle r="15" fill="#8F897A" opacity=".55"/>
+      <path d="M-17-6a21 21 0 0 1 34 0M-16 6a21 21 0 0 0 32 0" fill="none" stroke="#F5E8CF" stroke-opacity=".6" stroke-width="2"/>
+      <circle cx="-7" cy="-8" r="5" fill="#FFF4DE" opacity=".55"/>
+      <circle cy="16" r="2.5" fill="#B7AA92"/>
+    </g>
+    <g id="marble-uncommon">
+      <circle r="22" fill="#0C0907" opacity=".35" transform="translate(2 3)"/>
+      <circle r="21" fill="#342C3C" stroke="#71A66E" stroke-width="2"/>
+      <path d="M-16-7L3-16l13 12L5 17-13 10zM-13-10L8 15M4-16L-4 17" fill="none" stroke="#B5A8BF" stroke-opacity=".7" stroke-width="2"/>
+      <circle r="7" fill="#F5E8CF" opacity=".55"/>
+      <circle cx="-7" cy="-8" r="5" fill="#FFF4DE" opacity=".5"/>
+      <circle cx="-4" cy="16" r="2.5" fill="#71A66E"/>
+      <circle cx="4" cy="16" r="2.5" fill="#71A66E"/>
+    </g>
+    <g id="marble-rare">
+      <circle r="22" fill="#0C0907" opacity=".35" transform="translate(2 3)"/>
+      <circle r="21" fill="#AAB5B2" stroke="#5794BF" stroke-width="2"/>
+      <path d="M-15 10C-7 0-11-8 2-16M-2 2l11-6M-7 7l8 8" fill="none" stroke="#F5E8CF" stroke-opacity=".72" stroke-width="2"/>
+      <circle r="7" fill="#E3C06B" opacity=".72"/>
+      <circle cx="-7" cy="-9" r="5" fill="#FFF4DE" opacity=".58"/>
+      <circle cx="-8" cy="16" r="2.5" fill="#5794BF"/>
+      <circle cy="17" r="2.5" fill="#5794BF"/>
+      <circle cx="8" cy="16" r="2.5" fill="#5794BF"/>
+    </g>
+    <g id="marble-epic">
+      <circle r="22" fill="#0C0907" opacity=".35" transform="translate(2 3)"/>
+      <circle r="21" fill="#987564" stroke="#9A73B5" stroke-width="3"/>
+      <path d="M0 15C-14 9-13-7-2-10S14-2 8 9-9 12-10 1" fill="none" stroke="#E6B9A4" stroke-opacity=".75" stroke-width="2"/>
+      <circle r="7" fill="#C1A05A"/>
+      <circle cx="-7" cy="-8" r="5" fill="#FFF4DE" opacity=".55"/>
+      <circle cx="-12" cy="14" r="2.5" fill="#9A73B5"/>
+      <circle cx="-4" cy="17" r="2.5" fill="#9A73B5"/>
+      <circle cx="4" cy="17" r="2.5" fill="#9A73B5"/>
+      <circle cx="12" cy="14" r="2.5" fill="#9A73B5"/>
+    </g>
+    <g id="brick">
+      <rect x="2" y="3" width="42" height="31" rx="5" fill="#0C0907" opacity=".35"/>
+      <rect width="42" height="31" rx="5" fill="#756F68" stroke="#DAC8A7" stroke-opacity=".52"/>
+      <path d="M5 25h32M6 5h25" stroke="#17130F" stroke-opacity=".35"/>
+      <circle cx="31" cy="24" r="2" fill="#F5E8CF"/>
+      <circle cx="36" cy="24" r="2" fill="#F5E8CF"/>
+    </g>
+    <g id="sling">
+      <path d="M-22 17L-12-15M22 17L12-15" fill="none" stroke="#75492E" stroke-width="7" stroke-linecap="round"/>
+      <circle cx="-12" cy="-15" r="5" fill="#E3C06B" stroke="#B88636"/>
+      <circle cx="12" cy="-15" r="5" fill="#E3C06B" stroke="#B88636"/>
+      <path d="M-12-15Q0 4 12-15M-10-14Q0 10 10-14" fill="none" stroke="#DAC8A7" stroke-width="1.5"/>
+      <rect x="-9" y="4" width="18" height="10" rx="4" fill="#241A14"/>
+    </g>
+    <style>
+      .screen { fill:#17130F; stroke:#4A3022; stroke-width:2 }
+      .felt { fill:url(#felt); stroke:#3A5B4D; stroke-width:1 }
+      .wood { fill:url(#wood); stroke:#75492E; stroke-width:1 }
+      .paper { fill:#F5E8CF; stroke:#DAC8A7; stroke-width:1 }
+      .line { stroke:#CBB995; stroke-opacity:.45; stroke-width:1 }
+      .title { fill:#FFF4DE; font:700 18px ui-sans-serif,system-ui,sans-serif; letter-spacing:1.4px }
+      .heading { fill:#FFF4DE; font:700 14px ui-sans-serif,system-ui,sans-serif }
+      .body { fill:#FFF4DE; font:12px ui-sans-serif,system-ui,sans-serif }
+      .meta { fill:#CBB995; font:10px ui-sans-serif,system-ui,sans-serif; letter-spacing:.7px }
+      .paper-title { fill:#2A211A; font:700 15px ui-sans-serif,system-ui,sans-serif }
+      .paper-body { fill:#2A211A; font:11px ui-sans-serif,system-ui,sans-serif }
+      .button { fill:#E3C06B; stroke:#F7E3A2; stroke-width:1 }
+      .button-text { fill:#241A14; font:700 13px ui-sans-serif,system-ui,sans-serif; letter-spacing:.7px }
+      .ref-label { fill:#DAC8A7; font:700 14px ui-sans-serif,system-ui,sans-serif; letter-spacing:1px }
+      .measure { fill:none; stroke:#FFD36A; stroke-opacity:.2; stroke-dasharray:3 3 }
+    </style>
+  </defs>
+
+  <rect width="1680" height="900" fill="#0C0907"/>
+  <text x="12" y="28" class="ref-label">DRAFT · 390×844</text>
+  <text x="426" y="28" class="ref-label">FORMATION / ORDER · 390×844</text>
+  <text x="840" y="28" class="ref-label">DUAL-ARENA BATTLE · 390×844</text>
+  <text x="1254" y="28" class="ref-label">RESULT · 390×844</text>
+
+  <!-- Draft -->
+  <g transform="translate(12 48)" data-screen="draft" data-size="390x844">
+    <rect width="390" height="844" class="screen"/>
+    <rect x="12" y="12" width="366" height="52" rx="12" class="wood" data-rect="chrome"/>
+    <text x="28" y="36" class="title">CALLACK</text>
+    <text x="276" y="32" class="meta">DRAFT 2 / 5</text>
+    <text x="276" y="48" class="meta">3 PICKS LEFT</text>
+
+    <rect x="16" y="72" width="358" height="28" rx="8" class="felt" data-rect="phase"/>
+    <circle cx="83" cy="86" r="5" fill="#E3C06B"/><circle cx="139" cy="86" r="5" fill="#E3C06B"/>
+    <circle cx="195" cy="86" r="5" fill="#4A3022"/><circle cx="251" cy="86" r="5" fill="#4A3022"/><circle cx="307" cy="86" r="5" fill="#4A3022"/>
+
+    <g data-offer="warden">
+      <rect x="16" y="108" width="358" height="148" rx="12" class="paper"/>
+      <rect x="16" y="108" width="4" height="148" rx="2" fill="#5794BF"/>
+      <use href="#marble-rare" transform="translate(72 168) scale(1.45)"/>
+      <text x="132" y="137" class="paper-title">WARDEN</text>
+      <text x="132" y="155" class="paper-body">RARE · 3 SHELLS · 3 BEADS</text>
+      <text x="132" y="180" class="paper-body">Concussion core widens blowback.</text>
+      <text x="132" y="198" class="paper-body">Silver ward · granite heavy · jade chip</text>
+      <rect x="132" y="215" width="55" height="22" rx="6" fill="#AAB5B2"/><text x="143" y="230" class="paper-body">WARD</text>
+      <rect x="194" y="215" width="60" height="22" rx="6" fill="#756F68"/><text x="204" y="230" class="paper-body">HEAVY</text>
+    </g>
+
+    <g data-offer="split-geode">
+      <rect x="16" y="264" width="358" height="148" rx="12" class="paper" stroke="#E3C06B" stroke-width="3"/>
+      <rect x="16" y="264" width="4" height="148" rx="2" fill="#71A66E"/>
+      <use href="#marble-uncommon" transform="translate(72 324) scale(1.45)"/>
+      <text x="132" y="293" class="paper-title">SPLIT GEODE</text>
+      <text x="132" y="311" class="paper-body">UNCOMMON · 2 SHELLS · 2 BEADS</text>
+      <text x="132" y="336" class="paper-body">Shrapnel release chips adjacent bricks.</text>
+      <text x="132" y="354" class="paper-body">Obsidian cleave · jade chip</text>
+      <rect x="132" y="371" width="62" height="22" rx="6" fill="#342C3C"/><text x="141" y="386" fill="#FFF4DE" class="paper-body">CLEAVE</text>
+      <rect x="286" y="368" width="70" height="25" rx="12" fill="#E3C06B"/><text x="300" y="385" class="paper-body">PICKED</text>
+    </g>
+
+    <g data-offer="quartz-round">
+      <rect x="16" y="420" width="358" height="148" rx="12" class="paper"/>
+      <rect x="16" y="420" width="4" height="148" rx="2" fill="#B7AA92"/>
+      <use href="#marble-common" transform="translate(72 480) scale(1.45)"/>
+      <text x="132" y="449" class="paper-title">QUARTZ ROUND</text>
+      <text x="132" y="467" class="paper-body">COMMON · 1 SHELL · 1 BEAD</text>
+      <text x="132" y="492" class="paper-body">Skews right. Baseline blowback only.</text>
+      <text x="132" y="510" class="paper-body">Quartz banded · chip · durability 3</text>
+      <rect x="132" y="527" width="50" height="22" rx="6" fill="#D8D0B8"/><text x="143" y="542" class="paper-body">CHIP</text>
+    </g>
+
+    <rect x="16" y="584" width="358" height="112" rx="12" class="wood" data-rect="loadout"/>
+    <text x="28" y="605" class="meta">YOUR COLLECTOR RACK · ORDERED</text>
+    <use href="#marble-rare" transform="translate(64 644)"/><use href="#marble-uncommon" transform="translate(126 644)"/>
+    <circle cx="188" cy="644" r="22" fill="#18271F" stroke="#75492E" stroke-dasharray="3 3"/>
+    <circle cx="250" cy="644" r="22" fill="#18271F" stroke="#75492E" stroke-dasharray="3 3"/>
+    <circle cx="312" cy="644" r="22" fill="#18271F" stroke="#75492E" stroke-dasharray="3 3"/>
+    <text x="55" y="684" class="meta">1</text><text x="117" y="684" class="meta">2</text>
+
+    <rect x="16" y="708" width="358" height="44" rx="8" class="felt" data-rect="detail-hint"/>
+    <text x="31" y="735" class="body">Tap selected offer again for full details</text>
+    <rect x="16" y="772" width="358" height="56" rx="8" class="button" data-rect="primary"/>
+    <text x="108" y="806" class="button-text">CONFIRM SPLIT GEODE</text>
+  </g>
+
+  <!-- Formation / order -->
+  <g transform="translate(426 48)" data-screen="formation" data-size="390x844">
+    <rect width="390" height="844" class="screen"/>
+    <rect x="12" y="12" width="366" height="52" rx="12" class="wood"/>
+    <text x="28" y="36" class="title">SET THE TABLE</text>
+    <text x="290" y="36" class="meta">FEN · A</text>
+    <rect x="16" y="72" width="358" height="44" rx="8" class="felt"/>
+    <rect x="20" y="76" width="174" height="36" rx="6" fill="#E3C06B"/>
+    <text x="64" y="99" class="button-text">FORMATION</text>
+    <text x="254" y="99" class="body">ORDER</text>
+
+    <rect x="16" y="124" width="358" height="220" rx="12" class="felt"/>
+    <text x="28" y="146" class="meta">ROW 1 FACES THE CENTRE · 3 × 7</text>
+    <g transform="translate(21 158)" data-grid="3x7-48-gap2">
+      <use href="#brick" transform="scale(1.143 1.548)"/>
+      <use href="#brick" transform="translate(50 0) scale(1.143 1.548)"/>
+      <use href="#brick" transform="translate(100 0) scale(1.143 1.548)"/>
+      <use href="#brick" transform="translate(150 0) scale(1.143 1.548)"/>
+      <use href="#brick" transform="translate(200 0) scale(1.143 1.548)"/>
+      <use href="#brick" transform="translate(250 0) scale(1.143 1.548)"/>
+      <use href="#brick" transform="translate(300 0) scale(1.143 1.548)"/>
+      <rect x="0" y="50" width="48" height="48" rx="5" fill="#5E8E86"/><text x="13" y="79" class="body">FORT</text>
+      <rect x="50" y="50" width="48" height="48" rx="5" fill="#18271F" stroke="#3A5B4D" stroke-dasharray="3 3"/>
+      <rect x="100" y="50" width="48" height="48" rx="5" fill="#8C6C9B"/><text x="112" y="79" class="body">PSN</text>
+      <rect x="150" y="50" width="48" height="48" rx="5" fill="#C09A4A"/><text x="161" y="79" class="body">TMP</text>
+      <rect x="200" y="50" width="48" height="48" rx="5" fill="#8C6C9B"/><text x="211" y="79" class="body">SHT</text>
+      <rect x="250" y="50" width="48" height="48" rx="5" fill="#18271F" stroke="#3A5B4D" stroke-dasharray="3 3"/>
+      <rect x="300" y="50" width="48" height="48" rx="5" fill="#5E8E86"/><text x="313" y="79" class="body">ABS</text>
+      <rect x="0" y="100" width="48" height="48" rx="5" fill="#18271F" stroke="#3A5B4D" stroke-dasharray="3 3"/>
+      <rect x="50" y="100" width="48" height="48" rx="5" fill="#18271F" stroke="#3A5B4D" stroke-dasharray="3 3"/>
+      <rect x="100" y="100" width="48" height="48" rx="5" fill="#C09A4A"/><text x="112" y="129" class="body">MIR</text>
+      <rect x="150" y="100" width="48" height="48" rx="5" fill="#B07142"/><text x="161" y="129" class="body">CHN</text>
+      <rect x="200" y="100" width="48" height="48" rx="5" fill="#B07142"/><text x="212" y="129" class="body">SPL</text>
+      <rect x="250" y="100" width="48" height="48" rx="5" fill="#18271F" stroke="#3A5B4D" stroke-dasharray="3 3"/>
+      <rect x="300" y="100" width="48" height="48" rx="5" fill="#18271F" stroke="#3A5B4D" stroke-dasharray="3 3"/>
+    </g>
+
+    <rect x="16" y="356" width="358" height="128" rx="12" class="wood"/>
+    <text x="28" y="378" class="meta">BRICK BENCH · TAP THEN PLACE</text>
+    <g transform="translate(30 390)">
+      <rect width="72" height="78" rx="8" class="paper"/><text x="11" y="21" class="paper-body">AEGIS</text><text x="11" y="40" class="paper-body">3 HP</text>
+      <rect x="82" width="72" height="78" rx="8" class="paper"/><text x="94" y="21" class="paper-body">VOID</text><text x="94" y="40" class="paper-body">2 HP</text>
+      <rect x="164" width="72" height="78" rx="8" class="paper"/><text x="174" y="21" class="paper-body">VAULT</text><text x="174" y="40" class="paper-body">2 HP</text>
+      <rect x="246" width="72" height="78" rx="8" class="paper"/><text x="257" y="21" class="paper-body">RIME</text><text x="257" y="40" class="paper-body">2 HP</text>
+    </g>
+
+    <rect x="16" y="496" width="358" height="140" rx="12" class="wood"/>
+    <text x="28" y="518" class="meta">MARBLE ORDER · TAP TWO TO SWAP</text>
+    <path d="M38 586H352" stroke="#B88636" stroke-width="5" stroke-linecap="round"/>
+    <use href="#marble-rare" transform="translate(72 566) scale(1.18)"/>
+    <use href="#marble-uncommon" transform="translate(154 566) scale(1.18)"/>
+    <use href="#marble-common" transform="translate(236 566) scale(1.18)"/>
+    <use href="#marble-common" transform="translate(318 566) scale(1.18)"/>
+    <circle cx="72" cy="616" r="10" fill="#E3C06B"/><text x="69" y="620" class="paper-body">1</text>
+    <circle cx="154" cy="616" r="10" fill="#E3C06B"/><text x="151" y="620" class="paper-body">2</text>
+    <circle cx="236" cy="616" r="10" fill="#E3C06B"/><text x="233" y="620" class="paper-body">3</text>
+    <circle cx="318" cy="616" r="10" fill="#E3C06B"/><text x="315" y="620" class="paper-body">4</text>
+
+    <rect x="16" y="648" width="358" height="92" rx="12" class="felt"/>
+    <use href="#sling" transform="translate(58 693)"/>
+    <text x="99" y="676" class="heading">RICOCHET SLING</text>
+    <text x="99" y="697" class="body">Angled brass shoe · momentum +1</text>
+    <text x="99" y="717" class="meta">ONE SHOT · NO SCATTER · RICOCHET</text>
+    <rect x="16" y="772" width="358" height="56" rx="8" class="button"/>
+    <text x="127" y="806" class="button-text">LOCK FORMATION</text>
+  </g>
+
+  <!-- Battle -->
+  <g transform="translate(840 48)" data-screen="battle" data-size="390x844">
+    <rect width="390" height="844" class="screen"/>
+    <rect x="12" y="12" width="366" height="52" rx="12" class="wood"/>
+    <text x="28" y="36" class="title">CALLACK</text>
+    <text x="246" y="31" class="meta">SEED 9125</text>
+    <text x="246" y="48" class="meta">VOLLEY 07</text>
+
+    <rect x="16" y="72" width="358" height="246" rx="12" class="felt"/>
+    <text x="28" y="94" fill="#63B8A6" class="heading">B · BRAM</text>
+    <text x="257" y="93" class="meta">EFFECT AMPLIFIER</text>
+    <use href="#sling" transform="translate(50 125) scale(.65)"/>
+    <use href="#marble-epic" transform="translate(114 122) scale(.72)"/>
+    <use href="#marble-uncommon" transform="translate(166 122) scale(.72)"/>
+    <use href="#marble-common" transform="translate(218 122) scale(.72)"/>
+    <g transform="translate(28 157)">
+      <g fill="#756F68" stroke="#DAC8A7" stroke-opacity=".35">
+        <rect width="44" height="38" rx="5"/><rect x="48" width="44" height="38" rx="5"/><rect x="96" width="44" height="38" rx="5"/><rect x="144" width="44" height="38" rx="5"/><rect x="192" width="44" height="38" rx="5"/><rect x="240" width="44" height="38" rx="5"/><rect x="288" width="44" height="38" rx="5"/>
+        <rect y="42" width="44" height="38" rx="5" fill="#5E8E86"/><rect x="48" y="42" width="44" height="38" rx="5" fill="#18271F"/><rect x="96" y="42" width="44" height="38" rx="5" fill="#C09A4A"/><rect x="144" y="42" width="44" height="38" rx="5" fill="#B07142"/><rect x="192" y="42" width="44" height="38" rx="5" fill="#C09A4A"/><rect x="240" y="42" width="44" height="38" rx="5" fill="#18271F"/><rect x="288" y="42" width="44" height="38" rx="5" fill="#5E8E86"/>
+        <rect y="84" width="44" height="38" rx="5" fill="#18271F"/><rect x="48" y="84" width="44" height="38" rx="5" fill="#B07142"/><rect x="96" y="84" width="44" height="38" rx="5" fill="#C09A4A"/><rect x="144" y="84" width="44" height="38" rx="5" fill="#756F68"/><rect x="192" y="84" width="44" height="38" rx="5" fill="#C09A4A"/><rect x="240" y="84" width="44" height="38" rx="5" fill="#B07142"/><rect x="288" y="84" width="44" height="38" rx="5" fill="#18271F"/>
+      </g>
+      <g class="meta" text-anchor="middle"><text x="22" y="23">REF</text><text x="70" y="23">BASE</text><text x="118" y="23">FRZ</text><text x="166" y="23">REG</text><text x="214" y="23">MAG</text><text x="262" y="23">BASE</text><text x="310" y="23">REF</text></g>
+    </g>
+
+    <rect x="16" y="326" width="358" height="156" rx="12" class="wood"/>
+    <text x="28" y="349" class="meta">BOTH SIDES COMMITTED</text>
+    <use href="#marble-rare" transform="translate(74 380) scale(.78)"/>
+    <path d="M106 380H284" stroke="#E3C06B" stroke-width="2" stroke-dasharray="4 4"/>
+    <use href="#marble-epic" transform="translate(316 380) scale(.78)"/>
+    <text x="28" y="425" class="heading">Fen's Warden hits Aegis for 1</text>
+    <text x="28" y="447" class="meta">EVENT 188 / 193 · COLLISION · ROW 1 COL 4</text>
+    <rect x="28" y="458" width="196" height="5" rx="2" fill="#241A14"/><rect x="28" y="458" width="174" height="5" rx="2" fill="#E3C06B"/>
+    <text x="248" y="466" class="body">Ⅱ  ▶  MUTE</text>
+
+    <rect x="16" y="490" width="358" height="246" rx="12" class="felt"/>
+    <text x="28" y="716" fill="#E09A45" class="heading">A · FEN</text>
+    <text x="252" y="715" class="meta">RICOCHET SLING</text>
+    <g transform="translate(28 514)">
+      <g fill="#756F68" stroke="#DAC8A7" stroke-opacity=".35">
+        <rect width="44" height="38" rx="5" fill="#18271F"/><rect x="48" width="44" height="38" rx="5" fill="#18271F"/><rect x="96" width="44" height="38" rx="5" fill="#C09A4A"/><rect x="144" width="44" height="38" rx="5" fill="#B07142"/><rect x="192" width="44" height="38" rx="5" fill="#B07142"/><rect x="240" width="44" height="38" rx="5" fill="#18271F"/><rect x="288" width="44" height="38" rx="5" fill="#18271F"/>
+        <rect y="42" width="44" height="38" rx="5" fill="#B07142"/><rect x="48" y="42" width="44" height="38" rx="5" fill="#756F68"/><rect x="96" y="42" width="44" height="38" rx="5" fill="#5E8E86"/><rect x="144" y="42" width="44" height="38" rx="5" fill="#C09A4A"/><rect x="192" y="42" width="44" height="38" rx="5" fill="#5E8E86"/><rect x="240" y="42" width="44" height="38" rx="5" fill="#756F68"/><rect x="288" y="42" width="44" height="38" rx="5" fill="#B07142"/>
+        <rect y="84" width="44" height="38" rx="5"/><rect x="48" y="84" width="44" height="38" rx="5"/><rect x="96" y="84" width="44" height="38" rx="5" fill="#5E8E86"/><rect x="144" y="84" width="44" height="38" rx="5" fill="#C09A4A"/><rect x="192" y="84" width="44" height="38" rx="5" fill="#5E8E86"/><rect x="240" y="84" width="44" height="38" rx="5"/><rect x="288" y="84" width="44" height="38" rx="5"/>
+      </g>
+    </g>
+    <use href="#marble-rare" transform="translate(108 672) scale(.75)"/>
+    <use href="#marble-uncommon" transform="translate(164 672) scale(.75)"/>
+    <use href="#marble-common" transform="translate(220 672) scale(.75)"/>
+    <use href="#sling" transform="translate(330 684) scale(.65)"/>
+
+    <rect x="16" y="744" width="358" height="84" rx="12" class="wood"/>
+    <rect x="28" y="758" width="48" height="48" rx="8" class="felt"/><text x="45" y="789" class="body">Ⅱ</text>
+    <rect x="84" y="758" width="48" height="48" rx="8" class="felt"/><text x="101" y="789" class="body">▶</text>
+    <rect x="140" y="758" width="72" height="48" rx="8" class="felt"/><text x="157" y="789" class="body">1×</text>
+    <rect x="220" y="758" width="142" height="48" rx="8" class="felt"/><text x="255" y="789" class="body">SOUND ON</text>
+  </g>
+
+  <!-- Result -->
+  <g transform="translate(1254 48)" data-screen="result" data-size="390x844">
+    <rect width="390" height="844" class="screen"/>
+    <rect x="12" y="12" width="366" height="52" rx="12" class="wood"/>
+    <text x="28" y="36" class="title">MATCH SETTLED</text>
+    <text x="295" y="36" class="meta">9125</text>
+
+    <rect x="16" y="80" width="358" height="196" rx="16" class="felt"/>
+    <ellipse cx="195" cy="242" rx="124" ry="18" fill="#0C0907" opacity=".38"/>
+    <use href="#sling" transform="translate(140 183) scale(1.7)"/>
+    <use href="#marble-rare" transform="translate(235 190) scale(2.2)"/>
+    <path d="M82 252H308" stroke="#B88636" stroke-width="6" stroke-linecap="round"/>
+    <circle cx="104" cy="252" r="7" fill="#E3C06B"/><circle cx="286" cy="252" r="7" fill="#E3C06B"/>
+
+    <rect x="16" y="292" width="358" height="170" rx="12" class="paper"/>
+    <text x="195" y="331" text-anchor="middle" class="paper-body">VOLLEY 07 · PLAYER A</text>
+    <text x="195" y="373" text-anchor="middle" fill="#2A211A" font-family="ui-sans-serif,system-ui,sans-serif" font-size="32" font-weight="700">FEN WINS</text>
+    <path d="M44 392H346" stroke="#DAC8A7"/>
+    <text x="195" y="418" text-anchor="middle" class="paper-body">OPPONENT MARBLES DESTROYED</text>
+    <text x="195" y="442" text-anchor="middle" class="paper-body">9 bricks · 1 marble remain · seed 9125</text>
+
+    <rect x="16" y="478" width="358" height="190" rx="12" class="wood"/>
+    <text x="28" y="501" class="meta">MATCH LEDGER · LAST CANONICAL EVENTS</text>
+    <circle cx="38" cy="533" r="5" fill="#63B8A6"/><text x="54" y="538" class="body">Bram blowback reaches 2 lanes</text>
+    <circle cx="38" cy="570" r="5" fill="#E09A45"/><text x="54" y="575" class="body">Fen triggers shrapnel</text>
+    <circle cx="38" cy="607" r="5" fill="#DF684F"/><text x="54" y="612" class="body">Bram's cascade ends: destroyed</text>
+    <circle cx="38" cy="644" r="5" fill="#E3C06B"/><text x="54" y="649" class="body">Final: Fen wins</text>
+
+    <rect x="16" y="692" width="358" height="56" rx="8" class="button"/>
+    <text x="143" y="726" class="button-text">DRAFT AGAIN</text>
+    <rect x="16" y="760" width="174" height="56" rx="8" class="felt"/><text x="50" y="794" class="body">REVIEW BATTLE</text>
+    <rect x="200" y="760" width="174" height="56" rx="8" class="felt"/><text x="236" y="794" class="body">REPLAY SEED</text>
+  </g>
+</svg>
