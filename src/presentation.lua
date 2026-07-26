@@ -414,4 +414,16 @@ function M.to_end(model)
     return model
 end
 
+-- Product-shaped snapshot projection added by the run-loop slice.  The legacy
+-- event adapter above remains available only until the continuous battle
+-- integration replaces the exhibition boot path.
+function M.project(run_snapshot, previous_frame, current_frame, alpha)
+    return require("run_presentation").project(
+        run_snapshot,
+        previous_frame,
+        current_frame,
+        alpha
+    )
+end
+
 return M

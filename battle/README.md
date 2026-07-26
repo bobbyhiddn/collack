@@ -5,10 +5,25 @@ under plain `lua` or `luajit` from the command line so CI can test it without a
 display.
 
 > **Migration status:** this directory currently contains the discrete
-> exhibition prototype. It is not the target combat model. ADR 0005 and
+> exhibition combat prototype plus the product-shaped pure-Lua run, draft,
+> opponent, and setup controllers. The discrete engine is not the target combat
+> model. ADR 0005 and
 > `docs/specs/battle-engine-vertical-slice.md` replace its event-log-first
 > boundary with a 120 Hz continuous world; `battle/vslice_contract.lua` pins
 > the downstream state, draft, setup, timing and seed contracts.
+
+## Product run controller
+
+`battle/run.lua` owns the deterministic
+`draft → setup → battle handoff → result` progression. It generates nine
+individual offers through `battle/draft.lua`, builds an asymmetric seeded CPU
+through `battle/opponent.lua`, and validates the 3 × 7 formation plus explicit
+four-marble bag through `battle/setup_rules.lua`. Combat remains input-free;
+the continuous engine consumes `battle_handoff` and returns its result plus
+immutable recording through `run.complete_battle`.
+
+The exact controller, input, presentation, and integration contracts are in
+[`docs/specs/draft-setup-controller.md`](../docs/specs/draft-setup-controller.md).
 
 Callack is a **two-player auto battler**. Each player has a brick formation and a
 sling loaded with marbles, and fires at the opponent. There is no paddle.
@@ -94,6 +109,10 @@ battle/
   battlelog.lua     the battle log and its canonical text rendering
   engine.lua        cascade, blowback, volleys, win conditions
   setup.lua         hardcoded marble / brick / sling sets and the demo matchup
+  run.lua           immutable product run state machine and recording journal
+  draft.lua         curated seeded three-card offer generation
+  opponent.lua      validated asymmetric CPU recipes
+  setup_rules.lua   player formation and ordered-bag validation
   cli.lua           run one battle from a seed and print the log
   content/          cores, shells, bricks, slings
   tests/            headless test suite — run_all.lua is the entry point

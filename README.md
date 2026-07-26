@@ -9,6 +9,10 @@ product migration is defined by
 [`ADR 0005`](docs/decisions/0005-continuous-vertical-slice.md) and the
 [`Battle Engine vertical slice`](docs/specs/battle-engine-vertical-slice.md):
 draft, setup, canonical continuous autobattle and recorded-state result/replay.
+The pure-Lua draft/setup controller and its presentation boundary are now
+implemented and documented in
+[`Draft and setup controller contract`](docs/specs/draft-setup-controller.md);
+the continuous physics and final LÖVE surface remain downstream integration.
 
 ## Quick start
 
@@ -41,7 +45,7 @@ Space to pause and Right Arrow to single-step.
 
 ```
 battle/                 Canonical deterministic pure-Lua simulation and content
-src/                    LÖVE event-log adapter UI; no combat rules
+src/                    Pure run presentation/controller plus the legacy LÖVE UI
 tests/                  Plain-Lua presentation/replay tests
 scripts/                love.js, desktop, and Capacitor packaging
 web-shell/              Responsive 390x844 browser shell
