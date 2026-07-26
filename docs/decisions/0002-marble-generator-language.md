@@ -11,7 +11,12 @@
 
 ## Decision
 
-The Marble Generator is written in **Go**.
+The Marble Generator's **module, CLI, data model, and content-pack pipeline are
+written in Go**.
+
+The **renderer is deliberately left open** — see "The renderer is a separate
+question" below. This note settles the language of the tool, not the technology
+that produces the pixels.
 
 ## Why this needed a note at all
 
@@ -30,19 +35,38 @@ miniature. This note replaces the dead justification with a live one.
    generator's language is invisible across that boundary, and the
    Lua-everywhere argument from ADR 0001 — which is about game runtime code —
    does not reach it.
-2. **Headless generation is the whole job, and it is a LÖVE weakness.**
-   Rendering marble art in LÖVE means `love.graphics`, which wants a window and
-   a GL context. Generating content packs in CI, reproducibly, with no display,
-   is awkward there and routine in Go with `image/png` in the standard library.
-3. **Determinism and testability.** Content packs must be reproducible from a
-   seed so the same pack can be regenerated and diffed. Go gives explicit seeded
-   RNG, a first-class test story for golden-file comparison, and a static binary
-   that runs identically on a dev box and a CI runner.
+2. **Everything runs headless, and that is a LÖVE weakness.** Driving LÖVE as a
+   batch tool means `love.graphics`, which wants a window and a GL context.
+   Content packs are generated in CI with no display. Go runs headless by
+   default and shells out cleanly to whatever renderer we pick.
+3. **Determinism and testability.** REQ-GCACP-006 requires that the same seed
+   and parameters reproduce identical images and identical data cards, with
+   golden-image comparison in CI. Go gives explicit seeded RNG, a first-class
+   golden-file test story, and a static binary that behaves the same on a dev
+   box and a CI runner.
 
-## What would change this
+## The renderer is a separate question — do not treat this note as settling it
+
+REQ-GCACP-004 asks for real transmission and refraction, 3D pattern geometry
+suspended inside the glass, and an emissive core casting light outward. That is
+a path-traced render, not a 2D drawing job, and Go's `image/png` gets nowhere
+near it on its own. Two candidates, both compatible with everything above:
+
+- **A CPU path tracer in Go.** Fully deterministic, parallelises across
+  goroutines, no external dependency, one binary. Most control, most code.
+- **Headless Blender + Cycles, driven by the Go CLI.** Physically-based glass
+  and emission for free and the standard tool for this look, at the cost of a
+  heavy external dependency and pinning Blender's version for reproducibility.
+
+Pick this during the Generator Core design phase and record it as ADR 0003.
+Whichever wins, the Go decision above holds, because the choice is about what
+the tool invokes rather than what the tool is written in.
+
+## What would change the Go decision itself
 
 If the generator ever needs to share rendering code with the game client — the
 same shader or draw path producing both the content-pack art and the in-game
-marble — that would be a real argument for LÖVE, and this note should be
-revisited rather than worked around. Nothing in the current spec requires it:
-the game loads finished PNGs.
+marble — that is a real argument for LÖVE, and this note should be revisited
+rather than worked around. Nothing in the current spec requires it: per
+REQ-GCACP-007 the game loads finished PNGs and carries no runtime dependency on
+the generator at all.
