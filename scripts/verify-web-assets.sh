@@ -8,6 +8,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 OUT="${1:-$ROOT/dist/web}"
 HTML="$OUT/index.html"
 NGINX="$ROOT/deploy/fly/nginx.conf"
+DOCKERFILE="$ROOT/deploy/fly/Dockerfile"
 
 fail() {
     echo "[web-assets] FAIL: $*" >&2
@@ -61,9 +62,14 @@ grep -Fq "love.wasm" "$OUT/$LOVE_JS_NAME" && fail "$LOVE_JS_NAME still reference
 grep -Fq "__GAME_JS__" "$HTML" && fail "game loader placeholder was not replaced"
 grep -Fq "__LOVE_JS__" "$HTML" && fail "LÖVE loader placeholder was not replaced"
 [ -f "$NGINX" ] || fail "missing Fly nginx config"
-grep -Fq 'location ~* \.[0-9a-f]{16}\.(wasm|js|data)$ {' "$NGINX"
-grep -Fq 'Cache-Control "public, max-age=31536000, immutable"' "$NGINX"
+grep -Fq 'location ~* "\.[0-9a-f]{16}\.(wasm|js|data)$" {' "$NGINX" \
+    || fail "Fly nginx config does not quote the hashed-asset regular expression"
+grep -Fq 'Cache-Control "public, max-age=31536000, immutable"' "$NGINX" \
+    || fail "Fly nginx config does not cache hashed runtime assets immutably"
 grep -Fq 'location ~* \.(wasm|js|data)$ {' "$NGINX" \
     && fail "nginx still marks unhashed runtime URLs immutable"
+[ -f "$DOCKERFILE" ] || fail "missing Fly Dockerfile"
+grep -Eq '^FROM docker\.io/library/nginx:[^@[:space:]]+@sha256:[0-9a-f]{64}$' "$DOCKERFILE" \
+    || fail "Fly Dockerfile nginx base is not fully qualified and digest-pinned"
 
 echo "[web-assets] OK: $GAME_JS_NAME → $GAME_DATA_NAME; $LOVE_JS_NAME → $LOVE_WASM_NAME"

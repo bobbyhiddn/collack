@@ -16,6 +16,7 @@ lua5.1 battle/cli.lua --seed 9125
 
 # Build targets:
 ./scripts/build-web.sh
+./scripts/verify-release-container.sh
 npm ci && npm run browser:install
 npm run verify:web
 ./scripts/build-desktop.sh
