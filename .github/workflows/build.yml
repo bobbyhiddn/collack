@@ -80,6 +80,12 @@ jobs:
         if: matrix.target == 'web'
         run: ./scripts/build-web.sh
 
+      - name: Verify release container
+        if: matrix.target == 'web'
+        env:
+          CALLACK_CONTAINER_ENGINE: docker
+        run: bash scripts/verify-release-container.sh
+
       - name: Verify reproducible web artifacts
         if: matrix.target == 'web'
         run: bash scripts/verify-web-reproducible.sh
