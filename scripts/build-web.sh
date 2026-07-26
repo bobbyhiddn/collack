@@ -11,7 +11,8 @@
 #                            here, build Davidobot/love.js master against
 #                            LÖVE 11.5 (requires Emscripten in build image).
 #
-# Output: dist/web/{index.html, *.js, *.wasm, *.data}
+# Output: dist/web/{index.html, *.<content-hash>.js,
+#                  *.<content-hash>.wasm, *.<content-hash>.data}
 #
 # Run locally:
 #   ./scripts/build-web.sh
@@ -59,6 +60,39 @@ LOVE_JS_BIN="$NODE_CACHE/node_modules/.bin/love.js"
 
 echo "[web] love.js compile complete → $OUT"
 
+content_name() {
+    local stem="$1"
+    local extension="$2"
+    local path="$3"
+    local digest
+    digest="$(shasum -a 256 "$path" | awk '{print substr($1, 1, 16)}')"
+    printf '%s.%s.%s' "$stem" "$digest" "$extension"
+}
+
+rewrite_reference() {
+    local old_name="$1"
+    local new_name="$2"
+    local path="$3"
+    local escaped_old="${old_name//./\\.}"
+    local temporary="${path}.rewrite"
+    sed "s|${escaped_old}|${new_name}|g" "$path" > "$temporary"
+    mv "$temporary" "$path"
+}
+
+# Content-address every runtime URL. The generated JavaScript names its own
+# data/WASM dependency, so rewrite those edges before hashing the loaders.
+GAME_DATA_NAME="$(content_name game data "$OUT/game.data")"
+mv "$OUT/game.data" "$OUT/$GAME_DATA_NAME"
+rewrite_reference "game.data" "$GAME_DATA_NAME" "$OUT/game.js"
+GAME_JS_NAME="$(content_name game js "$OUT/game.js")"
+mv "$OUT/game.js" "$OUT/$GAME_JS_NAME"
+
+LOVE_WASM_NAME="$(content_name love wasm "$OUT/love.wasm")"
+mv "$OUT/love.wasm" "$OUT/$LOVE_WASM_NAME"
+rewrite_reference "love.wasm" "$LOVE_WASM_NAME" "$OUT/love.js"
+LOVE_JS_NAME="$(content_name love js "$OUT/love.js")"
+mv "$OUT/love.js" "$OUT/$LOVE_JS_NAME"
+
 # Replace the stock love.js index.html with our responsive shell. The stock
 # template uses a fixed loading canvas that draws offscreen on mobile portrait
 # viewports (and a pink/cyan theme/bg.png that dominates the layout).
@@ -68,10 +102,15 @@ echo "[web] love.js compile complete → $OUT"
 SHELL_HTML="$ROOT/web-shell/index.html"
 if [ -f "$SHELL_HTML" ]; then
     cp "$SHELL_HTML" "$OUT/index.html"
+    rewrite_reference "__GAME_JS__" "$GAME_JS_NAME" "$OUT/index.html"
+    rewrite_reference "__LOVE_JS__" "$LOVE_JS_NAME" "$OUT/index.html"
     echo "[web] installed responsive shell → $OUT/index.html"
 else
-    echo "[web] WARN: web-shell/index.html missing; using stock love.js template" >&2
+    echo "[web] ERROR: web-shell/index.html is required for hashed asset references" >&2
+    exit 1
 fi
+
+bash "$ROOT/scripts/verify-web-assets.sh" "$OUT"
 
 ls -lh "$OUT"
 echo "[web] OK. Serve with: (cd $OUT && python3 -m http.server 8000)"

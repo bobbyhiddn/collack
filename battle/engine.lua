@@ -116,6 +116,71 @@ local function build_player(id, def, cols)
     return player
 end
 
+-- Build the canonical event-protocol snapshot consumed by renderers and replay
+-- tools. The payload contains values only: no object here is shared with the
+-- mutable battle state, so it survives serialization or a deep-copy round trip.
+local function initial_side(player)
+    local side = {
+        id = player.id,
+        name = player.name,
+        sling_id = player.sling.id,
+        sling_name = player.sling.name or player.sling.id,
+        rows = player.formation.rows,
+        cols = player.formation.cols,
+        bricks_alive = player.formation.alive,
+        marbles_alive = #player.roster,
+        bricks = {},
+        marbles = {},
+        queue = {},
+    }
+
+    for row = 1, player.formation.rows do
+        for col = 1, player.formation.cols do
+            local brick = player.formation.grid[row][col]
+            if brick then
+                side.bricks[#side.bricks + 1] = {
+                    id = brick.id,
+                    name = brick.name,
+                    family = brick.family,
+                    behaviour = brick.behaviour,
+                    row = brick.row,
+                    col = brick.col,
+                    hp = brick.hp,
+                    max_hp = brick.max_hp,
+                    alive = brick.alive,
+                }
+            end
+        end
+    end
+
+    for _, marble in ipairs(player.roster) do
+        local snapshot = {
+            uid = marble.uid,
+            name = marble.name,
+            rarity = marble.rarity,
+            core = marble.core.name,
+            lane = marble.lane,
+            state = marble.state,
+            alive = true,
+            shells = {},
+        }
+        for _, shell in ipairs(marble.shells) do
+            snapshot.shells[#snapshot.shells + 1] = {
+                mineral = shell.mineral,
+                pattern = shell.pattern,
+                durability = shell.durability,
+                max_durability = shell.max_durability,
+            }
+        end
+        side.marbles[#side.marbles + 1] = snapshot
+    end
+
+    for _, marble in ipairs(player.queue) do
+        side.queue[#side.queue + 1] = marble.uid
+    end
+    return side
+end
+
 --- Create a battle. opts:
 ---   seed          — integer seed (required for a reproducible battle)
 ---   sides         — { A = <player def>, B = <player def> }
@@ -159,6 +224,13 @@ function M.new_battle(opts)
         a_bricks = battle.sides.A.formation.alive,
         b_bricks = battle.sides.B.formation.alive,
         max_volleys = battle.max_volleys,
+        initial_state = {
+            protocol_version = 1,
+            sides = {
+                A = initial_side(battle.sides.A),
+                B = initial_side(battle.sides.B),
+            },
+        },
     })
 
     return battle

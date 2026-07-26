@@ -319,12 +319,19 @@ local function draw_button(button, color)
     love.graphics.printf(button.key, button.x, button.y + 25, button.w, "center")
 end
 
+local function report_model_action(action)
+    love.window.setTitle(string.format("Callack Auto-Battler | Seed %d", model.seed))
+    print(string.format("CALLACK_ACTION %s seed=%d", action, model.seed))
+end
+
 local function reset_same_seed()
     model = presentation.replay(model)
+    report_model_action("replay")
 end
 
 local function reset_new_seed()
     model = presentation.next_seed(model)
+    report_model_action("new_seed")
 end
 
 local function press_at(x, y)
@@ -344,13 +351,13 @@ end
 function love.load()
     love.graphics.setDefaultFilter("nearest", "nearest")
     love.graphics.setLineStyle("rough")
-    love.window.setTitle("Callack Auto-Battler")
     fonts.tiny = love.graphics.newFont(9)
     fonts.small = love.graphics.newFont(10)
     fonts.body = love.graphics.newFont(12)
     fonts.large = love.graphics.newFont(20)
     fonts.title = love.graphics.newFont(25)
     model = presentation.new(presentation.DEFAULT_SEED)
+    report_model_action("ready")
 end
 
 function love.update(dt)

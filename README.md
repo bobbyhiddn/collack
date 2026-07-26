@@ -16,15 +16,19 @@ lua5.1 battle/cli.lua --seed 9125
 
 # Build targets:
 ./scripts/build-web.sh
+npm ci && npm run browser:install
+npm run verify:web
 ./scripts/build-desktop.sh
 ./scripts/build-desktop.sh --windows
 ./scripts/build-ios.sh
 ```
 
-The web result is written to `dist/web/`. Serve that directory with any static
-HTTP server. The in-canvas controls replay the fixed seed or advance to a new
-seed; keyboard equivalents are `R` and `N`, with Space to pause and Right Arrow
-to single-step.
+The web result is written to `dist/web/` with content-addressed JavaScript,
+data, and WebAssembly filenames. Serve that directory with any static HTTP
+server. The browser verifier starts and stops its own local server, boots the
+packaged canvas at 390x844, and exercises mouse replay plus touch new-seed
+input. The in-canvas controls use `R` and `N` as keyboard equivalents, with
+Space to pause and Right Arrow to single-step.
 
 ## Repository map
 

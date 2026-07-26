@@ -1,7 +1,7 @@
 -- Pure presentation adapter over battle/. It runs the canonical deterministic
--- engine once, snapshots the initial display state, then advances that display
--- solely by consuming the engine's event log. No combat rule is implemented
--- here, and this module runs under plain Lua for headless replay tests.
+-- engine to obtain an event sequence, then initializes and advances display
+-- state solely from that sequence. No combat rule or mutable engine snapshot is
+-- retained here, and this module runs under plain Lua for headless replay tests.
 
 local engine = require("battle.engine")
 local setup = require("battle.setup")
@@ -11,72 +11,114 @@ local M = {}
 M.DEFAULT_SEED = 9125
 M.EVENT_SECONDS = 0.16
 
-local function copy_shells(source)
+local function deep_copy(source, seen)
+    if type(source) ~= "table" then return source end
+    seen = seen or {}
+    if seen[source] then error("event sequences must not contain cycles") end
+    seen[source] = true
     local out = {}
-    for index, shell in ipairs(source) do
-        out[index] = {
-            mineral = shell.mineral,
-            pattern = shell.pattern,
-            durability = shell.durability,
-            max_durability = shell.max_durability,
-        }
+    for key, value in pairs(source) do
+        out[deep_copy(key, seen)] = deep_copy(value, seen)
     end
+    seen[source] = nil
     return out
 end
 
-local function snapshot_side(player)
+local function project_side(source)
+    assert(type(source) == "table", "battle_start is missing a side snapshot")
     local side = {
-        id = player.id,
-        name = player.name,
-        sling_id = player.sling.id,
-        sling_name = player.sling.name,
-        rows = player.formation.rows,
-        cols = player.formation.cols,
-        bricks_alive = player.formation.alive,
-        marbles_alive = #player.roster,
+        id = source.id,
+        name = source.name,
+        sling_id = source.sling_id,
+        sling_name = source.sling_name,
+        rows = source.rows,
+        cols = source.cols,
+        bricks_alive = source.bricks_alive,
+        marbles_alive = source.marbles_alive,
         grid = {},
         marbles = {},
         queue = {},
         active = nil,
     }
 
-    for row = 1, player.formation.rows do
+    for row = 1, side.rows do
         side.grid[row] = {}
-        for col = 1, player.formation.cols do
-            local brick = player.formation.grid[row][col]
-            if brick then
-                side.grid[row][col] = {
-                    id = brick.id,
-                    name = brick.name,
-                    family = brick.family,
-                    behaviour = brick.behaviour,
-                    hp = brick.hp,
-                    max_hp = brick.max_hp,
-                    alive = brick.alive,
-                    flash = nil,
-                }
-            end
-        end
     end
-
-    for _, marble in ipairs(player.roster) do
-        side.marbles[marble.uid] = {
-            uid = marble.uid,
-            name = marble.name,
-            rarity = marble.rarity,
-            core = marble.core.name,
-            lane = marble.lane,
-            state = marble.state,
-            alive = true,
-            shells = copy_shells(marble.shells),
-            statuses = {},
+    for _, brick in ipairs(source.bricks or {}) do
+        side.grid[brick.row][brick.col] = {
+            id = brick.id,
+            name = brick.name,
+            family = brick.family,
+            behaviour = brick.behaviour,
+            hp = brick.hp,
+            max_hp = brick.max_hp,
+            alive = brick.alive,
             flash = nil,
         }
     end
-    for _, marble in ipairs(player.queue) do
-        side.queue[#side.queue + 1] = marble.uid
+
+    for _, source_marble in ipairs(source.marbles or {}) do
+        local marble = {
+            uid = source_marble.uid,
+            name = source_marble.name,
+            rarity = source_marble.rarity,
+            core = source_marble.core,
+            lane = source_marble.lane,
+            state = source_marble.state,
+            alive = source_marble.alive,
+            shells = {},
+            statuses = {},
+            flash = nil,
+        }
+        for _, shell in ipairs(source_marble.shells or {}) do
+            marble.shells[#marble.shells + 1] = deep_copy(shell)
+        end
+        side.marbles[marble.uid] = marble
+    end
+    for _, uid in ipairs(source.queue or {}) do
+        side.queue[#side.queue + 1] = uid
     end
     return side
+end
+
+local function view_from_start(event)
+    assert(event and event.type == "battle_start",
+        "event sequence must begin with battle_start")
+    local initial = event.initial_state
+    assert(type(initial) == "table" and initial.protocol_version == 1,
+        "battle_start has no supported initial-state payload")
+    assert(type(initial.sides) == "table",
+        "battle_start initial-state payload has no sides")
+    return {
+        seed = event.seed,
+        volley = 0,
+        seq = 0,
+        current = nil,
+        feed = {},
+        finished = false,
+        outcome = nil,
+        winner = nil,
+        reason = nil,
+        sides = {
+            A = project_side(initial.sides.A),
+            B = project_side(initial.sides.B),
+        },
+    }
+end
+
+local function result_from_events(events)
+    for index = #events, 1, -1 do
+        local event = events[index]
+        if event.type == "battle_end" then
+            return {
+                outcome = event.outcome,
+                winner = event.winner ~= "none" and event.winner or nil,
+                reason = event.reason,
+                volleys = event.volleys,
+            }
+        end
+    end
+    return nil
 end
 
 local function remove_uid(list, uid)
@@ -298,37 +340,34 @@ function M.apply_event(model, event)
     push_feed(model, event)
 end
 
+--- Build a presentation from canonical events alone. The sequence is copied so
+--- callers may discard or mutate their decoded/engine-owned representation.
+function M.from_events(events)
+    assert(type(events) == "table" and #events > 0,
+        "from_events needs a non-empty event sequence")
+    local copied_events = deep_copy(events)
+    local first = copied_events[1]
+    local model = {
+        seed = first.seed,
+        view = view_from_start(first),
+        cursor = 0,
+        elapsed = M.EVENT_SECONDS,
+        interval = M.EVENT_SECONDS,
+        playing = true,
+        events = copied_events,
+    }
+    model.result = result_from_events(copied_events)
+    return model
+end
+
 function M.new(seed)
     seed = math.floor(tonumber(seed) or M.DEFAULT_SEED)
     local battle = engine.new_battle({
         seed = seed,
         sides = setup.default_matchup(),
     })
-    local model = {
-        seed = seed,
-        battle = battle,
-        view = {
-            seed = seed,
-            volley = 0,
-            seq = 0,
-            current = nil,
-            feed = {},
-            finished = false,
-            outcome = nil,
-            winner = nil,
-            reason = nil,
-            sides = {
-                A = snapshot_side(battle.sides.A),
-                B = snapshot_side(battle.sides.B),
-            },
-        },
-        cursor = 0,
-        elapsed = M.EVENT_SECONDS,
-        interval = M.EVENT_SECONDS,
-        playing = true,
-    }
-    model.result = engine.run(battle)
-    model.events = battle.log.events
+    engine.run(battle)
+    local model = M.from_events(battle.log.events)
     model.log_text = battle.log:text()
     return model
 end
@@ -359,7 +398,9 @@ function M.update(model, dt)
 end
 
 function M.replay(model)
-    return M.new(model.seed)
+    local replay = M.from_events(model.events)
+    replay.log_text = model.log_text
+    return replay
 end
 
 function M.next_seed(model)
