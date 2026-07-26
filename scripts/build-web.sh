@@ -24,23 +24,73 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SRC="$ROOT/src"
 OUT="$ROOT/dist/web"
 LOVE_JS_VERSION="11.4.1"  # latest published on npm (see header note)
+ARCHIVE_TIMESTAMP="200001010000.00"
 
+# Keep archive ordering, timestamps, permissions, and locale-dependent tool
+# behaviour independent of the checkout and caller environment.
+export LC_ALL=C
+export TZ=UTC
+unset ZIP ZIPOPT
+umask 022
+
+BUILD_TMP=""
+cleanup() {
+    if [ -n "$BUILD_TMP" ] && [ -d "$BUILD_TMP" ]; then
+        rm -rf "$BUILD_TMP"
+    fi
+}
+trap cleanup EXIT
+
+rm -rf "$OUT"
 mkdir -p "$OUT"
-rm -rf "${OUT:?}/"*
 
-# Build the .love archive from a clean file. src/ owns presentation only; the
-# canonical pure-Lua rules and content retain their battle/ module paths.
+# Build the .love archive from normalized staging files. Info-ZIP otherwise
+# records checkout mtimes, modes, UID/GID extra fields, and filesystem traversal
+# order. src/ owns presentation only; the canonical pure-Lua rules and content
+# retain their battle/ module paths.
 LOVE_ARCHIVE="$ROOT/dist/collack-spike.love"
 mkdir -p "$ROOT/dist"
+BUILD_TMP="$(mktemp -d "$ROOT/dist/.web-build.XXXXXX")"
+ARCHIVE_ROOT="$BUILD_TMP/archive"
+ARCHIVE_FILE_LIST="$BUILD_TMP/archive-files.txt"
+ARCHIVE_ACTUAL_LIST="$BUILD_TMP/archive-actual.txt"
+
+mkdir -p "$ARCHIVE_ROOT"
+cp -R "$SRC/." "$ARCHIVE_ROOT/"
+mkdir -p "$ARCHIVE_ROOT/battle"
+cp -R "$ROOT/battle/." "$ARCHIVE_ROOT/battle/"
+rm -rf "$ARCHIVE_ROOT/battle/tests"
+rm -f "$ARCHIVE_ROOT/battle/cli.lua" "$ARCHIVE_ROOT/battle/README.md"
+find "$ARCHIVE_ROOT" -name '.DS_Store' -delete
+find "$ARCHIVE_ROOT" -type d -exec chmod 0755 {} +
+find "$ARCHIVE_ROOT" -type f -exec chmod 0644 {} +
+find "$ARCHIVE_ROOT" -type f -exec touch -t "$ARCHIVE_TIMESTAMP" {} +
+
+(
+    cd "$ARCHIVE_ROOT"
+    find . -type f -print | sort | sed 's|^\./||'
+) > "$ARCHIVE_FILE_LIST"
+[ -s "$ARCHIVE_FILE_LIST" ] || {
+    echo "[web] ERROR: deterministic archive input list is empty" >&2
+    exit 1
+}
+
 rm -f "$LOVE_ARCHIVE"
-( cd "$SRC" && zip -9 -r "$LOVE_ARCHIVE" . -x '*.DS_Store' >/dev/null )
-( cd "$ROOT" && zip -9 -r "$LOVE_ARCHIVE" battle \
-    -x 'battle/tests/*' 'battle/cli.lua' 'battle/README.md' '*.DS_Store' >/dev/null )
+(
+    cd "$ARCHIVE_ROOT"
+    zip -X -9 "$LOVE_ARCHIVE" -@ < "$ARCHIVE_FILE_LIST" >/dev/null
+)
 unzip -tqq "$LOVE_ARCHIVE"
+unzip -Z -1 "$LOVE_ARCHIVE" > "$ARCHIVE_ACTUAL_LIST"
+if ! cmp -s "$ARCHIVE_FILE_LIST" "$ARCHIVE_ACTUAL_LIST"; then
+    echo "[web] ERROR: archive entries differ from the stable input order" >&2
+    diff -u "$ARCHIVE_FILE_LIST" "$ARCHIVE_ACTUAL_LIST" >&2 || true
+    exit 1
+fi
 echo "[web] built $LOVE_ARCHIVE ($(du -h "$LOVE_ARCHIVE" | cut -f1))"
 
 # Install love.js once into a local node_modules cache.
-NODE_CACHE="$ROOT/.node_cache"
+NODE_CACHE="${CALLACK_NODE_CACHE_DIR:-$ROOT/.node_cache}"
 if [ ! -x "$NODE_CACHE/node_modules/.bin/love.js" ]; then
     mkdir -p "$NODE_CACHE"
     pushd "$NODE_CACHE" >/dev/null
@@ -60,13 +110,18 @@ LOVE_JS_BIN="$NODE_CACHE/node_modules/.bin/love.js"
 
 echo "[web] love.js compile complete → $OUT"
 
+content_digest() {
+    local path="$1"
+    shasum -a 256 "$path" | awk '{print $1}'
+}
+
 content_name() {
     local stem="$1"
     local extension="$2"
     local path="$3"
     local digest
-    digest="$(shasum -a 256 "$path" | awk '{print substr($1, 1, 16)}')"
-    printf '%s.%s.%s' "$stem" "$digest" "$extension"
+    digest="$(content_digest "$path")"
+    printf '%s.%s.%s' "$stem" "${digest:0:16}" "$extension"
 }
 
 rewrite_reference() {
@@ -77,6 +132,26 @@ rewrite_reference() {
     local temporary="${path}.rewrite"
     sed "s|${escaped_old}|${new_name}|g" "$path" > "$temporary"
     mv "$temporary" "$path"
+}
+
+# love.js 11.4.1 has no deterministic packaging flag and unconditionally emits
+# uuid() into game.js. That UUID is only compared as an IndexedDB cache identity,
+# so replace it with the full packaged-data digest: deterministic, and guaranteed
+# to change whenever the cached package bytes change.
+GAME_DATA_DIGEST="$(content_digest "$OUT/game.data")"
+PACKAGE_ID="sha256-$GAME_DATA_DIGEST"
+PACKAGE_ID_COUNT="$(grep -Eo '"package_uuid":"[^"]+"' "$OUT/game.js" | wc -l | tr -d '[:space:]')"
+if [ "$PACKAGE_ID_COUNT" != "1" ]; then
+    echo "[web] ERROR: expected one love.js package_uuid, found $PACKAGE_ID_COUNT" >&2
+    exit 1
+fi
+PACKAGE_ID_TMP="$OUT/game.js.package-id"
+sed -E "s|\"package_uuid\":\"[^\"]+\"|\"package_uuid\":\"$PACKAGE_ID\"|" \
+    "$OUT/game.js" > "$PACKAGE_ID_TMP"
+mv "$PACKAGE_ID_TMP" "$OUT/game.js"
+grep -Fq "\"package_uuid\":\"$PACKAGE_ID\"" "$OUT/game.js" || {
+    echo "[web] ERROR: deterministic package identity was not installed" >&2
+    exit 1
 }
 
 # Content-address every runtime URL. The generated JavaScript names its own
@@ -109,6 +184,9 @@ else
     echo "[web] ERROR: web-shell/index.html is required for hashed asset references" >&2
     exit 1
 fi
+
+find "$OUT" -type d -exec chmod 0755 {} +
+find "$OUT" -type f -exec chmod 0644 {} +
 
 bash "$ROOT/scripts/verify-web-assets.sh" "$OUT"
 

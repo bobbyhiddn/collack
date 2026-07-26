@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "browser:install": "PLAYWRIGHT_BROWSERS_PATH=.playwright-browsers playwright install chromium",
-    "verify:web": "PLAYWRIGHT_BROWSERS_PATH=.playwright-browsers node scripts/verify-web-browser.mjs"
+    "verify:web": "PLAYWRIGHT_BROWSERS_PATH=.playwright-browsers node scripts/verify-web-browser.mjs",
+    "verify:web:reproducible": "bash scripts/verify-web-reproducible.sh"
   },
   "devDependencies": {
     "playwright": "1.54.1"

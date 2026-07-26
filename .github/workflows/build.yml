@@ -80,6 +80,10 @@ jobs:
         if: matrix.target == 'web'
         run: ./scripts/build-web.sh
 
+      - name: Verify reproducible web artifacts
+        if: matrix.target == 'web'
+        run: bash scripts/verify-web-reproducible.sh
+
       - name: Verify shell scripts
         run: |
           bash -n scripts/*.sh

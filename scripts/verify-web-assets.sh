@@ -30,6 +30,12 @@ LOVE_WASM_NAME="$(grep -Eo 'love\.[0-9a-f]{16}\.wasm' "$OUT/$LOVE_JS_NAME" | hea
 [ -f "$OUT/$GAME_DATA_NAME" ] || fail "missing loader-referenced $GAME_DATA_NAME"
 [ -f "$OUT/$LOVE_WASM_NAME" ] || fail "missing loader-referenced $LOVE_WASM_NAME"
 
+GAME_DATA_DIGEST="$(shasum -a 256 "$OUT/$GAME_DATA_NAME" | awk '{print $1}')"
+PACKAGE_ID="$(grep -Eo '"package_uuid":"sha256-[0-9a-f]{64}"' "$OUT/$GAME_JS_NAME" \
+    | sed -E 's/^"package_uuid":"([^"]+)"$/\1/')"
+[ "$PACKAGE_ID" = "sha256-$GAME_DATA_DIGEST" ] \
+    || fail "$GAME_JS_NAME package_uuid is not the full $GAME_DATA_NAME digest"
+
 verify_hash() {
     local name="$1"
     local path="$2"
