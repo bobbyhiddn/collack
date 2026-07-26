@@ -124,4 +124,16 @@ function M.quality_vs_quantity()
     }
 end
 
+-- Product run-loop contract.  The hardcoded fixtures above remain for the
+-- discrete-engine tests, while new code calls setup.validate(loadout).
+local setup_rules = require("battle.setup_rules")
+function M.validate(loadout)
+    local valid, errors = setup_rules.validate(loadout)
+    if valid then return true end
+    return errors
+end
+M.validate_detailed = setup_rules.validate
+M.empty_formation = setup_rules.empty_formation
+M.player_spec = setup_rules.player_spec
+
 return M

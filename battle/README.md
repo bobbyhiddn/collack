@@ -23,6 +23,19 @@ local recording = battle.recording(world)          -- value-only 30 Hz frames
 local pending = battle.drain_events(world)          -- exact-tick audit events
 ```
 
+## Product run controller
+
+`battle/run.lua` owns the deterministic
+`draft → setup → battle handoff → result` progression. It generates nine
+individual offers through `battle/draft.lua`, builds an asymmetric seeded CPU
+through `battle/opponent.lua`, and validates the 3 × 7 formation plus explicit
+four-marble bag through `battle/setup_rules.lua`. Combat remains input-free;
+the continuous engine consumes `battle_handoff` and returns its result plus
+immutable recording through `run.complete_battle`.
+
+The exact controller, input, presentation, and integration contracts are in
+[`docs/specs/draft-setup-controller.md`](../docs/specs/draft-setup-controller.md).
+
 `new_battle`, `run`, and `simulate` remain command-line/test conveniences over
 the same implementation. They do not implement a second rules path.
 
@@ -99,7 +112,12 @@ battle/
   formation.lua     fixed setup grid transformed into world AABBs
   battlelog.lua     deterministic audit formatting
   rng.lua           controlled MINSTD generator
-  setup.lua         fixture loadouts
+  setup.lua         content lookup and fixture loadouts
+  run.lua           immutable product run state machine and recording journal
+  draft.lua         curated seeded three-card offer generation
+  opponent.lua      validated asymmetric CPU recipes
+  setup_rules.lua   player formation and ordered-bag validation
+  cli.lua           run one battle from a seed and print the log
   content/          cores, shells, bricks, and slings
   tests/            deterministic physics and end-to-end tests
 ```

@@ -8,9 +8,12 @@ trajectory script.
 
 The implementation follows
 [`ADR 0005`](docs/decisions/0005-continuous-vertical-slice.md) and the
-[`Battle Engine vertical slice`](docs/specs/battle-engine-vertical-slice.md).
-Draft and setup integration consume the value-only battle API documented in
-[`battle/README.md`](battle/README.md).
+[`Battle Engine vertical slice`](docs/specs/battle-engine-vertical-slice.md):
+draft, setup, canonical continuous autobattle and recorded-state result/replay.
+The pure-Lua draft/setup controller and its presentation boundary are now
+implemented and documented in
+[`Draft and setup controller contract`](docs/specs/draft-setup-controller.md).
+The value-only battle API is documented in [`battle/README.md`](battle/README.md).
 
 ## Quick start
 
@@ -42,9 +45,9 @@ starts a new seed, Space pauses, and Right Arrow advances one exact fixed step.
 ## Repository map
 
 ```
-battle/                 Pure-Lua continuous physics, rules, content, recording
-src/                    LÖVE snapshot projector/controller; no combat rules
-tests/                  Plain-Lua snapshot and recorded-frame replay tests
+battle/                 Pure-Lua draft, setup, continuous physics, rules, recording
+src/                    LÖVE and pure presentation controllers; no combat rules
+tests/                  Plain-Lua run, snapshot, and recorded-frame replay tests
 scripts/                love.js, desktop, and Capacitor packaging
 web-shell/              Responsive 390x844 browser shell
 capacitor/              Preserved mobile wrapper and iOS scaffold
