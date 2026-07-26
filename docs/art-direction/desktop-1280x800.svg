@@ -1,0 +1,203 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="800" viewBox="0 0 1280 800" role="img" aria-labelledby="title desc" data-contract-version="1">
+  <title id="title">Callack 1280 by 800 dual-arena desktop battle layout</title>
+  <desc id="desc">Authored landscape reference with opponent and player arenas facing horizontally across a central event spine.</desc>
+  <defs>
+    <pattern id="felt" width="20" height="20" patternUnits="userSpaceOnUse">
+      <rect width="20" height="20" fill="#18271F"/>
+      <path d="M3 6l4 1M14 3l3 2M9 15l5-1M1 18l3-1" stroke="#DAC8A7" stroke-opacity=".06"/>
+    </pattern>
+    <pattern id="wood" width="48" height="16" patternUnits="userSpaceOnUse">
+      <rect width="48" height="16" fill="#4A3022"/>
+      <path d="M0 4c11-3 25 4 48 0M0 12c17 2 29-3 48 0" fill="none" stroke="#75492E" stroke-opacity=".48"/>
+    </pattern>
+    <g id="marble-a">
+      <circle r="23" fill="#0C0907" opacity=".38" transform="translate(3 3)"/>
+      <circle r="22" fill="#AAB5B2" stroke="#5794BF" stroke-width="3"/>
+      <path d="M-16 11C-7 0-12-9 2-17M-2 2l12-6M-7 8l8 9" fill="none" stroke="#F5E8CF" stroke-width="2" stroke-opacity=".7"/>
+      <circle r="7" fill="#E3C06B"/><circle cx="-8" cy="-9" r="5" fill="#FFF4DE" opacity=".58"/>
+      <circle cx="-9" cy="17" r="2.5" fill="#5794BF"/><circle cy="19" r="2.5" fill="#5794BF"/><circle cx="9" cy="17" r="2.5" fill="#5794BF"/>
+    </g>
+    <g id="marble-b">
+      <circle r="23" fill="#0C0907" opacity=".38" transform="translate(3 3)"/>
+      <circle r="22" fill="#987564" stroke="#9A73B5" stroke-width="3"/>
+      <path d="M0 16C-15 9-14-8-2-11S15-2 8 10-9 13-11 1" fill="none" stroke="#E6B9A4" stroke-width="2"/>
+      <circle r="7" fill="#C1A05A"/><circle cx="-8" cy="-9" r="5" fill="#FFF4DE" opacity=".54"/>
+      <circle cx="-13" cy="15" r="2.5" fill="#9A73B5"/><circle cx="-4" cy="19" r="2.5" fill="#9A73B5"/><circle cx="5" cy="19" r="2.5" fill="#9A73B5"/><circle cx="13" cy="15" r="2.5" fill="#9A73B5"/>
+    </g>
+    <g id="sling-left">
+      <path d="M-14-25L15-14M-14 25L15 14" fill="none" stroke="#75492E" stroke-width="8" stroke-linecap="round"/>
+      <circle cx="15" cy="-14" r="6" fill="#E3C06B" stroke="#B88636" stroke-width="2"/>
+      <circle cx="15" cy="14" r="6" fill="#E3C06B" stroke="#B88636" stroke-width="2"/>
+      <path d="M15-14Q-3 0 15 14M16-11Q4 0 16 11" fill="none" stroke="#DAC8A7" stroke-width="2"/>
+      <rect x="-8" y="-10" width="15" height="20" rx="5" fill="#241A14"/>
+    </g>
+    <g id="sling-right">
+      <path d="M14-25L-15-14M14 25L-15 14" fill="none" stroke="#75492E" stroke-width="8" stroke-linecap="round"/>
+      <circle cx="-15" cy="-14" r="6" fill="#E3C06B" stroke="#B88636" stroke-width="2"/>
+      <circle cx="-15" cy="14" r="6" fill="#E3C06B" stroke="#B88636" stroke-width="2"/>
+      <path d="M-15-14Q3 0-15 14M-16-11Q-4 0-16 11" fill="none" stroke="#DAC8A7" stroke-width="2"/>
+      <rect x="-7" y="-10" width="15" height="20" rx="5" fill="#241A14"/>
+    </g>
+    <style>
+      .felt { fill:url(#felt); stroke:#3A5B4D; stroke-width:1.5 }
+      .wood { fill:url(#wood); stroke:#75492E; stroke-width:1.5 }
+      .paper { fill:#F5E8CF; stroke:#DAC8A7 }
+      .title { fill:#FFF4DE; font:700 24px ui-sans-serif,system-ui,sans-serif; letter-spacing:2px }
+      .heading { fill:#FFF4DE; font:700 18px ui-sans-serif,system-ui,sans-serif }
+      .body { fill:#FFF4DE; font:15px ui-sans-serif,system-ui,sans-serif }
+      .meta { fill:#CBB995; font:11px ui-sans-serif,system-ui,sans-serif; letter-spacing:.8px }
+      .brick-label { fill:#FFF4DE; font:700 10px ui-sans-serif,system-ui,sans-serif; text-anchor:middle }
+      .button-text { fill:#241A14; font:700 14px ui-sans-serif,system-ui,sans-serif; letter-spacing:.7px }
+      .panel-note { fill:#CBB995; font:10px ui-monospace,monospace }
+    </style>
+  </defs>
+
+  <rect width="1280" height="800" fill="#0C0907"/>
+  <rect x="24" y="16" width="1232" height="64" rx="16" class="wood" data-rect="chrome"/>
+  <text x="48" y="54" class="title">CALLACK · TABLE 9125</text>
+  <text x="526" y="45" class="meta">BATTLE ENGINE PROTOTYPE · CANONICAL EVENT REPLAY</text>
+  <text x="1144" y="45" class="meta">VOLLEY 07</text>
+  <circle cx="1217" cy="47" r="10" fill="#E3C06B"/><circle cx="1217" cy="47" r="4" fill="#241A14"/>
+
+  <!-- Opponent arena -->
+  <rect x="24" y="96" width="500" height="568" rx="16" class="felt" data-rect="opponent"/>
+  <text x="48" y="128" fill="#63B8A6" class="heading">B · BRAM</text>
+  <text x="48" y="148" class="meta">EFFECT AMPLIFIER · 12 BRICKS · 3 MARBLES</text>
+  <text x="64" y="586" class="meta">OUTER RACK</text>
+  <text x="408" y="586" class="meta">ROW 1 · FRONT</text>
+
+  <use href="#sling-left" transform="translate(70 212)"/>
+  <path d="M96 160V568" stroke="#B88636" stroke-width="6" stroke-linecap="round"/>
+  <use href="#marble-b" transform="translate(96 186)"/>
+  <use href="#marble-b" transform="translate(96 302) scale(.92)"/>
+  <use href="#marble-b" transform="translate(96 476) scale(.92)"/>
+  <circle cx="96" cy="244" r="23" fill="#18271F" stroke="#75492E" stroke-dasharray="4 3"/>
+  <circle cx="96" cy="360" r="23" fill="#18271F" stroke="#75492E" stroke-dasharray="4 3"/>
+  <circle cx="96" cy="418" r="23" fill="#18271F" stroke="#75492E" stroke-dasharray="4 3"/>
+  <circle cx="96" cy="534" r="23" fill="#18271F" stroke="#75492E" stroke-dasharray="4 3"/>
+
+  <!-- B formation, rows 3,2,1 left-to-right; lanes top-to-bottom -->
+  <g data-grid="b-rows-horizontal" stroke="#DAC8A7" stroke-opacity=".32">
+    <!-- row 3 -->
+    <rect x="252" y="160" width="76" height="52" rx="7" fill="#18271F"/>
+    <rect x="252" y="218" width="76" height="52" rx="7" fill="#B07142"/>
+    <rect x="252" y="276" width="76" height="52" rx="7" fill="#C09A4A"/>
+    <rect x="252" y="334" width="76" height="52" rx="7" fill="#756F68"/>
+    <rect x="252" y="392" width="76" height="52" rx="7" fill="#C09A4A"/>
+    <rect x="252" y="450" width="76" height="52" rx="7" fill="#B07142"/>
+    <rect x="252" y="508" width="76" height="52" rx="7" fill="#18271F"/>
+    <!-- row 2 -->
+    <rect x="336" y="160" width="76" height="52" rx="7" fill="#5E8E86"/>
+    <rect x="336" y="218" width="76" height="52" rx="7" fill="#18271F"/>
+    <rect x="336" y="276" width="76" height="52" rx="7" fill="#C09A4A"/>
+    <rect x="336" y="334" width="76" height="52" rx="7" fill="#B07142"/>
+    <rect x="336" y="392" width="76" height="52" rx="7" fill="#C09A4A"/>
+    <rect x="336" y="450" width="76" height="52" rx="7" fill="#18271F"/>
+    <rect x="336" y="508" width="76" height="52" rx="7" fill="#5E8E86"/>
+    <!-- row 1 -->
+    <rect x="420" y="160" width="76" height="52" rx="7" fill="#5E8E86"/>
+    <rect x="420" y="218" width="76" height="52" rx="7" fill="#756F68"/>
+    <rect x="420" y="276" width="76" height="52" rx="7" fill="#8C6C9B"/>
+    <rect x="420" y="334" width="76" height="52" rx="7" fill="#7EAD74"/>
+    <rect x="420" y="392" width="76" height="52" rx="7" fill="#8C6C9B"/>
+    <rect x="420" y="450" width="76" height="52" rx="7" fill="#756F68"/>
+    <rect x="420" y="508" width="76" height="52" rx="7" fill="#5E8E86"/>
+  </g>
+  <g class="brick-label">
+    <text x="290" y="250">SPL</text><text x="290" y="308">AEG</text><text x="290" y="366">BASE</text><text x="290" y="424">AEG</text><text x="290" y="482">CHN</text>
+    <text x="374" y="192">FORT</text><text x="374" y="308">VOID</text><text x="374" y="366">VLT</text><text x="374" y="424">VOID</text><text x="374" y="540">FORT</text>
+    <text x="458" y="192">REF</text><text x="458" y="250">BASE</text><text x="458" y="308">FRZ</text><text x="458" y="366">REG</text><text x="458" y="424">MAG</text><text x="458" y="482">BASE</text><text x="458" y="540">REF</text>
+  </g>
+  <g class="meta" text-anchor="middle">
+    <text x="290" y="606">ROW 3</text><text x="374" y="606">ROW 2</text><text x="458" y="606">ROW 1</text>
+  </g>
+
+  <!-- Central event spine -->
+  <rect x="548" y="96" width="184" height="568" rx="16" class="wood" data-rect="event-spine"/>
+  <text x="640" y="126" text-anchor="middle" class="meta">VOLLEY 07</text>
+  <circle cx="604" cy="161" r="26" fill="#18271F" stroke="#E09A45" stroke-width="3"/>
+  <use href="#marble-a" transform="translate(604 161) scale(.75)"/>
+  <circle cx="676" cy="161" r="26" fill="#18271F" stroke="#63B8A6" stroke-width="3"/>
+  <use href="#marble-b" transform="translate(676 161) scale(.75)"/>
+  <text x="640" y="204" text-anchor="middle" class="meta">BOTH COMMITTED</text>
+  <path d="M640 224V494" stroke="#241A14" stroke-width="6" stroke-linecap="round"/>
+  <path d="M640 224V450" stroke="#E3C06B" stroke-width="4" stroke-linecap="round"/>
+  <g fill="#E3C06B">
+    <circle cx="640" cy="246" r="5"/><circle cx="640" cy="294" r="5"/><circle cx="640" cy="342" r="5"/><circle cx="640" cy="390" r="5"/><circle cx="640" cy="438" r="5"/>
+  </g>
+  <text x="640" y="528" text-anchor="middle" class="heading">COLLISION</text>
+  <text x="640" y="551" text-anchor="middle" class="body">Warden hits</text>
+  <text x="640" y="571" text-anchor="middle" class="body">Aegis for 1</text>
+  <text x="640" y="599" text-anchor="middle" class="meta">188 / 193</text>
+  <text x="640" y="622" text-anchor="middle" class="panel-note">ROW 1 · LANE 4</text>
+
+  <!-- Player arena -->
+  <rect x="756" y="96" width="500" height="568" rx="16" class="felt" data-rect="player"/>
+  <text x="780" y="128" fill="#E09A45" class="heading">A · FEN</text>
+  <text x="780" y="148" class="meta">RICOCHET SLING · 9 BRICKS · 4 MARBLES</text>
+  <text x="780" y="586" class="meta">ROW 1 · FRONT</text>
+  <text x="1158" y="586" class="meta">OUTER RACK</text>
+
+  <!-- A formation, rows 1,2,3 left-to-right; lanes top-to-bottom -->
+  <g data-grid="a-rows-horizontal" stroke="#DAC8A7" stroke-opacity=".32">
+    <!-- row 1 -->
+    <rect x="784" y="160" width="76" height="52" rx="7" fill="#B07142"/>
+    <rect x="784" y="218" width="76" height="52" rx="7" fill="#756F68"/>
+    <rect x="784" y="276" width="76" height="52" rx="7" fill="#5E8E86"/>
+    <rect x="784" y="334" width="76" height="52" rx="7" fill="#C09A4A"/>
+    <rect x="784" y="392" width="76" height="52" rx="7" fill="#5E8E86"/>
+    <rect x="784" y="450" width="76" height="52" rx="7" fill="#756F68"/>
+    <rect x="784" y="508" width="76" height="52" rx="7" fill="#B07142"/>
+    <!-- row 2 -->
+    <rect x="868" y="160" width="76" height="52" rx="7" fill="#18271F"/>
+    <rect x="868" y="218" width="76" height="52" rx="7" fill="#5E8E86"/>
+    <rect x="868" y="276" width="76" height="52" rx="7" fill="#8C6C9B"/>
+    <rect x="868" y="334" width="76" height="52" rx="7" fill="#C09A4A"/>
+    <rect x="868" y="392" width="76" height="52" rx="7" fill="#8C6C9B"/>
+    <rect x="868" y="450" width="76" height="52" rx="7" fill="#5E8E86"/>
+    <rect x="868" y="508" width="76" height="52" rx="7" fill="#18271F"/>
+    <!-- row 3 -->
+    <rect x="952" y="160" width="76" height="52" rx="7" fill="#18271F"/>
+    <rect x="952" y="218" width="76" height="52" rx="7" fill="#18271F"/>
+    <rect x="952" y="276" width="76" height="52" rx="7" fill="#C09A4A"/>
+    <rect x="952" y="334" width="76" height="52" rx="7" fill="#B07142"/>
+    <rect x="952" y="392" width="76" height="52" rx="7" fill="#B07142"/>
+    <rect x="952" y="450" width="76" height="52" rx="7" fill="#18271F"/>
+    <rect x="952" y="508" width="76" height="52" rx="7" fill="#18271F"/>
+  </g>
+  <g class="brick-label">
+    <text x="822" y="192">DMY</text><text x="822" y="250">BASE</text><text x="822" y="308">ABS</text><text x="822" y="366">AEG</text><text x="822" y="424">ABS</text><text x="822" y="482">BASE</text><text x="822" y="540">DMY</text>
+    <text x="906" y="250">FORT</text><text x="906" y="308">PSN</text><text x="906" y="366">TMP</text><text x="906" y="424">SHT</text><text x="906" y="482">FORT</text>
+    <text x="990" y="308">MIR</text><text x="990" y="366">CHN</text><text x="990" y="424">SPL</text>
+  </g>
+  <g class="meta" text-anchor="middle">
+    <text x="822" y="606">ROW 1</text><text x="906" y="606">ROW 2</text><text x="990" y="606">ROW 3</text>
+  </g>
+
+  <path d="M1184 160V568" stroke="#B88636" stroke-width="6" stroke-linecap="round"/>
+  <use href="#marble-a" transform="translate(1184 186)"/>
+  <use href="#marble-a" transform="translate(1184 302) scale(.92)"/>
+  <use href="#marble-a" transform="translate(1184 418) scale(.92)"/>
+  <use href="#marble-a" transform="translate(1184 534) scale(.92)"/>
+  <circle cx="1184" cy="244" r="23" fill="#18271F" stroke="#75492E" stroke-dasharray="4 3"/>
+  <circle cx="1184" cy="360" r="23" fill="#18271F" stroke="#75492E" stroke-dasharray="4 3"/>
+  <circle cx="1184" cy="476" r="23" fill="#18271F" stroke="#75492E" stroke-dasharray="4 3"/>
+  <use href="#sling-right" transform="translate(1210 212)"/>
+
+  <!-- Active A trajectory into B's row 1, lane 3. -->
+  <path d="M1160 302C1010 250 832 250 720 286S540 318 476 302" fill="none" stroke="#E09A45" stroke-width="3" stroke-dasharray="8 6" opacity=".75"/>
+  <circle cx="476" cy="302" r="32" fill="#E09A45" opacity=".12"/>
+  <use href="#marble-a" transform="translate(476 302) scale(.72)"/>
+  <path d="M494 287l12 15-18 3z" fill="#E09A45"/>
+
+  <!-- Footer -->
+  <rect x="24" y="688" width="1232" height="88" rx="16" class="wood" data-rect="footer"/>
+  <rect x="48" y="708" width="56" height="48" rx="8" class="felt"/><text x="68" y="738" class="body">Ⅱ</text>
+  <rect x="116" y="708" width="56" height="48" rx="8" class="felt"/><text x="136" y="738" class="body">▶</text>
+  <rect x="184" y="708" width="76" height="48" rx="8" class="felt"/><text x="208" y="738" class="body">1×</text>
+  <rect x="272" y="708" width="132" height="48" rx="8" class="felt"/><text x="299" y="738" class="body">SOUND ON</text>
+  <text x="640" y="730" text-anchor="middle" class="body">Fen's Warden hits Aegis Keystone at row 1, lane 4 for 1</text>
+  <text x="640" y="750" text-anchor="middle" class="meta">SPACE PAUSE · RIGHT STEP · M MUTE · R REPLAY SEED</text>
+  <rect x="1060" y="708" width="172" height="48" rx="8" fill="#E3C06B" stroke="#F7E3A2"/>
+  <text x="1095" y="738" class="button-text">OPEN LEDGER</text>
+</svg>
