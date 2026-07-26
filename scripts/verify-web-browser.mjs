@@ -80,7 +80,9 @@ try {
   page.on("request", (request) => requestedAssets.push(new URL(request.url()).pathname));
 
   const readyMessage = page.waitForEvent("console", {
-    predicate: (message) => message.text().includes("CALLACK_ACTION ready seed=9125"),
+    predicate: (message) => message.text().includes(
+      "CALLACK_ACTION ready seed=9125 phase=draft"
+    ),
     timeout: 60_000,
   });
   await page.goto(`http://127.0.0.1:${address.port}/`, {
@@ -103,22 +105,60 @@ try {
   assert(Math.abs(bounds.height - expectedViewport.height) < 0.5,
     `#canvas height is ${bounds.height}, expected ${expectedViewport.height}`);
 
-  const liveReplayGuardHandled = page.waitForEvent("console", {
-    predicate: (message) => message.text().includes("CALLACK_ACTION replay_unavailable seed=9125"),
-    timeout: 10_000,
-  });
-  await page.mouse.click(bounds.x + 100, bounds.y + 810);
-  await liveReplayGuardHandled;
+  const tapAction = async (x, y, action, timeout = 15_000) => {
+    const handled = page.waitForEvent("console", {
+      predicate: (message) => message.text().includes(`CALLACK_ACTION ${action}`),
+      timeout,
+    });
+    await page.touchscreen.tap(bounds.x + x, bounds.y + y);
+    await handled;
+  };
 
-  // The in-game pointer debounce prevents a delayed synthetic mouse event from
-  // turning one tap into two actions.
-  await page.waitForTimeout(1_100);
-  const newSeedHandled = page.waitForEvent("console", {
-    predicate: (message) => message.text().includes("CALLACK_ACTION new_seed seed=9126"),
-    timeout: 10_000,
+  // Complete all nine inspect → select → confirm decisions through touch.
+  for (let offer = 0; offer < 9; offer += 1) {
+    await tapAction(195, 180, "offer:");
+    await tapAction(195, 732, "select:");
+    await tapAction(195, 800, "confirm_offer");
+  }
+
+  // Place the eight independently drafted bricks into legal cells.
+  const bench = [
+    [60, 386], [149, 386], [238, 386], [327, 386],
+    [60, 446], [149, 446], [238, 446], [327, 446],
+  ];
+  const cells = [
+    [44, 180], [93, 180], [142, 180], [191, 180],
+    [240, 180], [289, 180], [338, 180], [44, 229],
+  ];
+  for (let index = 0; index < bench.length; index += 1) {
+    await tapAction(bench[index][0], bench[index][1], "brick:");
+    await tapAction(cells[index][0], cells[index][1], "cell:");
+  }
+
+  const resultReached = page.waitForEvent("console", {
+    predicate: (message) => message.text().includes(
+      "CALLACK_ACTION phase_result seed=9125 phase=result"
+    ),
+    timeout: 120_000,
   });
-  await page.touchscreen.tap(bounds.x + 290, bounds.y + 810);
-  await newSeedHandled;
+  await tapAction(195, 800, "lock_setup");
+  await resultReached;
+
+  await tapAction(103, 788, "replay_battle");
+  await tapAction(103, 788, "replay_next");
+  await tapAction(287, 788, "replay_close");
+  await tapAction(287, 788, "new_run");
+
+  // Synthetic mouse and touch use the same semantic action route.
+  await page.waitForTimeout(1_100);
+  const mouseHandled = page.waitForEvent("console", {
+    predicate: (message) => message.text().includes(
+      "CALLACK_ACTION offer:"
+    ) && message.text().includes("seed=9126 phase=draft"),
+    timeout: 15_000,
+  });
+  await page.mouse.click(bounds.x + 195, bounds.y + 180);
+  await mouseHandled;
 
   const fixedRuntimeUrls = new Set(["/game.js", "/game.data", "/love.js", "/love.wasm"]);
   assert(!requestedAssets.some((asset) => fixedRuntimeUrls.has(asset)),
@@ -133,7 +173,9 @@ try {
     "browser did not request hashed WebAssembly");
   assert(runtimeErrors.length === 0, runtimeErrors.join("\n"));
 
-  console.log("[web-browser] OK: 390x844 boot; live replay guard; touch new seed; hashed runtime requests");
+  console.log(
+    "[web-browser] OK: 390x844 full touch run; canonical result/replay/new run; mouse parity; hashed runtime requests"
+  );
 } finally {
   if (browser) await browser.close();
   if (serverListening) {

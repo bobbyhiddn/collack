@@ -16,7 +16,7 @@ local util = require("battle.run_util")
 local M = {}
 
 M.SCHEMA_VERSION = 1
-M.RULES_VERSION = "run-rules-1"
+M.RULES_VERSION = "continuous-v1"
 M.CONTENT_VERSION = draft.CONTENT_VERSION
 
 local function append_journal(state, entry)

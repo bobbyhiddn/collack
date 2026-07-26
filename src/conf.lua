@@ -2,11 +2,11 @@
 -- renderer letterboxes it cleanly in resizable desktop windows.
 -- Pinned to 11.4 because love.js@11.4.1 (latest npm release) embeds the LÖVE
 -- 11.4 runtime; declaring 11.5 caused indirect WASM calls to functions absent
--- in 11.4, throwing RuntimeError: null function on init. The battle-log client
+-- in 11.4, throwing RuntimeError: null function on init. The vertical-slice client
 -- uses only 11.0-era graphics/window APIs, so 11.4 is sufficient.
 -- Bumping to 11.5 requires building Davidobot/love.js master against LÖVE 11.5
 -- (tracked as a follow-up).
--- Audio modules disabled at boot for minimal dependency surface in love.js.
+-- Audio stays available for the presentation adapter's procedural cue contract.
 function love.conf(t)
     t.identity = "collack-spike"
     t.version = "11.4"

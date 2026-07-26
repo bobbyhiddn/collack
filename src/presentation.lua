@@ -89,7 +89,7 @@ end
 
 --- Project two completed canonical frames into a renderer-owned value.
 --- `alpha` is render interpolation only and cannot affect either frame.
-function M.project(current, previous, alpha)
+function M.project_battle(current, previous, alpha)
     assert(type(current) == "table" and current.schema_version,
         "presentation.project needs a BattleFrame")
     previous = previous or current
@@ -261,15 +261,18 @@ function M.replay_project(replay)
     return M.project(current, previous, alpha)
 end
 
--- Product-shaped snapshot projection added by the run-loop slice.  The legacy
--- event adapter above remains available only until the continuous battle
--- integration replaces the exhibition boot path.
-function M.project(run_snapshot, previous_frame, current_frame, alpha)
+-- Compatibility facade for callers at either settled blueprint boundary.
+-- BattleFrame values use the canonical physics projector; RunSnapshot values
+-- use the four-surface run projector. Neither branch owns combat rules.
+function M.project(value, second, third, fourth)
+    if type(value) == "table" and value.sides and value.arena and value.world then
+        return M.project_battle(value, second, third)
+    end
     return require("run_presentation").project(
-        run_snapshot,
-        previous_frame,
-        current_frame,
-        alpha
+        value,
+        second,
+        third,
+        fourth
     )
 end
 

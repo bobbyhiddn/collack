@@ -3,15 +3,16 @@
 -- calculates combat outcomes.
 
 local draft_content = require("battle.content.draft")
-local setup_rules = require("battle.setup_rules")
 local util = require("battle.run_util")
+local battle_projection = require("presentation")
+local art = require("ui.art_tokens")
 
 local M = {}
 
 M.SCHEMA_VERSION = 1
 M.LOGICAL_WIDTH = 390
 M.LOGICAL_HEIGHT = 844
-M.MIN_TARGET = 44
+M.MIN_TARGET = art.touch.minimum
 
 local function clamp(value, low, high)
     return math.max(low, math.min(high, value))
@@ -36,6 +37,15 @@ end
 local function add_action(presentation, descriptor)
     presentation.actions[#presentation.actions + 1] = descriptor
     presentation.enabled_actions[descriptor.id] = descriptor.enabled
+end
+
+local function token_bounds(rect)
+    return {
+        x = rect.x,
+        y = rect.y,
+        width = rect.w,
+        height = rect.h,
+    }
 end
 
 local function tag_projection(tags)
@@ -136,7 +146,7 @@ local function project_draft(presentation, state, ui)
             "inspect_offer",
             "Inspect " .. choice.name,
             true,
-            { x = 16 + (index - 1) * 122, y = 220, width = 114, height = 250 }
+            token_bounds(art.layout.phone.draft.offers[index])
         ))
         if card.inspected then
             presentation.draft.inspected = util.deep_copy(card)
@@ -145,7 +155,7 @@ local function project_draft(presentation, state, ui)
                 "select_offer",
                 "Select " .. choice.name,
                 true,
-                { x = 24, y = 690, width = 342, height = 52 }
+                { x = 16, y = 708, width = 358, height = 48 }
             ))
         end
     end
@@ -154,7 +164,7 @@ local function project_draft(presentation, state, ui)
         "confirm_offer",
         "Confirm choice",
         ui.selected_choice_id ~= nil,
-        { x = 16, y = 776, width = 358, height = 52 }
+        token_bounds(art.layout.phone.draft.primary)
     ))
 end
 
@@ -174,13 +184,6 @@ local function project_setup(presentation, state, ui)
     presentation.title = "Arrange your collection"
     presentation.subtitle = "Tap a brick, then a legal cell. Bag index 1 launches first."
     presentation.opponent = opponent_projection(state.opponent)
-    local loadout = {
-        sling = state.player.sling,
-        marbles = state.player.marbles,
-        bricks = state.player.bricks,
-        formation = state.setup.formation,
-        bag_order = state.setup.bag_order,
-    }
     local brick_by_uid = map_bricks(state.player.bricks)
     local marble_by_uid = map_marbles(state.player.marbles)
     local placement = {}
@@ -224,10 +227,10 @@ local function project_setup(presentation, state, ui)
             "Select " .. brick.name,
             true,
             {
-                x = 12 + ((index - 1) % 4) * 92,
-                y = 170 + math.floor((index - 1) / 4) * 52,
-                width = 86,
-                height = 46,
+                x = 20 + ((index - 1) % 4) * 89,
+                y = 360 + math.floor((index - 1) / 4) * 60,
+                width = 80,
+                height = 52,
             }
         ))
     end
@@ -253,7 +256,7 @@ local function project_setup(presentation, state, ui)
                 "place_selected",
                 string.format("Formation row %d column %d", row, col),
                 cell.legal,
-                { x = 30 + (col - 1) * 47, y = 300 + (row - 1) * 48, width = 44, height = 44 }
+                { x = 22 + (col - 1) * 49, y = 158 + (row - 1) * 49, width = 44, height = 44 }
             ))
         end
     end
@@ -277,7 +280,7 @@ local function project_setup(presentation, state, ui)
             "select_marble",
             "Select " .. marble.name,
             true,
-            { x = 20 + (order - 1) * 91, y = 505, width = 78, height = 60 }
+            { x = 20 + (order - 1) * 89, y = 520, width = 78, height = 56 }
         ))
         local slot = {
             before_uid = uid,
@@ -290,7 +293,7 @@ local function project_setup(presentation, state, ui)
             "insert_selected",
             "Insert before " .. marble.name,
             slot.enabled,
-            { x = 8 + (order - 1) * 91, y = 574, width = 44, height = 44 }
+            { x = 16 + (order - 1) * 89, y = 584, width = 48, height = 48 }
         ))
     end
     presentation.setup.insertion_slots[#presentation.setup.insertion_slots + 1] = {
@@ -303,14 +306,14 @@ local function project_setup(presentation, state, ui)
         "insert_selected",
         "Move to bag tail",
         ui.selected_marble_uid ~= nil,
-        { x = 338, y = 574, width = 44, height = 44 }
+        { x = 326, y = 584, width = 48, height = 48 }
     ))
     add_action(presentation, action(
         "lock_setup",
         "lock_setup",
         state.setup.valid and "Lock formation" or "Formation incomplete",
         state.setup.valid,
-        { x = 16, y = 776, width = 358, height = 52 }
+        token_bounds(art.layout.phone.formation.primary)
     ))
 end
 
@@ -324,6 +327,9 @@ end
 
 local function projected_frame(previous_frame, current_frame, alpha)
     if not current_frame then return previous_frame and util.deep_copy(previous_frame) or nil end
+    if current_frame.sides and current_frame.arena and current_frame.world then
+        return battle_projection.project_battle(current_frame, previous_frame, alpha)
+    end
     local previous = entity_map(previous_frame)
     local projected = util.deep_copy(current_frame)
     projected.entities = {}
@@ -352,11 +358,13 @@ local function project_battle(presentation, state, ui, previous_frame, current_f
     presentation.title = "Automatic battle"
     presentation.subtitle = "Both bags commit together. No reflex input changes combat."
     presentation.opponent = opponent_projection(state.opponent)
+    local frame = projected_frame(previous_frame, current_frame, alpha)
     presentation.battle = {
-        status = state.battle and state.battle.status or "handoff",
-        exchange = state.battle and state.battle.exchange or 0,
-        tick = state.battle and state.battle.tick or 0,
-        frame = projected_frame(previous_frame, current_frame, alpha),
+        status = frame and (frame.finished and "finished" or "running")
+            or (state.battle and state.battle.status or "handoff"),
+        exchange = frame and frame.exchange or (state.battle and state.battle.exchange or 0),
+        tick = frame and frame.tick or (state.battle and state.battle.tick or 0),
+        frame = frame,
         inspected_entity_id = ui.inspected_entity_id,
         view = {
             paused = ui.paused == true,
@@ -366,18 +374,28 @@ local function project_battle(presentation, state, ui, previous_frame, current_f
         },
     }
     for index, entity in ipairs(
-        presentation.battle.frame
-        and presentation.battle.frame.entities
+        frame
+        and frame.entities
         or {}
     ) do
         local id = entity.id or entity.uid
         if id then
+            local bounds = {
+                x = 20 + ((index - 1) % 7) * 50,
+                y = 250,
+                width = 48,
+                height = 48,
+            }
+            if frame.arena and type(entity.x) == "number" and type(entity.y) == "number" then
+                bounds.x = clamp(16 + entity.x / frame.arena.width * 358 - 24, 16, 326)
+                bounds.y = clamp(86 + entity.y / frame.arena.height * 650 - 24, 86, 688)
+            end
             add_action(presentation, action(
                 "entity:" .. tostring(id),
                 "inspect_entity",
                 "Inspect " .. tostring(entity.name or entity.kind or id),
                 true,
-                { x = 20 + ((index - 1) % 7) * 50, y = 250, width = 44, height = 44 }
+                bounds
             ))
         end
     end
@@ -386,28 +404,28 @@ local function project_battle(presentation, state, ui, previous_frame, current_f
         "toggle_pause",
         ui.paused and "Resume" or "Pause",
         true,
-        { x = 16, y = 776, width = 82, height = 52 }
+        { x = 16, y = 768, width = 82, height = 56 }
     ))
     add_action(presentation, action(
         "battle_speed",
         "cycle_speed",
         (ui.speed or 1) .. "×",
         true,
-        { x = 106, y = 776, width = 82, height = 52 }
+        { x = 106, y = 768, width = 82, height = 56 }
     ))
     add_action(presentation, action(
         "battle_mute",
         "toggle_mute",
         ui.muted and "Unmute" or "Mute",
         true,
-        { x = 196, y = 776, width = 82, height = 52 }
+        { x = 196, y = 768, width = 82, height = 56 }
     ))
     add_action(presentation, action(
         "battle_motion",
         "toggle_reduced_motion",
         "Motion",
         true,
-        { x = 286, y = 776, width = 88, height = 52 }
+        { x = 286, y = 768, width = 88, height = 56 }
     ))
 end
 
@@ -429,14 +447,14 @@ local function project_result(presentation, state)
         "replay_battle",
         "Replay Battle",
         #(state.battle.recording.frames or {}) > 0,
-        { x = 16, y = 776, width = 172, height = 52 }
+        { x = 16, y = 760, width = 174, height = 56 }
     ))
     add_action(presentation, action(
         "new_run",
         "new_run",
         "New Run",
         true,
-        { x = 202, y = 776, width = 172, height = 52 }
+        { x = 200, y = 760, width = 174, height = 56 }
     ))
 end
 
@@ -447,11 +465,13 @@ local function project_replay(presentation, state, ui)
     presentation.title = "Battle replay"
     presentation.subtitle = string.format("Recorded frame %d of %d", replay.cursor, replay.frame_count)
     presentation.opponent = opponent_projection(state.opponent)
+    local current = recording.frames[replay.cursor]
+    local previous = recording.frames[math.max(1, replay.cursor - 1)]
     presentation.replay = {
         source = replay.source,
         cursor = replay.cursor,
         frame_count = replay.frame_count,
-        frame = util.deep_copy(recording.frames[replay.cursor]),
+        frame = projected_frame(previous, current, 1),
         events = util.deep_copy(recording.events),
         result = util.deep_copy(state.result),
     }
@@ -460,14 +480,14 @@ local function project_replay(presentation, state, ui)
         "replay_step",
         "Next frame",
         replay.cursor < replay.frame_count,
-        { x = 16, y = 776, width = 172, height = 52 }
+        { x = 16, y = 760, width = 174, height = 56 }
     ))
     add_action(presentation, action(
         "replay_close",
         "replay_close",
         "Back to result",
         true,
-        { x = 202, y = 776, width = 172, height = 52 }
+        { x = 200, y = 760, width = 174, height = 56 }
     ))
 end
 
@@ -477,7 +497,10 @@ end
 -- A fifth optional view_state carries inspect/selection controls without
 -- polluting canonical RunState.
 function M.project(run_snapshot, previous_frame, current_frame, alpha, view_state)
-    local state = util.deep_copy(run_snapshot)
+    -- Projection never mutates its inputs; each table exposed below is built or
+    -- copied explicitly. Avoid cloning a potentially large finished recording
+    -- on every result/replay render frame.
+    local state = run_snapshot
     local ui = util.deep_copy(view_state or {})
     local presentation = {
         schema_version = M.SCHEMA_VERSION,

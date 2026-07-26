@@ -38,9 +38,12 @@ npm run verify:web
 The web result is written to `dist/web/` with content-addressed JavaScript,
 data, and WebAssembly filenames. Serve that directory with any static HTTP
 server. The browser verifier starts and stops its own local server, boots the
-packaged canvas at 390x844, checks the live replay guard, and exercises touch
-new-seed input. `R` starts immutable recorded-frame replay after a result, `N`
-starts a new seed, Space pauses, and Right Arrow advances one exact fixed step.
+packaged canvas at 390x844, completes the nine-pick draft and eight-brick setup
+through touch, waits for the canonical autobattle, then exercises replay, New
+Run, and mouse parity. Touch or click the visible controls; Tab and Enter
+navigate the same semantic actions. During battle, Space pauses and Right Arrow
+advances one exact fixed step. On the result screen, `R` opens replay and `N`
+starts the next seeded run.
 
 ## Repository map
 
@@ -52,6 +55,7 @@ scripts/                love.js, desktop, and Capacitor packaging
 web-shell/              Responsive 390x844 browser shell
 capacitor/              Preserved mobile wrapper and iOS scaffold
 docs/decisions/          Settled engine and simulation decisions
+docs/art-direction/      Accepted presentation contract and reference boards
 ```
 
 ## Runtime pins

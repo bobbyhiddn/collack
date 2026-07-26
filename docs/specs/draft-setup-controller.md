@@ -48,9 +48,9 @@ presentation.project(run_snapshot, previous_frame, current_frame, alpha)
 ```
 
 `battle/setup.lua` exports the union-returning setup validator for the blueprint
-API (`validate_detailed` exposes the internal boolean-plus-errors form) while
-retaining the discrete prototype fixtures until physics integration removes
-them.
+API (`validate_detailed` exposes the internal boolean-plus-errors form).
+Constructed fixed matchup fixtures now live only under `battle/tests/` and are
+excluded from runtime archives.
 
 ## Offers and player choices
 
@@ -131,25 +131,21 @@ new_run
 
 Touch and mouse both call `run_controller.activate(model, action_id, source)`;
 `source` never changes rules or branching. `PresentationState.actions` carries
-the same IDs, enabled state, and logical bounds no smaller than 44 × 44 on the
-390 × 844 surface.
+the same IDs, enabled state, and logical bounds no smaller than the art
+contract's 48 × 48 target on the 390 × 844 surface.
 
 Inspect, pending selection, entity inspection, pause, speed, mute, reduced
 motion, and replay cursor are view state. They cannot alter `RunState`. Replay
 reads stored frames directly and never calls combat stepping.
 
-## Integration ownership
+## Integrated runtime
 
-This branch deliberately does not implement continuous physics or replace the
-current exhibition renderer. The physics integration must:
+`src/run_loop.lua` now consumes the handoff and is the only bridge to
+`battle.engine`. It maps UID formations and ordered rosters into the continuous
+world without regenerating content, feeds adjacent canonical frames to the
+presentation boundary, and returns the versioned recording, result, and
+checkpoint hashes through the engine-only completion callback.
 
-1. map the handoff's UID formations and ordered rosters into the continuous
-   world without regenerating content;
-2. feed canonical adjacent `BattleFrame` snapshots to `presentation.project`;
-3. call the engine-only completion API with a versioned recording;
-4. preserve run/domain seeds and stable UIDs in checkpoints and recording.
-
-The presentation integration may replace the legacy event adapter and
-`src/main.lua`, but must keep the semantic action IDs and controller calls. It
-must not copy draft legality, placement validation, bag ordering, or winner
-rules into LÖVE input/rendering.
+`src/main.lua` activates the semantic action IDs for touch, mouse, and keyboard.
+It contains no draft legality, placement validation, bag ordering, collision,
+damage, or winner rules. Replay projects stored frames and cannot step combat.

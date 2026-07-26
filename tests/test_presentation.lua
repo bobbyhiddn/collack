@@ -7,7 +7,7 @@ package.path = table.concat({
 }, ";")
 
 local engine = require("battle.engine")
-local setup = require("battle.setup")
+local setup = require("battle.tests.fixtures")
 local presentation = require("presentation")
 
 local checks, failures = 0, 0

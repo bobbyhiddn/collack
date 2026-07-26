@@ -103,7 +103,7 @@ function M.build(def, sling, owner_id)
     end
 
     return {
-        uid = alloc_uid(),
+        uid = def.uid ~= nil and def.uid or alloc_uid(),
         name = def.name,
         rarity = def.rarity,
         owner = owner_id,
@@ -142,7 +142,7 @@ end
 --- Invariant check used by the engine and by the tests.
 function M.assert_core_covered(marble)
     if #marble.shells < 1 then
-        error(string.format("marble %s (uid %d) has an exposed core while still in play",
+        error(string.format("marble %s (uid %s) has an exposed core while still in play",
             tostring(marble.name), marble.uid))
     end
 end

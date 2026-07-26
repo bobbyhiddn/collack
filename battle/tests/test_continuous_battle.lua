@@ -1,6 +1,6 @@
 local harness = require("battle.tests.harness")
 local engine = require("battle.engine")
-local setup = require("battle.setup")
+local setup = require("battle.tests.fixtures")
 
 local M = { name = "continuous_battle" }
 

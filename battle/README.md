@@ -31,7 +31,9 @@ individual offers through `battle/draft.lua`, builds an asymmetric seeded CPU
 through `battle/opponent.lua`, and validates the 3 × 7 formation plus explicit
 four-marble bag through `battle/setup_rules.lua`. Combat remains input-free;
 the continuous engine consumes `battle_handoff` and returns its result plus
-immutable recording through `run.complete_battle`.
+immutable recording through `run.complete_battle`. The handoff adapter resolves
+formation UIDs without regenerating content, launches the exact chosen bag
+order, and retains drafted marble and brick identities in recorded frames.
 
 The exact controller, input, presentation, and integration contracts are in
 [`docs/specs/draft-setup-controller.md`](../docs/specs/draft-setup-controller.md).
@@ -89,7 +91,8 @@ During simulation the engine records:
 - the final frame and result.
 
 `presentation.from_recording` replays these immutable values and never calls
-`battle.step`.
+`battle.step`. `battle/checkpoints.lua` signs the full one-second keyframes for
+same-build partition/determinism verification.
 
 ## Run and verify
 
@@ -110,14 +113,15 @@ battle/
   effects.lua       collision/release/status profiles
   marble.lua        shell/core construction and invariants
   formation.lua     fixed setup grid transformed into world AABBs
+  checkpoints.lua   stable signatures for recorded one-second keyframes
   battlelog.lua     deterministic audit formatting
   rng.lua           controlled MINSTD generator
-  setup.lua         content lookup and fixture loadouts
+  setup.lua         public setup validation boundary
   run.lua           immutable product run state machine and recording journal
   draft.lua         curated seeded three-card offer generation
   opponent.lua      validated asymmetric CPU recipes
   setup_rules.lua   player formation and ordered-bag validation
-  cli.lua           run one battle from a seed and print the log
+  cli.lua           draft/setup a seeded run and print its canonical battle
   content/          cores, shells, bricks, and slings
   tests/            deterministic physics and end-to-end tests
 ```

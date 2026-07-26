@@ -18,7 +18,7 @@ package.path = table.concat({
 
 local harness = require("battle.tests.harness")
 local engine = require("battle.engine")
-local setup = require("battle.setup")
+local setup = require("battle.tests.fixtures")
 local RNG = require("battle.rng")
 
 local M = { name = "determinism" }

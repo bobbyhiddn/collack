@@ -26,7 +26,26 @@ rm -f "$LOVE_ARCHIVE"
 ( cd "$SRC" && zip -9 -r "$LOVE_ARCHIVE" . -x '*.DS_Store' >/dev/null )
 ( cd "$ROOT" && zip -9 -r "$LOVE_ARCHIVE" battle \
     -x 'battle/tests/*' 'battle/cli.lua' 'battle/README.md' '*.DS_Store' >/dev/null )
+if [ -d "$ROOT/assets" ]; then
+    ( cd "$ROOT" && zip -9 -r "$LOVE_ARCHIVE" assets -x '*.DS_Store' >/dev/null )
+fi
 unzip -tqq "$LOVE_ARCHIVE"
+ARCHIVE_LIST="$(unzip -Z -1 "$LOVE_ARCHIVE")"
+for required in \
+    main.lua conf.lua presentation.lua run_controller.lua run_presentation.lua \
+    run_loop.lua ui/art_tokens.lua battle/engine.lua battle/physics.lua \
+    battle/checkpoints.lua battle/run.lua battle/draft.lua battle/opponent.lua \
+    battle/setup.lua battle/setup_rules.lua
+do
+    grep -Fxq "$required" <<<"$ARCHIVE_LIST" || {
+        echo "[desktop] ERROR: runtime archive is missing $required" >&2
+        exit 1
+    }
+done
+if grep -Eq '^battle/(tests/|cli\.lua$)' <<<"$ARCHIVE_LIST"; then
+    echo "[desktop] ERROR: quarantined headless/demo paths entered the runtime archive" >&2
+    exit 1
+fi
 echo "[desktop] built $LOVE_ARCHIVE"
 
 # 2. Fetch LÖVE Linux AppImage runtime (cached).

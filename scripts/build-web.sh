@@ -7,7 +7,7 @@
 #                            Declaring t.version = "11.5" in conf.lua triggered
 #                            indirect WASM calls to functions absent in 11.4
 #                            (RuntimeError: null function on init). Pinning to
-#                            11.4 fixes the demo. To use 11.5 LÖVE features
+#                            11.4 fixes the client. To use 11.5 LÖVE features
 #                            here, build Davidobot/love.js master against
 #                            LÖVE 11.5 (requires Emscripten in build image).
 #
@@ -59,6 +59,9 @@ mkdir -p "$ARCHIVE_ROOT"
 cp -R "$SRC/." "$ARCHIVE_ROOT/"
 mkdir -p "$ARCHIVE_ROOT/battle"
 cp -R "$ROOT/battle/." "$ARCHIVE_ROOT/battle/"
+if [ -d "$ROOT/assets" ]; then
+    cp -R "$ROOT/assets" "$ARCHIVE_ROOT/assets"
+fi
 rm -rf "$ARCHIVE_ROOT/battle/tests"
 rm -f "$ARCHIVE_ROOT/battle/cli.lua" "$ARCHIVE_ROOT/battle/README.md"
 find "$ARCHIVE_ROOT" -name '.DS_Store' -delete
@@ -85,6 +88,36 @@ unzip -Z -1 "$LOVE_ARCHIVE" > "$ARCHIVE_ACTUAL_LIST"
 if ! cmp -s "$ARCHIVE_FILE_LIST" "$ARCHIVE_ACTUAL_LIST"; then
     echo "[web] ERROR: archive entries differ from the stable input order" >&2
     diff -u "$ARCHIVE_FILE_LIST" "$ARCHIVE_ACTUAL_LIST" >&2 || true
+    exit 1
+fi
+
+# Fail the build if an integration module or the data-only art contract falls
+# out of the archive. Tests and the CLI are deliberately not shipped.
+REQUIRED_RUNTIME_FILES=(
+    "main.lua"
+    "conf.lua"
+    "presentation.lua"
+    "run_controller.lua"
+    "run_presentation.lua"
+    "run_loop.lua"
+    "ui/art_tokens.lua"
+    "battle/engine.lua"
+    "battle/physics.lua"
+    "battle/checkpoints.lua"
+    "battle/run.lua"
+    "battle/draft.lua"
+    "battle/opponent.lua"
+    "battle/setup.lua"
+    "battle/setup_rules.lua"
+)
+for required in "${REQUIRED_RUNTIME_FILES[@]}"; do
+    grep -Fxq "$required" "$ARCHIVE_ACTUAL_LIST" || {
+        echo "[web] ERROR: runtime archive is missing $required" >&2
+        exit 1
+    }
+done
+if grep -Eq '^battle/(tests/|cli\.lua$)' "$ARCHIVE_ACTUAL_LIST"; then
+    echo "[web] ERROR: quarantined headless/demo paths entered the runtime archive" >&2
     exit 1
 fi
 echo "[web] built $LOVE_ARCHIVE ($(du -h "$LOVE_ARCHIVE" | cut -f1))"

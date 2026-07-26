@@ -61,7 +61,7 @@ function M.run(t)
     t:eq(projected.screen, "draft", "new run projects draft surface")
     t:eq(projected.logical_size.width, 390, "projection targets phone width")
     t:eq(projected.logical_size.height, 844, "projection targets phone height")
-    t:eq(projected.minimum_target, 44, "projection pins 44-pixel touch minimum")
+    t:eq(projected.minimum_target, 48, "projection applies the art contract's touch minimum")
     t:eq(projected.art_direction, "warm_handcrafted_tabletop",
         "all screens carry the accepted tabletop direction")
     t:eq(#projected.draft.cards, 3, "draft projects three individual cards")
@@ -138,7 +138,7 @@ function M.run(t)
     local current = completion.recording.frames[2]
     projected = controller.project(model, previous, current, 0.5)
     t:eq(projected.screen, "battle", "lock projects battle surface")
-    t:eq(projected.battle.status, "handoff", "battle surface exposes handoff status")
+    t:eq(projected.battle.status, "running", "canonical frames mark the battle surface running")
     t:eq(projected.battle.frame.entities[1].x, 195.5,
         "renderer interpolation uses adjacent canonical frames")
     t:eq(projected.battle.frame.entities[1].y, 705,

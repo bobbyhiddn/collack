@@ -114,17 +114,49 @@ local function body_id(marble)
     return "marble:" .. tostring(marble.uid)
 end
 
-local function box_id(side_id, row, col)
+local function box_id(side_id, row, col, brick)
+    if brick and brick.uid ~= nil then return "brick:" .. tostring(brick.uid) end
     return string.format("brick:%s:%02d:%02d", side_id, row, col)
 end
 
+local function ordered_marble_defs(def)
+    local defs = def.marbles or {}
+    local order = def.bag_order
+    if not order then return defs end
+    if #order ~= #defs then
+        error(string.format(
+            "player %s bag has %d entries for %d marbles",
+            tostring(def.name or def.id or "?"),
+            #order,
+            #defs
+        ))
+    end
+    local by_uid = {}
+    for _, marble in ipairs(defs) do
+        if marble.uid == nil then error("ordered battle marble is missing uid") end
+        if by_uid[marble.uid] then
+            error("battle marble roster contains duplicate uid: " .. tostring(marble.uid))
+        end
+        by_uid[marble.uid] = marble
+    end
+    local ordered, used = {}, {}
+    for _, uid in ipairs(order) do
+        local marble = by_uid[uid]
+        if not marble then error("battle bag contains unknown marble: " .. tostring(uid)) end
+        if used[uid] then error("battle bag repeats marble: " .. tostring(uid)) end
+        used[uid] = true
+        ordered[#ordered + 1] = marble
+    end
+    return ordered
+end
+
 local function build_player(id, def, cols)
-    local sling = resolve_sling(def.sling)
+    local sling = resolve_sling(def.sling or def.sling_id)
     local player = {
         id = id,
         name = def.name or id,
         sling = sling,
-        formation = formation_mod.build(def.formation),
+        formation = formation_mod.build(def.formation, def.bricks),
         rack = {},
         roster = {},
         all_marbles = {},
@@ -132,7 +164,7 @@ local function build_player(id, def, cols)
         bag = {},
         lanes = cols,
     }
-    local defs = def.marbles or {}
+    local defs = ordered_marble_defs(def)
     if #defs < 1 then error(string.format("player %s has no marbles", id)) end
     if #defs > cols then
         error(string.format("player %s has %d marbles but only %d lanes", id, #defs, cols))
@@ -251,7 +283,7 @@ local function create_world(battle)
                 if brick then
                     local x, y = brick_position(side_id, row, col, player.formation.cols)
                     local profile = effects.brick_profile(brick.behaviour)
-                    brick.body_id = box_id(side_id, row, col)
+                    brick.body_id = box_id(side_id, row, col, brick)
                     brick.x, brick.y = x, y
                     world:add_box({
                         id = brick.body_id, kind = "brick", owner = side_id,
@@ -298,6 +330,7 @@ end
 function M.new(opts)
     assert(type(opts) == "table", "battle.new needs an options table")
     local sides = opts.sides
+    local product_handoff = not sides and opts.player and opts.opponent
     if not sides and opts.player and opts.opponent then
         sides = { A = opts.player, B = opts.opponent }
     end
@@ -322,6 +355,10 @@ function M.new(opts)
         exchange_started_tick = 0,
         lanes = a_cols,
         order = { "A", "B" },
+        result_ids = copy(opts.result_ids or (
+            product_handoff and { A = "player", B = "opponent" }
+            or { A = "A", B = "B" }
+        )),
         sides = {},
         active = {},
         active_by_body = {},
@@ -540,7 +577,7 @@ release_core = function(battle, owner, other, marble, x, y, depth)
     end
 
     battle.world:add_field({
-        id = string.format("release:%d:%d", marble.uid, battle.tick),
+        id = string.format("release:%s:%d", tostring(marble.uid), battle.tick),
         kind = "radial", owner = owner.id, x = x, y = y,
         radius = radius, strength = base.invert and -10 or 10,
         duration = 24, falloff = true,
@@ -975,13 +1012,15 @@ local function evaluate(battle)
     end
     if #a_reasons > 0 then
         return {
-            outcome = "victory", winner = "A", reason = table.concat(a_reasons, "+"),
+            outcome = "victory", winner = battle.result_ids.A,
+            reason = table.concat(a_reasons, "+"),
             exchanges = battle.exchange, volleys = battle.exchange,
         }
     end
     if #b_reasons > 0 then
         return {
-            outcome = "victory", winner = "B", reason = table.concat(b_reasons, "+"),
+            outcome = "victory", winner = battle.result_ids.B,
+            reason = table.concat(b_reasons, "+"),
             exchanges = battle.exchange, volleys = battle.exchange,
         }
     end
@@ -1117,7 +1156,8 @@ local function snapshot_side(battle, player)
             local brick = player.formation.grid[row][col]
             if brick then
                 side.bricks[#side.bricks + 1] = {
-                    body_id = brick.body_id, id = brick.id, name = brick.name,
+                    body_id = brick.body_id, id = brick.id, uid = brick.uid,
+                    name = brick.name,
                     family = brick.family, behaviour = brick.behaviour,
                     row = row, col = col, hp = brick.hp, max_hp = brick.max_hp,
                     alive = brick.alive, x = brick.x, y = brick.y,
