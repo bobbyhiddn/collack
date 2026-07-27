@@ -1,7 +1,8 @@
 # ADR 0004 — Battle simulation model: the five open questions
 
 - **Date:** 2026-07-26
-- **Status:** Accepted
+- **Status:** Partially superseded by
+  [ADR 0005](0005-continuous-vertical-slice.md)
 - **Decided by:** Alpha (worker), Battle Engine Core, first development slice.
   Every one of these is cheap to reverse while `battle/` is headless and has no
   client bound to it. That stops being true the moment the LÖVE client renders a
@@ -10,6 +11,19 @@
   not content generation.
 - **Follows:** [ADR 0001](0001-game-engine.md) (LÖVE + Lua is the engine, which
   is why this is pure Lua and not Go).
+
+## Supersession note
+
+The fixed grid, player-ordered bag, brick HP pools, shell/core rules, content
+families, friendly-fire blowback, and symmetric win conditions remain product
+decisions.
+
+ADR 0005 supersedes section 3's one-cascade-at-a-time resolution, section 5's
+discrete cell stepping, and the event log as the output of record. The shipped
+vertical slice instead advances both launched marbles in one continuous
+fixed-step world and renders that canonical state. This file remains an
+accurate description of the current prototype until the migration lands; it is
+not the target architecture.
 
 ## Why this note exists
 

@@ -12,8 +12,10 @@ local bricks = require("battle.content.bricks")
 local M = {}
 
 --- Build a formation from a layout: an array of rows, each an array of brick
---- ids. Use "." or false for an empty cell. Every row must be the same width.
-function M.build(layout)
+--- ids. Product handoffs use stable brick UIDs in the grid and pass the
+--- drafted roster as the second argument. Use "." or false for an empty cell.
+--- Every row must be the same width.
+function M.build(layout, roster)
     local rows = #layout
     if rows < 1 then
         error("formation layout has no rows")
@@ -21,6 +23,15 @@ function M.build(layout)
     local cols = #layout[1]
     if cols < 1 then
         error("formation layout row 1 has no columns")
+    end
+
+    local roster_by_uid = {}
+    for _, brick in ipairs(roster or {}) do
+        if brick.uid == nil then error("formation roster brick is missing uid") end
+        if roster_by_uid[brick.uid] then
+            error("formation roster contains duplicate uid: " .. tostring(brick.uid))
+        end
+        roster_by_uid[brick.uid] = brick
     end
 
     local grid = {}
@@ -33,12 +44,15 @@ function M.build(layout)
         for col = 1, cols do
             local cell = layout[row][col]
             if cell and cell ~= "." then
-                local def = bricks.by_id[cell]
+                local roster_item = roster_by_uid[cell]
+                local content_id = roster_item and roster_item.content_id or cell
+                local def = bricks.by_id[content_id]
                 if not def then
-                    error("unknown brick: " .. tostring(cell))
+                    error("unknown brick: " .. tostring(content_id))
                 end
                 grid[row][col] = {
                     id = def.id,
+                    uid = roster_item and roster_item.uid or nil,
                     name = def.name,
                     family = def.family or "basic",
                     behaviour = def.behaviour,
@@ -50,6 +64,33 @@ function M.build(layout)
                     alive = true,
                 }
                 alive = alive + 1
+            end
+        end
+    end
+
+    if roster and #roster > 0 then
+        if alive ~= #roster then
+            error(string.format(
+                "formation places %d bricks but roster contains %d",
+                alive,
+                #roster
+            ))
+        end
+        local placed = {}
+        for row = 1, rows do
+            for col = 1, cols do
+                local brick = grid[row][col]
+                if brick and brick.uid then
+                    if placed[brick.uid] then
+                        error("formation places brick twice: " .. tostring(brick.uid))
+                    end
+                    placed[brick.uid] = true
+                end
+            end
+        end
+        for uid in pairs(roster_by_uid) do
+            if not placed[uid] then
+                error("formation omits roster brick: " .. tostring(uid))
             end
         end
     end

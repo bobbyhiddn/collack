@@ -6,12 +6,9 @@
 --
 --   damage_bonus     — added to every collision's damage.
 --   durability_bonus — added to every shell's durability.
---   momentum_bonus   — added to launch momentum (how many collisions a marble
---                      can push through before it comes to rest).
---   aim              — added to the core's trajectory. Lets a sling correct or
---                      exaggerate a core's drift.
---   scatter          — half-width of the random launch scatter, in lanes.
---                      0 means the sling never misses its lane.
+--   momentum_bonus   — added to launch impulse and mass tuning.
+--   aim              — added to the core's continuous launch-angle bias.
+--   scatter          — deterministic launch-angle variance; 0 is exact aim.
 
 local SLINGS = {
     {

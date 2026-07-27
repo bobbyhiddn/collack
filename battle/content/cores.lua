@@ -1,8 +1,8 @@
 -- battle/content/cores.lua — hardcoded core definitions.
 --
 -- A core is the centre of a marble. It supplies:
---   * trajectory — the marble's lateral bias per row of travel.
---                  negative = drifts left, positive = drifts right, 0 = straight.
+--   * trajectory — the marble's continuous launch-angle bias.
+--                  negative = left, positive = right, 0 = straight.
 --   * release    — the effect fired when the marble's last shell breaks and the
 --                  core is exposed. nil means "baseline blowback only", which
 --                  is what every common core gets. Uncommon and above add one

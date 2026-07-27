@@ -1,49 +1,69 @@
--- battle/engine.lua — the Callack battle simulation.
+-- battle/engine.lua -- Callack's canonical continuous autobattle.
 --
--- Pure Lua. No love.*, no io, no os.time, no math.random. Everything that could
--- vary between runs is either derived from the seed or fixed by construction,
--- because the contract is: same seed + same setup => byte-identical battle log.
---
--- Shape of a battle (see docs/decisions/0004-battle-sim-model.md):
---
---   * Two players, A and B. Each has a brick FORMATION on a fixed grid and a
---     RACK of marbles sitting in lanes, fired by a SLING.
---   * Play proceeds in VOLLEYS. In each volley BOTH players commit their next
---     marble before either cascade resolves, and win conditions are checked
---     only once both cascades are done. That is what makes this simultaneous
---     rather than turn-taking: neither side can be denied its shot, and neither
---     side can win "first" inside a volley.
---   * A launched marble CASCADES through the opponent's formation, colliding
---     brick by brick, until it runs out of momentum, leaves the grid, or loses
---     its last shell. Only when both cascades have finished does the next
---     volley begin.
---   * When a marble's last shell breaks the core is exposed and RELEASES. The
---     release always produces baseline blowback, which displaces marbles within
---     a radius on BOTH racks — the firing player's own marbles included.
---
--- Column space and lane space are the same integer space: column c of either
--- formation is lane c of either rack. That is the coupling that lets a core
--- released deep in the enemy formation shove your own marbles around.
+-- Motion is owned by battle.physics and advances only in exact 1/120 s ticks.
+-- This module applies game rules to physical contacts and records snapshots and
+-- audit events.  Rendering and replay never invent trajectories.
 
 local RNG = require("battle.rng")
 local Log = require("battle.battlelog")
 local effects = require("battle.effects")
 local formation_mod = require("battle.formation")
 local marble_mod = require("battle.marble")
-
+local physics = require("battle.physics")
 local slings = require("battle.content.slings")
 
 local M = {}
 
-M.DEFAULT_MAX_VOLLEYS = 40
-M.MAX_CHAIN_DEPTH = 3      -- chain bricks detonating chain bricks
-M.MAX_BLOWBACK_DEPTH = 3   -- a blowback kill triggering another blowback
-M.MAX_CASCADE_STEPS = 200  -- belt-and-braces guard; momentum already bounds this
+M.SCHEMA_VERSION = 2
+M.RULES_VERSION = "continuous-v1"
+M.FIXED_DT = physics.FIXED_DT
+M.DEFAULT_MAX_EXCHANGES = 40
+M.DEFAULT_MAX_VOLLEYS = M.DEFAULT_MAX_EXCHANGES -- historical option spelling
+M.DEFAULT_EXCHANGE_TICKS = 960
+M.FRAME_INTERVAL = 4
+M.KEYFRAME_INTERVAL = 120
+M.MAX_CHAIN_DEPTH = 3
+M.MAX_RELEASE_DEPTH = 3
+
+M.ARENA = {
+    width = 70,
+    height = 120,
+    brick_width = 8,
+    brick_height = 5,
+    cell_x = 9,
+    cell_y = 7,
+    top_front_y = 31,
+    bottom_front_y = 89,
+    top_rack_y = 7,
+    bottom_rack_y = 113,
+    marble_radius = 1.65,
+}
+
+local abs, floor, max, min, sqrt =
+    math.abs, math.floor, math.max, math.min, math.sqrt
 
 local function clamp(value, lo, hi)
     if value < lo then return lo end
     if value > hi then return hi end
     return value
+end
+
+local function copy(source, seen)
+    if type(source) ~= "table" then return source end
+    seen = seen or {}
+    if seen[source] then error("canonical state cannot contain cycles") end
+    seen[source] = true
+    local out = {}
+    for key, value in pairs(source) do out[copy(key, seen)] = copy(value, seen) end
+    seen[source] = nil
+    return out
+end
+
+local function quantize(value)
+    if type(value) ~= "number" then return value end
+    if abs(value) < 0.0000005 then return 0 end
+    if value >= 0 then return floor(value * 1000000 + 0.5) / 1000000 end
+    return math.ceil(value * 1000000 - 0.5) / 1000000
 end
 
 local function remove_from(list, item)
@@ -56,69 +76,117 @@ local function remove_from(list, item)
     return false
 end
 
--- ---------------------------------------------------------------------------
--- Setup
--- ---------------------------------------------------------------------------
+local function contains(list, item)
+    for _, value in ipairs(list) do if value == item then return true end end
+    return false
+end
 
 local function resolve_sling(spec)
     if type(spec) == "table" then return spec end
     local sling = slings.by_id[spec or "training_sling"]
-    if not sling then
-        error("unknown sling: " .. tostring(spec))
-    end
+    if not sling then error("unknown sling: " .. tostring(spec)) end
     return sling
 end
 
---- Spread n marbles evenly across `cols` lanes. Integer arithmetic on exact
---- doubles, so the placement is identical everywhere.
 local function default_lane(index, count, cols)
-    return math.floor(((2 * index - 1) * cols) / (2 * count)) + 1
+    return floor(((2 * index - 1) * cols) / (2 * count)) + 1
+end
+
+local function lane_x(lane, lanes)
+    local total = (lanes - 1) * M.ARENA.cell_x
+    return (M.ARENA.width - total) / 2 + (lane - 1) * M.ARENA.cell_x
+end
+
+local function brick_position(side_id, row, col, cols)
+    local x = lane_x(col, cols)
+    if side_id == "A" then
+        return x, M.ARENA.bottom_front_y + (row - 1) * M.ARENA.cell_y
+    end
+    return x, M.ARENA.top_front_y - (row - 1) * M.ARENA.cell_y
+end
+
+local function rack_position(side_id, lane, lanes)
+    return lane_x(lane, lanes),
+        side_id == "A" and M.ARENA.bottom_rack_y or M.ARENA.top_rack_y
+end
+
+local function body_id(marble)
+    return "marble:" .. tostring(marble.uid)
+end
+
+local function box_id(side_id, row, col, brick)
+    if brick and brick.uid ~= nil then return "brick:" .. tostring(brick.uid) end
+    return string.format("brick:%s:%02d:%02d", side_id, row, col)
+end
+
+local function ordered_marble_defs(def)
+    local defs = def.marbles or {}
+    local order = def.bag_order
+    if not order then return defs end
+    if #order ~= #defs then
+        error(string.format(
+            "player %s bag has %d entries for %d marbles",
+            tostring(def.name or def.id or "?"),
+            #order,
+            #defs
+        ))
+    end
+    local by_uid = {}
+    for _, marble in ipairs(defs) do
+        if marble.uid == nil then error("ordered battle marble is missing uid") end
+        if by_uid[marble.uid] then
+            error("battle marble roster contains duplicate uid: " .. tostring(marble.uid))
+        end
+        by_uid[marble.uid] = marble
+    end
+    local ordered, used = {}, {}
+    for _, uid in ipairs(order) do
+        local marble = by_uid[uid]
+        if not marble then error("battle bag contains unknown marble: " .. tostring(uid)) end
+        if used[uid] then error("battle bag repeats marble: " .. tostring(uid)) end
+        used[uid] = true
+        ordered[#ordered + 1] = marble
+    end
+    return ordered
 end
 
 local function build_player(id, def, cols)
-    local sling = resolve_sling(def.sling)
+    local sling = resolve_sling(def.sling or def.sling_id)
     local player = {
         id = id,
         name = def.name or id,
         sling = sling,
-        formation = formation_mod.build(def.formation),
-        rack = {},    -- lane -> marble
-        roster = {},  -- every live marble, stable order
-        queue = {},   -- firing order
-        bag = {},     -- core ids recovered from destroyed marbles
+        formation = formation_mod.build(def.formation, def.bricks),
+        rack = {},
+        roster = {},
+        all_marbles = {},
+        queue = {},
+        bag = {},
         lanes = cols,
     }
-
-    local defs = def.marbles or {}
-    if #defs < 1 then
-        error(string.format("player %s has no marbles", id))
-    end
+    local defs = ordered_marble_defs(def)
+    if #defs < 1 then error(string.format("player %s has no marbles", id)) end
     if #defs > cols then
         error(string.format("player %s has %d marbles but only %d lanes", id, #defs, cols))
     end
-
     for index, marble_def in ipairs(defs) do
         local marble = marble_mod.build(marble_def, sling, id)
         local lane = marble_def.lane or default_lane(index, #defs, cols)
-        if lane < 1 or lane > cols then
-            error(string.format("marble %q lane %d is outside 1..%d", tostring(marble_def.name), lane, cols))
-        end
-        if player.rack[lane] then
-            error(string.format("two marbles assigned to lane %d for player %s", lane, id))
-        end
+        if lane < 1 or lane > cols then error("marble lane is outside formation width") end
+        if player.rack[lane] then error("two marbles assigned to lane " .. lane) end
         marble.lane = lane
+        marble.home_lane = lane
+        marble.body_id = body_id(marble)
+        marble.state = "ready"
+        marble.statuses = {}
         player.rack[lane] = marble
         player.roster[#player.roster + 1] = marble
-        -- Firing order is the player's declared order (ADR 0004), not a shuffle.
+        player.all_marbles[#player.all_marbles + 1] = marble
         player.queue[#player.queue + 1] = marble
     end
-
     return player
 end
 
--- Build the canonical event-protocol snapshot consumed by renderers and replay
--- tools. The payload contains values only: no object here is shared with the
--- mutable battle state, so it survives serialization or a deep-copy round trip.
 local function initial_side(player)
     local side = {
         id = player.id,
@@ -133,590 +201,427 @@ local function initial_side(player)
         marbles = {},
         queue = {},
     }
-
     for row = 1, player.formation.rows do
         for col = 1, player.formation.cols do
             local brick = player.formation.grid[row][col]
             if brick then
+                local x, y = brick_position(player.id, row, col, player.formation.cols)
                 side.bricks[#side.bricks + 1] = {
-                    id = brick.id,
-                    name = brick.name,
-                    family = brick.family,
-                    behaviour = brick.behaviour,
-                    row = brick.row,
-                    col = brick.col,
-                    hp = brick.hp,
-                    max_hp = brick.max_hp,
-                    alive = brick.alive,
+                    id = brick.id, name = brick.name, family = brick.family,
+                    behaviour = brick.behaviour, row = row, col = col,
+                    hp = brick.hp, max_hp = brick.max_hp, alive = brick.alive,
+                    x = x, y = y, width = M.ARENA.brick_width, height = M.ARENA.brick_height,
                 }
             end
         end
     end
-
-    for _, marble in ipairs(player.roster) do
-        local snapshot = {
-            uid = marble.uid,
-            name = marble.name,
-            rarity = marble.rarity,
-            core = marble.core.name,
-            lane = marble.lane,
-            state = marble.state,
-            alive = true,
-            shells = {},
+    for _, marble in ipairs(player.all_marbles) do
+        local x, y = rack_position(player.id, marble.lane, player.lanes)
+        local item = {
+            uid = marble.uid, name = marble.name, rarity = marble.rarity,
+            core = marble.core.name, lane = marble.lane, state = marble.state,
+            alive = true, x = x, y = y, radius = M.ARENA.marble_radius, shells = {},
         }
         for _, shell in ipairs(marble.shells) do
-            snapshot.shells[#snapshot.shells + 1] = {
-                mineral = shell.mineral,
-                pattern = shell.pattern,
-                durability = shell.durability,
-                max_durability = shell.max_durability,
+            item.shells[#item.shells + 1] = {
+                mineral = shell.mineral, pattern = shell.pattern,
+                durability = shell.durability, max_durability = shell.max_durability,
             }
         end
-        side.marbles[#side.marbles + 1] = snapshot
+        side.marbles[#side.marbles + 1] = item
     end
-
-    for _, marble in ipairs(player.queue) do
-        side.queue[#side.queue + 1] = marble.uid
-    end
+    for _, marble in ipairs(player.queue) do side.queue[#side.queue + 1] = marble.uid end
     return side
 end
 
---- Create a battle. opts:
----   seed          — integer seed (required for a reproducible battle)
----   sides         — { A = <player def>, B = <player def> }
----   max_volleys   — draw-by-exhaustion cap
---- A player def is { name, sling, formation = <layout>, marbles = { <def>... } }.
-function M.new_battle(opts)
-    assert(type(opts) == "table", "new_battle needs an options table")
-    assert(opts.sides and opts.sides.A and opts.sides.B, "new_battle needs sides A and B")
-
-    -- uids are per-battle so that running two battles in one process yields the
-    -- same log for the same seed both times.
-    marble_mod.reset_uids()
-
-    local a_cols = #opts.sides.A.formation[1]
-    local b_cols = #opts.sides.B.formation[1]
-    if a_cols ~= b_cols then
-        error(string.format("both formations must be the same width (A=%d, B=%d); "
-            .. "columns and rack lanes share one coordinate space", a_cols, b_cols))
-    end
-
-    local battle = {
-        seed = math.floor(tonumber(opts.seed) or 1),
-        rng = RNG.new(opts.seed),
-        log = Log.new(),
-        volley = 0,
-        max_volleys = opts.max_volleys or M.DEFAULT_MAX_VOLLEYS,
-        lanes = a_cols,
-        order = { "A", "B" },
-        sides = {},
-        result = nil,
-    }
-
-    battle.sides.A = build_player("A", opts.sides.A, a_cols)
-    battle.sides.B = build_player("B", opts.sides.B, b_cols)
-
-    battle.log:add(0, "-", "battle_start", {
-        seed = battle.seed,
-        lanes = battle.lanes,
-        a_marbles = #battle.sides.A.roster,
-        b_marbles = #battle.sides.B.roster,
-        a_bricks = battle.sides.A.formation.alive,
-        b_bricks = battle.sides.B.formation.alive,
-        max_volleys = battle.max_volleys,
-        initial_state = {
-            protocol_version = 1,
-            sides = {
-                A = initial_side(battle.sides.A),
-                B = initial_side(battle.sides.B),
-            },
-        },
-    })
-
-    return battle
-end
-
-local function opponent_of(battle, player)
-    if player.id == "A" then return battle.sides.B end
-    return battle.sides.A
-end
-
-local function log(battle, side, kind, fields)
-    return battle.log:add(battle.volley, side, kind, fields)
-end
-
--- ---------------------------------------------------------------------------
--- Bricks
--- ---------------------------------------------------------------------------
-
-local damage_brick
-
---- A chain brick detonating into its orthogonal neighbours. Depth-capped so a
---- dense field of chain bricks cannot recurse forever.
-local function detonate(battle, owner, brick, damage, depth)
-    if depth > M.MAX_CHAIN_DEPTH then
-        log(battle, owner.id, "chain_capped", { row = brick.row, col = brick.col, depth = depth })
-        return
-    end
-    log(battle, owner.id, "chain_detonate", {
-        brick = brick.id, row = brick.row, col = brick.col, damage = damage, depth = depth,
-    })
-    for _, neighbour in ipairs(formation_mod.neighbours(owner.formation, brick.row, brick.col)) do
-        damage_brick(battle, owner, neighbour, damage, "chain", depth)
-    end
-end
-
---- Apply damage to a brick. `owner` is the player whose formation it belongs
---- to. Returns true if this call destroyed it.
-function damage_brick(battle, owner, brick, amount, source, depth)
-    if not brick.alive or amount <= 0 then return false end
-    brick.hp = brick.hp - amount
-    log(battle, owner.id, "brick_damaged", {
-        brick = brick.id, row = brick.row, col = brick.col,
-        damage = amount, hp_left = math.max(0, brick.hp), source = source,
-    })
-    if brick.hp > 0 then return false end
-
-    formation_mod.kill(owner.formation, brick)
-    log(battle, owner.id, "brick_destroyed", {
-        brick = brick.id, row = brick.row, col = brick.col,
-        source = source, bricks_left = owner.formation.alive,
-    })
-    local profile = effects.brick_profile(brick.behaviour)
-    if (profile.death_splash or 0) > 0 then
-        detonate(battle, owner, brick, profile.death_splash, (depth or 0) + 1)
+local function physics_filter(body, collider)
+    if collider.kind == "brick" and body.owner == collider.owner then return false end
+    if collider.kind == "marble" and body.owner == collider.owner
+        and (not body.dynamic or not collider.dynamic) then
+        return false
     end
     return true
 end
 
--- ---------------------------------------------------------------------------
--- Marble destruction, core release, blowback
--- ---------------------------------------------------------------------------
-
-local apply_blowback
-
-local function destroy_marble(battle, owner, marble, cause)
-    if marble.state == "destroyed" then return end
-    marble.state = "destroyed"
-    if marble.lane and owner.rack[marble.lane] == marble then
-        owner.rack[marble.lane] = nil
-    end
-    remove_from(owner.roster, marble)
-    remove_from(owner.queue, marble)
-    -- The core survives the marble and returns to the owner's bag. It is not a
-    -- combat unit: bagged cores never re-enter the battle, they are what the
-    -- owner walks away with. See ADR 0004.
-    owner.bag[#owner.bag + 1] = marble.core.id
-    log(battle, owner.id, "marble_destroyed", {
-        marble = marble.uid, name = marble.name, cause = cause,
-        marbles_left = #owner.roster, core_bagged = marble.core.id,
-    })
+local function append_event(battle, side, kind, fields)
+    fields = fields or {}
+    fields.tick = fields.tick or battle.tick
+    fields.exchange = fields.exchange or battle.exchange
+    fields.schema_version = M.SCHEMA_VERSION
+    local event = battle.log:add(battle.exchange, side or "-", kind, fields)
+    battle.pending_events[#battle.pending_events + 1] = event
+    battle.recording.events[#battle.recording.events + 1] = copy(event)
+    return event
 end
 
---- The core is exposed and lets go. `col` is the lane/column the release
---- happens in; `owner` is the marble's player, `other` the opponent.
---- `formation_owner` is whose bricks (if any) are around the release point —
---- nil when the release happens in a rack rather than on a formation.
-local function release_core(battle, owner, other, marble, col, row, formation_owner, depth)
-    local base_profile = effects.release_profile(marble.core.release)
-    local amplification = marble.effect_power or 0
-    local profile = {
-        id = base_profile.id,
-        radius = base_profile.radius + amplification,
-        invert = base_profile.invert,
-        scorch = base_profile.scorch,
-        shrapnel = base_profile.shrapnel + amplification,
-    }
-    log(battle, owner.id, "core_release", {
-        marble = marble.uid, core = marble.core.id, release = profile.id,
-        col = col, row = row or -1, depth = depth, amplification = amplification,
-    })
-
-    destroy_marble(battle, owner, marble, "core_released")
-
-    -- Baseline blowback always fires, for every rarity, including common.
-    apply_blowback(battle, owner, other, col, profile, depth)
-
-    -- Release effects that touch bricks only apply when the core popped inside
-    -- a formation.
-    if profile.shrapnel > 0 and formation_owner then
-        log(battle, formation_owner.id, "shrapnel", { col = col, row = row, damage = profile.shrapnel })
-        for _, neighbour in ipairs(formation_mod.neighbours(formation_owner.formation, row, col)) do
-            damage_brick(battle, formation_owner, neighbour, profile.shrapnel, "shrapnel", 0)
-        end
+local function add_recorded_frame(battle, keyframe)
+    local frame = M.snapshot(battle)
+    frame.keyframe = keyframe == true
+    battle.recording.frames[#battle.recording.frames + 1] = frame
+    if keyframe then
+        battle.recording.keyframes[#battle.recording.keyframes + 1] = copy(frame)
     end
 end
 
---- Grind durability off a racked marble's outermost shell. Returns the marble
---- if this killed it (caller queues the secondary release), nil otherwise.
-local function crush_shell(battle, owner, marble, amount, cause)
-    local shell = marble.shells[1]
-    if not shell then return marble end
-    shell.durability = shell.durability - amount
-    log(battle, owner.id, "shell_crushed", {
-        marble = marble.uid, mineral = shell.mineral, pattern = shell.pattern,
-        durability_left = math.max(0, shell.durability), cause = cause,
+local function create_world(battle)
+    local world = physics.new({
+        width = M.ARENA.width,
+        height = M.ARENA.height,
+        fixed_dt = M.FIXED_DT,
+        max_speed = 240,
+        linear_damping = 0.992,
+        sleep_speed = 1.35,
+        sleep_ticks = 30,
+        restitution = 0.84,
+        can_collide = physics_filter,
     })
-    if shell.durability > 0 then return nil end
-    table.remove(marble.shells, 1)
-    log(battle, owner.id, "shell_break", {
-        marble = marble.uid, mineral = shell.mineral, shells_left = #marble.shells, cause = cause,
-    })
-    if #marble.shells == 0 then
-        return marble
-    end
-    return nil
-end
-
---- Baseline blowback: displace every marble within `radius` lanes of the
---- epicentre, on BOTH racks. The firing player's own rack is processed FIRST,
---- deliberately — friendly displacement is a rule of the game, not a side
---- effect, and putting it first makes that obvious in the log.
----
---- A marble shoved into a lane that is off the rack or already occupied cannot
---- move, so it takes the force instead and loses a point of shell durability.
---- That is the cost of clustering.
-function apply_blowback(battle, owner, other, epicentre, profile, depth)
-    depth = depth or 1
-    if depth > M.MAX_BLOWBACK_DEPTH then
-        log(battle, owner.id, "blowback_capped", { col = epicentre, depth = depth })
-        return
-    end
-
-    log(battle, owner.id, "blowback", {
-        col = epicentre, radius = profile.radius, release = profile.id,
-        invert = profile.invert, depth = depth,
-    })
-
-    local secondaries = {}
-
-    for _, side in ipairs({ owner, other }) do
-        local ally = (side.id == owner.id)
-
-        -- Collect affected marbles, then order them so they get out of each
-        -- other's way: pushed outward, the far ones move first; pulled inward,
-        -- the near ones move first. Ties break on lane, so the order is total.
-        local affected = {}
-        for lane = 1, side.lanes do
-            local marble = side.rack[lane]
-            if marble and math.abs(lane - epicentre) <= profile.radius then
-                affected[#affected + 1] = marble
-            end
-        end
-        table.sort(affected, function(left, right)
-            local dl = math.abs(left.lane - epicentre)
-            local dr = math.abs(right.lane - epicentre)
-            if dl ~= dr then
-                if profile.invert then return dl < dr end
-                return dl > dr
-            end
-            return left.lane < right.lane
-        end)
-
-        for _, marble in ipairs(affected) do
-            local delta = marble.lane - epicentre
-            local direction
-            if delta == 0 then
-                -- Sitting exactly on the epicentre: nothing decides which way
-                -- it goes but the seed.
-                direction = battle.rng:sign()
-            elseif delta > 0 then
-                direction = 1
-            else
-                direction = -1
-            end
-            if profile.invert then direction = -direction end
-
-            local target = marble.lane + direction
-            local blocked = target < 1 or target > side.lanes or side.rack[target] ~= nil
-            if blocked then
-                log(battle, side.id, "blowback_blocked", {
-                    marble = marble.uid, lane = marble.lane, into = target, ally = ally,
-                })
-                local killed = crush_shell(battle, side, marble, 1, "blowback_crush")
-                if killed then secondaries[#secondaries + 1] = { side = side, marble = killed } end
-            else
-                side.rack[marble.lane] = nil
-                side.rack[target] = marble
-                local from = marble.lane
-                marble.lane = target
-                log(battle, side.id, "blowback_displace", {
-                    marble = marble.uid, from = from, to = target, ally = ally,
-                })
-            end
-
-            if profile.scorch and marble.state ~= "destroyed" then
-                local killed = crush_shell(battle, side, marble, 1, "scorch")
-                if killed then secondaries[#secondaries + 1] = { side = side, marble = killed } end
-            end
-        end
-    end
-
-    -- Chained releases run after both racks have settled, so nothing mutates a
-    -- rack that is still being walked.
-    for _, entry in ipairs(secondaries) do
-        local side = entry.side
-        local marble = entry.marble
-        if marble.state ~= "destroyed" then
-            local counterpart = (side.id == owner.id) and other or owner
-            release_core(battle, side, counterpart, marble, marble.lane, nil, nil, depth + 1)
-        end
-    end
-end
-
--- ---------------------------------------------------------------------------
--- Cascade
--- ---------------------------------------------------------------------------
-
-local STATUS_ORDER = { "poison", "freeze" }
-
---- Tick persistent brick effects before a committed marble leaves its rack.
---- Returns a momentum modifier, or nil if a poison tick exposed the core and
---- aborted the launch.
-local function tick_statuses(battle, attacker, defender, marble, shot)
-    local momentum_delta = 0
-    for _, status_id in ipairs(STATUS_ORDER) do
-        local remaining = marble.statuses[status_id]
-        if remaining and remaining > 0 then
-            local profile = effects.status_profile(status_id)
-            log(battle, attacker.id, "status_tick", {
-                marble = marble.uid, status = status_id, remaining = remaining,
-            })
-            momentum_delta = momentum_delta + (profile.launch_momentum or 0)
-            if (profile.launch_shell_wear or 0) > 0 then
-                local killed = crush_shell(battle, attacker, marble, profile.launch_shell_wear, status_id)
-                if killed then
-                    marble.statuses[status_id] = nil
-                    release_core(battle, attacker, defender, marble, marble.lane, nil, nil, 1)
-                    log(battle, attacker.id, "launch_aborted", {
-                        marble = marble.uid, reason = status_id, shot = shot or 1,
+    for _, side_id in ipairs({ "A", "B" }) do
+        local player = battle.sides[side_id]
+        for row = 1, player.formation.rows do
+            for col = 1, player.formation.cols do
+                local brick = player.formation.grid[row][col]
+                if brick then
+                    local x, y = brick_position(side_id, row, col, player.formation.cols)
+                    local profile = effects.brick_profile(brick.behaviour)
+                    brick.body_id = box_id(side_id, row, col, brick)
+                    brick.x, brick.y = x, y
+                    world:add_box({
+                        id = brick.body_id, kind = "brick", owner = side_id,
+                        x = x, y = y, width = M.ARENA.brick_width,
+                        height = M.ARENA.brick_height,
+                        restitution = profile.reflect and 1.0 or 0.82,
+                        data = {
+                            row = row, col = col, brick_id = brick.id,
+                            behaviour = brick.behaviour, hp = brick.hp, max_hp = brick.max_hp,
+                        },
                     })
-                    return nil
+                    if brick.behaviour == "magnetic" then
+                        world:add_field({
+                            id = "field:" .. brick.body_id, kind = "radial", owner = side_id,
+                            x = x, y = y, radius = 13, strength = -58, duration = nil,
+                            data = { behaviour = "magnetic", brick = brick.body_id },
+                        })
+                    elseif brick.behaviour == "poison" or brick.behaviour == "freeze" then
+                        world:add_field({
+                            id = "field:" .. brick.body_id, kind = "radial", owner = side_id,
+                            x = x, y = y, radius = 6.5, strength = 0, duration = nil,
+                            data = { behaviour = brick.behaviour, brick = brick.body_id },
+                        })
+                    end
                 end
             end
-            remaining = remaining - 1
-            if remaining > 0 then
-                marble.statuses[status_id] = remaining
-            else
-                marble.statuses[status_id] = nil
+        end
+        for _, marble in ipairs(player.roster) do
+            local x, y = rack_position(side_id, marble.lane, player.lanes)
+            local mass = 0.8 + #marble.shells * 0.32 + (marble.momentum or 0) * 0.04
+            world:add_body({
+                id = marble.body_id, kind = "marble", owner = side_id,
+                x = x, y = y, radius = M.ARENA.marble_radius,
+                mass = mass, restitution = marble.ricochet and 0.98 or 0.84,
+                dynamic = false, asleep = true,
+                data = { marble = marble.uid, state = marble.state, shells = #marble.shells },
+            })
+        end
+    end
+    world:drain_events()
+    return world
+end
+
+function M.new(opts)
+    assert(type(opts) == "table", "battle.new needs an options table")
+    local sides = opts.sides
+    local product_handoff = not sides and opts.player and opts.opponent
+    if not sides and opts.player and opts.opponent then
+        sides = { A = opts.player, B = opts.opponent }
+    end
+    assert(sides and sides.A and sides.B, "battle.new needs player/opponent or sides A/B")
+    marble_mod.reset_uids()
+    local a_cols = #sides.A.formation[1]
+    local b_cols = #sides.B.formation[1]
+    if a_cols ~= b_cols then error("both formations must have the same width") end
+
+    local battle = {
+        schema_version = M.SCHEMA_VERSION,
+        rules_version = opts.rules_version or M.RULES_VERSION,
+        seed = floor(tonumber(opts.battle_seed or opts.seed) or 1),
+        rng = RNG.new(opts.battle_seed or opts.seed),
+        log = Log.new(),
+        tick = 0,
+        exchange = 0,
+        volley = 0,
+        max_exchanges = opts.max_exchanges or opts.max_volleys or M.DEFAULT_MAX_EXCHANGES,
+        max_volleys = opts.max_exchanges or opts.max_volleys or M.DEFAULT_MAX_EXCHANGES,
+        max_exchange_ticks = opts.max_exchange_ticks or M.DEFAULT_EXCHANGE_TICKS,
+        exchange_started_tick = 0,
+        lanes = a_cols,
+        order = { "A", "B" },
+        result_ids = copy(opts.result_ids or (
+            product_handoff and { A = "player", B = "opponent" }
+            or { A = "A", B = "B" }
+        )),
+        sides = {},
+        active = {},
+        active_by_body = {},
+        brick_by_body = {},
+        marble_by_body = {},
+        contact_cooldown = {},
+        state = "boundary",
+        result = nil,
+        pending_events = {},
+        recording = {
+            schema_version = 1,
+            rules_version = opts.rules_version or M.RULES_VERSION,
+            battle_seed = floor(tonumber(opts.battle_seed or opts.seed) or 1),
+            fixed_dt = M.FIXED_DT,
+            frame_interval = M.FRAME_INTERVAL,
+            keyframe_interval = M.KEYFRAME_INTERVAL,
+            frames = {},
+            keyframes = {},
+            events = {},
+            final = nil,
+            result = nil,
+        },
+    }
+    battle.sides.A = build_player("A", sides.A, a_cols)
+    battle.sides.B = build_player("B", sides.B, b_cols)
+    battle.world = create_world(battle)
+
+    for _, side_id in ipairs(battle.order) do
+        local player = battle.sides[side_id]
+        for _, marble in ipairs(player.all_marbles) do
+            battle.marble_by_body[marble.body_id] = { owner = player, marble = marble }
+        end
+        for row = 1, player.formation.rows do
+            for col = 1, player.formation.cols do
+                local brick = player.formation.grid[row][col]
+                if brick then battle.brick_by_body[brick.body_id] = { owner = player, brick = brick } end
             end
         end
     end
-    return momentum_delta
+
+    append_event(battle, "-", "battle_start", {
+        seed = battle.seed, lanes = battle.lanes,
+        a_marbles = #battle.sides.A.roster, b_marbles = #battle.sides.B.roster,
+        a_bricks = battle.sides.A.formation.alive, b_bricks = battle.sides.B.formation.alive,
+        max_exchanges = battle.max_exchanges, fixed_dt = M.FIXED_DT,
+        initial_state = {
+            protocol_version = 2,
+            sides = { A = initial_side(battle.sides.A), B = initial_side(battle.sides.B) },
+        },
+    })
+    add_recorded_frame(battle, true)
+    return battle
 end
 
-local function adjacent_protection(defender, brick)
+M.new_battle = M.new
+
+local function opponent_of(battle, player)
+    return player.id == "A" and battle.sides.B or battle.sides.A
+end
+
+local function adjacent_protection(owner, brick)
     local reduction = 0
-    for _, neighbour in ipairs(formation_mod.neighbours(defender.formation, brick.row, brick.col)) do
-        local profile = effects.brick_profile(neighbour.behaviour)
-        reduction = reduction + (profile.protect_adjacent or 0)
+    for _, neighbour in ipairs(formation_mod.neighbours(owner.formation, brick.row, brick.col)) do
+        reduction = reduction + (effects.brick_profile(neighbour.behaviour).protect_adjacent or 0)
     end
     return reduction
 end
 
-local function apply_status(battle, defender, marble, status_id, power)
-    if not status_id then return end
-    local status = effects.status_profile(status_id)
-    local duration = status.duration + math.max(0, (power or 1) - 1)
-    marble.statuses[status_id] = math.max(marble.statuses[status_id] or 0, duration)
-    log(battle, defender.id, "status_applied", {
-        marble = marble.uid, status = status_id, duration = duration,
+local damage_brick
+
+local function destroy_brick(battle, owner, brick, source, depth)
+    if not formation_mod.kill(owner.formation, brick) then return false end
+    battle.world:remove_box(brick.body_id, source)
+    battle.brick_by_body[brick.body_id] = nil
+    local field_id = "field:" .. brick.body_id
+    if battle.world:get_field(field_id) then battle.world:remove_field(field_id, "brick_destroyed") end
+    append_event(battle, owner.id, "brick_destroyed", {
+        brick = brick.id, row = brick.row, col = brick.col,
+        source = source, bricks_left = owner.formation.alive,
+        x = brick.x, y = brick.y,
     })
-end
-
---- One collision between a flying marble and a brick.
---- Returns a table describing what the cascade should do next:
----   { destroyed = bool, momentum_spent = n, dir_flip = bool, traj = n }
-local function resolve_collision(battle, attacker, defender, marble, brick, row, col, dir, traj)
-    local shell = marble.shells[1]
-    marble_mod.assert_core_covered(marble)
-    local collision_profile = effects.collision_profile(shell.collision)
-    local brick_profile = effects.brick_profile(brick.behaviour)
-
-    local damage = collision_profile.damage + marble.damage_bonus
-    if marble.effect_power > 0 and collision_profile.id ~= "chip" then
-        damage = damage + marble.effect_power
-    end
-    local durability_cost = collision_profile.durability_cost + (brick_profile.shell_wear or 0)
-    local armour = (brick_profile.damage_reduction or 0) + adjacent_protection(defender, brick)
-    if armour > 0 and not collision_profile.pierces_absorb then
-        damage = math.max(0, damage - armour)
-        log(battle, defender.id, brick.behaviour == "absorb" and "absorb" or "fortify", {
-            brick = brick.id, row = row, col = col, marble = marble.uid, reduction = armour,
-        })
-    end
-
-    if brick_profile.negate_once and not brick.aegis_spent and damage > 0 then
-        brick.aegis_spent = true
-        damage = 0
-        log(battle, defender.id, "aegis", {
-            brick = brick.id, row = row, col = col, marble = marble.uid,
-        })
-    end
-
-    log(battle, attacker.id, "collision", {
-        marble = marble.uid, effect = collision_profile.id, brick = brick.id,
-        row = row, col = col, damage = damage, mineral = shell.mineral, pattern = shell.pattern,
-    })
-
-    local hp_before = brick.hp
-    damage_brick(battle, defender, brick, damage, "collision", 0)
-
-    local splash_behind = collision_profile.splash_behind + (marble.effect_power or 0)
-    if splash_behind > 0 then
-        local behind = formation_mod.brick_at(defender.formation, row + dir, col)
-        if behind then
-            damage_brick(battle, defender, behind, splash_behind, "splinter", 0)
-        end
-    end
-
-    if (brick_profile.collision_splash or 0) > 0 then
-        log(battle, defender.id, "splice", {
-            brick = brick.id, row = row, col = col, damage = brick_profile.collision_splash,
-        })
-        for _, neighbour in ipairs(formation_mod.neighbours(defender.formation, row, col)) do
-            damage_brick(battle, defender, neighbour, brick_profile.collision_splash, "splice", 0)
-        end
-    end
-
-    if (brick_profile.shell_wear or 0) > 1 then
-        log(battle, defender.id, "shatter", {
-            brick = brick.id, row = row, col = col, marble = marble.uid,
-            wear = brick_profile.shell_wear,
-        })
-    end
-    if (brick_profile.skip_rows or 0) > 0 then
-        log(battle, defender.id, "vault", {
-            brick = brick.id, row = row, col = col, marble = marble.uid,
-            skipped = brick_profile.skip_rows,
-        })
-    end
-    if brick_profile.harmless then
-        log(battle, defender.id, "dummy", {
-            brick = brick.id, row = row, col = col, marble = marble.uid,
-        })
-    end
-    if brick_profile.break_shell then
-        log(battle, defender.id, "void", {
-            brick = brick.id, row = row, col = col, marble = marble.uid,
-        })
-    end
-
-    if brick.alive and (brick_profile.heal_after_hit or 0) > 0 then
-        local old_hp = brick.hp
-        brick.hp = math.min(brick.max_hp, brick.hp + brick_profile.heal_after_hit)
-        if brick.hp > old_hp then
-            log(battle, defender.id, "regenerate", {
-                brick = brick.id, row = row, col = col, healed = brick.hp - old_hp, hp_left = brick.hp,
+    local profile = effects.brick_profile(brick.behaviour)
+    if (profile.death_splash or 0) > 0 then
+        if (depth or 0) >= M.MAX_CHAIN_DEPTH then
+            append_event(battle, owner.id, "chain_capped", {
+                row = brick.row, col = brick.col, depth = depth or 0,
             })
-        end
-    end
-
-    if brick.alive and brick_profile.rewind and brick.hp < hp_before then
-        local restored = hp_before - brick.hp
-        brick.hp = hp_before
-        log(battle, defender.id, "temporal", {
-            brick = brick.id, row = row, col = col, restored = restored, hp_left = brick.hp,
-        })
-    end
-
-    apply_status(battle, defender, marble, brick_profile.status, brick_profile.status_power)
-
-    if brick_profile.steer == "inward" then
-        local centre = (defender.formation.cols + 1) / 2
-        if col < centre then
-            traj = 1
-        elseif col > centre then
-            traj = -1
         else
-            traj = 0
-        end
-        log(battle, defender.id, "magnetic", {
-            brick = brick.id, row = row, col = col, marble = marble.uid, new_trajectory = traj,
-        })
-    end
-
-    -- Reflect only matters if the pane survived the hit. Ricochet is a sling
-    -- property and bends the lateral path after any collision.
-    local flipped = false
-    if brick.alive and brick_profile.reflect then
-        dir = -dir
-        if traj == 0 then
-            traj = battle.rng:sign()
-        else
-            traj = -traj
-        end
-        flipped = true
-        log(battle, defender.id, brick.behaviour == "mirror" and "mirror" or "reflect", {
-            brick = brick.id, row = row, col = col, marble = marble.uid, new_trajectory = traj,
-        })
-    elseif marble.ricochet then
-        if traj == 0 then
-            traj = col <= (defender.formation.cols / 2) and 1 or -1
-        else
-            traj = -traj
-        end
-        flipped = true
-        log(battle, attacker.id, "ricochet", {
-            marble = marble.uid, row = row, col = col, new_trajectory = traj,
-        })
-    end
-
-    -- Shell wear happens last, so a shell that breaks on this hit still gets to
-    -- deal its damage.
-    if brick_profile.harmless then durability_cost = 0 end
-    if brick_profile.break_shell then durability_cost = math.max(durability_cost, shell.durability) end
-    shell.durability = shell.durability - durability_cost
-    if durability_cost > 0 then
-        log(battle, attacker.id, "shell_damaged", {
-            marble = marble.uid, mineral = shell.mineral,
-            damage = durability_cost, durability_left = math.max(0, shell.durability),
-            cause = "collision",
-        })
-    end
-    local destroyed = false
-    if shell.durability <= 0 then
-        table.remove(marble.shells, 1)
-        log(battle, attacker.id, "shell_break", {
-            marble = marble.uid, mineral = shell.mineral, shells_left = #marble.shells, cause = "collision",
-        })
-        if #marble.shells == 0 then
-            release_core(battle, attacker, defender, marble, col, row, defender, 1)
-            destroyed = true
+            append_event(battle, owner.id, "chain_detonate", {
+                brick = brick.id, row = brick.row, col = brick.col,
+                damage = profile.death_splash, depth = (depth or 0) + 1,
+            })
+            battle.world:apply_radial_impulse(brick.x, brick.y, 10, 24, {
+                source = brick.body_id, falloff = true,
+            })
+            for _, neighbour in ipairs(formation_mod.neighbours(owner.formation, brick.row, brick.col)) do
+                damage_brick(battle, owner, neighbour, profile.death_splash, "chain", (depth or 0) + 1)
+            end
         end
     end
-
-    return {
-        destroyed = destroyed,
-        momentum_cost = collision_profile.momentum_cost,
-        momentum_delta = brick_profile.momentum_delta or 0,
-        skip_rows = brick_profile.skip_rows or 0,
-        dir = dir,
-        traj = traj,
-        flipped = flipped,
-    }
+    return true
 end
 
---- Pick the brick the sling points at: the live brick nearest the marble's own
---- lane, breaking ties toward the front row and then the left column. The scan
---- order is fixed, so aiming consumes no randomness and is reproducible.
----
---- Aiming is what a sling is FOR, and without it the simulation deadlocks: a
---- marble pinned to its rack lane whose column has already been cleared flies
---- through empty space every volley forever, landing no collisions, wearing no
---- shells, and every battle ends on the volley limit.
+function damage_brick(battle, owner, brick, amount, source, depth)
+    if not brick.alive or amount <= 0 then return false end
+    brick.hp = brick.hp - amount
+    local box = battle.world:get_box(brick.body_id)
+    if box then box.data.hp = max(0, brick.hp) end
+    append_event(battle, owner.id, "brick_damaged", {
+        brick = brick.id, row = brick.row, col = brick.col,
+        damage = amount, hp_left = max(0, brick.hp), source = source,
+        x = brick.x, y = brick.y,
+    })
+    if brick.hp <= 0 then return destroy_brick(battle, owner, brick, source, depth) end
+    return false
+end
+
+local release_core
+
+local function destroy_marble(battle, owner, marble, cause, x, y)
+    if marble.state == "destroyed" then return false end
+    marble.state = "destroyed"
+    if marble.lane and owner.rack[marble.lane] == marble then owner.rack[marble.lane] = nil end
+    remove_from(owner.roster, marble)
+    remove_from(owner.queue, marble)
+    remove_from(battle.active, marble)
+    battle.active_by_body[marble.body_id] = nil
+    battle.world:remove_body(marble.body_id, cause)
+    owner.bag[#owner.bag + 1] = marble.core.id
+    append_event(battle, owner.id, "marble_destroyed", {
+        marble = marble.uid, name = marble.name, cause = cause,
+        marbles_left = #owner.roster, core_bagged = marble.core.id,
+        x = quantize(x or 0), y = quantize(y or 0),
+    })
+    return true
+end
+
+local function wear_shell(battle, owner, marble, amount, cause, x, y, depth)
+    if marble.state == "destroyed" or amount <= 0 then return false end
+    local shell = marble.shells[1]
+    if not shell then return false end
+    shell.durability = shell.durability - amount
+    append_event(battle, owner.id, "shell_damaged", {
+        marble = marble.uid, mineral = shell.mineral, damage = amount,
+        durability_left = max(0, shell.durability), cause = cause,
+        x = quantize(x or 0), y = quantize(y or 0),
+    })
+    if shell.durability > 0 then return false end
+    table.remove(marble.shells, 1)
+    local body = battle.world:get_body(marble.body_id)
+    if body then body.data.shells = #marble.shells end
+    append_event(battle, owner.id, "shell_break", {
+        marble = marble.uid, mineral = shell.mineral,
+        shells_left = #marble.shells, cause = cause,
+        x = quantize(x or 0), y = quantize(y or 0),
+    })
+    if #marble.shells == 0 then
+        release_core(battle, owner, opponent_of(battle, owner), marble, x, y, depth or 1)
+        return true
+    end
+    return false
+end
+
+release_core = function(battle, owner, other, marble, x, y, depth)
+    if marble.state == "destroyed" then return end
+    depth = depth or 1
+    if depth > M.MAX_RELEASE_DEPTH then
+        append_event(battle, owner.id, "release_capped", {
+            marble = marble.uid, x = quantize(x), y = quantize(y), depth = depth,
+        })
+        destroy_marble(battle, owner, marble, "release_depth_cap", x, y)
+        return
+    end
+    local base = effects.release_profile(marble.core.release)
+    local amplification = marble.effect_power or 0
+    local radius = 7 + (base.radius + amplification) * 5
+    local strength = 36 + (base.radius + amplification) * 12
+    append_event(battle, owner.id, "core_release", {
+        marble = marble.uid, core = marble.core.id, release = base.id,
+        x = quantize(x), y = quantize(y), radius = radius,
+        strength = strength, invert = base.invert, depth = depth,
+        amplification = amplification,
+    })
+    destroy_marble(battle, owner, marble, "core_released", x, y)
+
+    local affected = battle.world:apply_radial_impulse(x, y, radius, strength, {
+        source = "core:" .. marble.uid,
+        invert = base.invert,
+        wake_static = true,
+        falloff = true,
+    })
+    append_event(battle, owner.id, "blowback", {
+        marble = marble.uid, x = quantize(x), y = quantize(y),
+        radius = radius, affected = copy(affected), ally = true, enemy = true,
+        invert = base.invert, release = base.id,
+    })
+    for _, affected_id in ipairs(affected) do
+        local entry = battle.marble_by_body[affected_id]
+        if entry and entry.marble.state ~= "destroyed" then
+            local affected_marble = entry.marble
+            if affected_marble.state == "ready" then
+                affected_marble.state = "blown"
+                battle.active[#battle.active + 1] = affected_marble
+                battle.active_by_body[affected_id] = affected_marble
+            end
+            append_event(battle, entry.owner.id, "blowback_impulse", {
+                marble = affected_marble.uid,
+                source_marble = marble.uid,
+                allied = entry.owner.id == owner.id,
+            })
+            if base.scorch then
+                wear_shell(battle, entry.owner, affected_marble, 1, "scorch",
+                    battle.world:get_body(affected_id).x, battle.world:get_body(affected_id).y, depth + 1)
+            end
+        end
+    end
+
+    battle.world:add_field({
+        id = string.format("release:%s:%d", tostring(marble.uid), battle.tick),
+        kind = "radial", owner = owner.id, x = x, y = y,
+        radius = radius, strength = base.invert and -10 or 10,
+        duration = 24, falloff = true,
+        data = { behaviour = "release", release = base.id, source_marble = marble.uid },
+    })
+
+    if base.shrapnel > 0 then
+        local closest, closest_distance
+        for _, side_id in ipairs(battle.order) do
+            local side = battle.sides[side_id]
+            for row = 1, side.formation.rows do
+                for col = 1, side.formation.cols do
+                    local brick = formation_mod.brick_at(side.formation, row, col)
+                    if brick then
+                        local dx, dy = brick.x - x, brick.y - y
+                        local distance = dx * dx + dy * dy
+                        if not closest_distance or distance < closest_distance then
+                            closest, closest_distance = { owner = side, brick = brick }, distance
+                        end
+                    end
+                end
+            end
+        end
+        if closest and closest_distance <= 180 then
+            damage_brick(battle, closest.owner, closest.brick,
+                base.shrapnel + amplification, "shrapnel", 0)
+            for _, neighbour in ipairs(formation_mod.neighbours(
+                closest.owner.formation, closest.brick.row, closest.brick.col)) do
+                damage_brick(battle, closest.owner, neighbour,
+                    base.shrapnel + amplification, "shrapnel", 0)
+            end
+        end
+    end
+end
+
 local function choose_target(defender, lane, precision)
-    local best, best_key = nil, nil
+    local best, best_key
     for row = 1, defender.formation.rows do
         for col = 1, defender.formation.cols do
             local brick = formation_mod.brick_at(defender.formation, row, col)
             if brick then
                 local key
-                if precision then
-                    key = { brick.hp, math.abs(col - lane), row, col }
-                else
-                    key = { math.abs(col - lane), row, col, brick.hp }
-                end
+                if precision then key = { brick.hp, abs(col - lane), row, col }
+                else key = { abs(col - lane), row, col, brick.hp } end
                 if not best_key
                     or key[1] < best_key[1]
                     or (key[1] == best_key[1] and key[2] < best_key[2])
@@ -731,237 +636,589 @@ local function choose_target(defender, lane, precision)
     return best
 end
 
---- Entry column that puts a marble on its target given the core's lateral
---- drift: walk the drift backwards from the target to row 1.
-local function entry_column(target, traj, cols)
-    if not target then return 1 end
-    return clamp(target.col - traj * (target.row - 1), 1, cols)
+local function rotate(x, y, angle)
+    local cosine, sine = math.cos(angle), math.sin(angle)
+    return x * cosine - y * sine, x * sine + y * cosine
 end
 
---- Fly one marble through the opponent's formation until it stops or dies.
-local function resolve_cascade(battle, attacker, defender, marble, shot)
-    local status_momentum = tick_statuses(battle, attacker, defender, marble, shot)
-    if status_momentum == nil then return end
-
+local function start_marble(battle, player, marble, shot)
+    if not marble or marble.state == "destroyed" then
+        append_event(battle, player.id, marble and "launch_aborted" or "no_marble", {
+            marble = marble and marble.uid or nil,
+            reason = marble and "destroyed_before_launch" or "queue_empty",
+            shot = shot,
+        })
+        return
+    end
+    local defender = opponent_of(battle, player)
+    local target = choose_target(defender, marble.lane, marble.precision)
+    local start_x, start_y = rack_position(player.id, marble.lane, player.lanes)
+    -- Two physical launch rails keep the routine paired shots legible without
+    -- disabling marble/marble contacts.  Deflections and blowback can still
+    -- cross the rails and collide later in the exchange.
+    local rail_offset = player.id == "A" and 2 or -2
+    start_x = clamp(start_x + rail_offset, M.ARENA.marble_radius,
+        M.ARENA.width - M.ARENA.marble_radius)
+    local target_x, target_y
+    if target then target_x, target_y = target.x + rail_offset, target.y
+    else target_x, target_y = start_x, player.id == "A" and 4 or M.ARENA.height - 4 end
+    local dx, dy = target_x - start_x, target_y - start_y
+    local length = sqrt(dx * dx + dy * dy)
+    dx, dy = dx / length, dy / length
+    local scatter = marble.scatter and marble.scatter > 0
+        and battle.rng:int(-marble.scatter, marble.scatter) or 0
+    -- Core bias is defined in the owner's local facing.  The top side's local
+    -- left/right axis is mirrored in world space.
+    local facing = player.id == "A" and 1 or -1
+    local bias = ((marble.core.trajectory or 0) * 0.055 + scatter * 0.035) * facing
+    dx, dy = rotate(dx, dy, bias)
+    local freeze = marble.statuses.freeze and marble.statuses.freeze.expires > battle.tick
+    local speed = 62 + (marble.momentum or 0) * 7
+    if freeze then speed = speed * 0.72 end
+    local body = battle.world:get_body(marble.body_id)
+    battle.world:set_position(marble.body_id, start_x, start_y)
+    battle.world:set_dynamic(marble.body_id, true)
+    battle.world:set_velocity(marble.body_id, dx * speed, dy * speed)
+    body.data.state = "flying"
     marble.state = "flying"
-    local home_lane = marble.lane
-    -- Out of the rack and into the air: a marble in flight cannot be shoved by
-    -- blowback, and its lane is free for someone else to be pushed into.
-    if attacker.rack[home_lane] == marble then
-        attacker.rack[home_lane] = nil
-    end
-
-    local cols = defender.formation.cols
-    local traj = marble.core.trajectory
-    local target = choose_target(defender, home_lane, marble.precision)
-    local aimed = entry_column(target, traj, cols)
-
-    -- Scatter is the sling's inaccuracy. A sling with scatter 0 always puts the
-    -- marble where it aimed; a loose one may throw the whole run off.
-    local scatter = 0
-    if marble.scatter and marble.scatter > 0 then
-        scatter = battle.rng:int(-marble.scatter, marble.scatter)
-    end
-    local col = clamp(aimed + scatter, 1, cols)
-    local row = 1
-    local dir = 1
-    local momentum = math.max(0, marble.momentum + status_momentum)
-
-    log(battle, attacker.id, "launch", {
+    if player.rack[marble.lane] == marble then player.rack[marble.lane] = nil end
+    battle.active[#battle.active + 1] = marble
+    battle.active_by_body[marble.body_id] = marble
+    append_event(battle, player.id, "launch", {
         marble = marble.uid, name = marble.name, rarity = marble.rarity,
-        lane = home_lane, aimed_col = aimed, scatter = scatter, entry_col = col,
-        target_row = target and target.row or -1, target_col = target and target.col or -1,
-        momentum = momentum, shells = #marble.shells, trajectory = traj, core = marble.core.id,
-        shot = shot or 1, precision = marble.precision,
+        lane = marble.lane, target_row = target and target.row or -1,
+        target_col = target and target.col or -1,
+        x = start_x, y = start_y, vx = quantize(body.vx), vy = quantize(body.vy),
+        speed = quantize(speed), shells = #marble.shells,
+        trajectory = marble.core.trajectory, core = marble.core.id,
+        shot = shot, scatter = scatter, precision = marble.precision,
     })
+end
 
-    local stop_reason = nil
-    local steps = 0
-    while not stop_reason do
-        steps = steps + 1
-        if steps > M.MAX_CASCADE_STEPS then
-            stop_reason = "stalled"
-            break
+local function start_exchange(battle)
+    if battle.result then return false end
+    if battle.exchange >= battle.max_exchanges then
+        battle.result = {
+            outcome = "draw", winner = nil, reason = "exchange_limit",
+            exchanges = battle.exchange, volleys = battle.exchange,
+        }
+        return false
+    end
+    battle.exchange = battle.exchange + 1
+    battle.volley = battle.exchange
+    battle.exchange_started_tick = battle.tick
+    battle.state = "running"
+    append_event(battle, "-", "exchange_start", {
+        a_marbles = #battle.sides.A.roster, b_marbles = #battle.sides.B.roster,
+        a_bricks = battle.sides.A.formation.alive, b_bricks = battle.sides.B.formation.alive,
+    })
+    append_event(battle, "-", "volley_start", {
+        a_marbles = #battle.sides.A.roster, b_marbles = #battle.sides.B.roster,
+        a_bricks = battle.sides.A.formation.alive, b_bricks = battle.sides.B.formation.alive,
+    })
+    local launchers, max_shots = {}, 1
+    for _, side_id in ipairs(battle.order) do
+        local player = battle.sides[side_id]
+        local shots = max(1, player.sling.shots_per_volley or 1)
+        max_shots = max(max_shots, shots)
+        launchers[side_id] = {}
+        for shot = 1, shots do launchers[side_id][shot] = table.remove(player.queue, 1) end
+    end
+    -- Every head is removed before any velocity is applied: commitment is
+    -- simultaneous even though stable side ordering is used for bookkeeping.
+    for shot = 1, max_shots do
+        for _, side_id in ipairs(battle.order) do
+            local player = battle.sides[side_id]
+            if shot <= max(1, player.sling.shots_per_volley or 1) then
+                start_marble(battle, player, launchers[side_id][shot], shot)
+            end
         end
+    end
+    return true
+end
 
-        if row > defender.formation.rows then
-            stop_reason = "through"
-        elseif row < 1 then
-            stop_reason = "ejected"
-        elseif col < 1 or col > cols then
-            stop_reason = "wide"
-        else
-            local brick = formation_mod.brick_at(defender.formation, row, col)
-            if not brick then
-                row = row + dir
-                col = col + traj
-            else
-                local outcome = resolve_collision(battle, attacker, defender, marble, brick, row, col, dir, traj)
-                momentum = momentum - outcome.momentum_cost + outcome.momentum_delta
-                dir = outcome.dir
-                traj = outcome.traj
-                if outcome.destroyed then
-                    stop_reason = "destroyed"
-                elseif momentum <= 0 then
-                    stop_reason = "spent"
-                else
-                    row = row + dir * (1 + outcome.skip_rows)
-                    col = col + traj
-                end
+local function apply_status_from_field(battle, field_event)
+    local entry = battle.marble_by_body[field_event.body]
+    local field = battle.world:get_field(field_event.field)
+    if not entry or not field or entry.marble.state == "destroyed" then return end
+    local behaviour = field.data.behaviour
+    if behaviour == "magnetic" then
+        local key = "field|" .. field.id .. "|" .. entry.marble.body_id
+        if (battle.contact_cooldown[key] or -1000) + 30 <= battle.tick then
+            battle.contact_cooldown[key] = battle.tick
+            append_event(battle, field.owner, "magnetic", {
+                brick = field.data.brick,
+                marble = entry.marble.uid,
+                field = field.id,
+                fx = field_event.fx,
+                fy = field_event.fy,
+            })
+        end
+        return
+    end
+    if behaviour ~= "poison" and behaviour ~= "freeze" then return end
+    if field.owner == entry.owner.id then return end
+    local marble = entry.marble
+    local status = marble.statuses[behaviour]
+    local expiry = battle.tick + (behaviour == "poison" and 240 or 90)
+    if not status or status.expires < expiry then
+        marble.statuses[behaviour] = {
+            expires = expiry,
+            next_tick = behaviour == "poison" and battle.tick + 120 or nil,
+        }
+        append_event(battle, entry.owner.id, "status_applied", {
+            marble = marble.uid, status = behaviour,
+            expires = expiry, source = field.data.brick,
+        })
+    end
+    if behaviour == "freeze" then
+        local body = battle.world:get_body(marble.body_id)
+        if body then body.vx, body.vy = body.vx * 0.985, body.vy * 0.985 end
+    end
+end
+
+local function handle_wall_contact(battle, event)
+    local entry = battle.marble_by_body[event.body]
+    if not entry or entry.marble.state == "destroyed" then return end
+    append_event(battle, entry.owner.id, "wall_collision", {
+        marble = entry.marble.uid, wall = event.wall,
+        nx = event.nx, ny = event.ny, impulse = event.impulse,
+    })
+    if entry.marble.ricochet then
+        append_event(battle, entry.owner.id, "ricochet", {
+            marble = entry.marble.uid, surface = "wall",
+            nx = event.nx, ny = event.ny,
+        })
+    end
+end
+
+local function handle_body_contact(battle, event)
+    local left = battle.marble_by_body[event.a]
+    local right = battle.marble_by_body[event.b]
+    if not left or not right then return end
+    append_event(battle, "-", "marble_collision", {
+        a = left.marble.uid, b = right.marble.uid,
+        a_owner = left.owner.id, b_owner = right.owner.id,
+        nx = event.nx, ny = event.ny, impulse = event.impulse,
+    })
+end
+
+local function collision_damage(battle, attacker, defender, marble, brick, event)
+    if marble.state == "destroyed" or not brick.alive then return end
+    local key = marble.body_id .. "|" .. brick.body_id
+    if (battle.contact_cooldown[key] or -1000) + 5 > battle.tick then return end
+    if (event.impulse or 0) < 2 then return end
+    battle.contact_cooldown[key] = battle.tick
+    local shell = marble.shells[1]
+    if not shell then return end
+    local collision = effects.collision_profile(shell.collision)
+    local profile = effects.brick_profile(brick.behaviour)
+    local impact_bonus = min(2, floor((event.impulse or 0) / 95))
+    local damage = collision.damage + (marble.damage_bonus or 0) + impact_bonus
+    if marble.effect_power > 0 and collision.id ~= "chip" then
+        damage = damage + marble.effect_power
+    end
+    local armour = (profile.damage_reduction or 0) + adjacent_protection(defender, brick)
+    if armour > 0 and not collision.pierces_absorb then
+        damage = max(0, damage - armour)
+        append_event(battle, defender.id, brick.behaviour == "absorb" and "absorb" or "fortify", {
+            brick = brick.id, row = brick.row, col = brick.col,
+            marble = marble.uid, reduction = armour,
+        })
+    end
+    if profile.negate_once and not brick.aegis_spent and damage > 0 then
+        brick.aegis_spent = true
+        damage = 0
+        append_event(battle, defender.id, "aegis", {
+            brick = brick.id, row = brick.row, col = brick.col, marble = marble.uid,
+        })
+    end
+    append_event(battle, attacker.id, "collision", {
+        marble = marble.uid, effect = collision.id, brick = brick.id,
+        row = brick.row, col = brick.col, damage = damage,
+        mineral = shell.mineral, pattern = shell.pattern,
+        x = quantize(brick.x), y = quantize(brick.y),
+        nx = event.nx, ny = event.ny, impulse = event.impulse,
+    })
+    local hp_before = brick.hp
+    damage_brick(battle, defender, brick, damage, "collision", 0)
+
+    if collision.splash_behind > 0 then
+        local direction = attacker.id == "A" and -1 or 1
+        local behind = formation_mod.brick_at(defender.formation, brick.row + direction, brick.col)
+        if behind then damage_brick(battle, defender, behind, collision.splash_behind, "splinter", 0) end
+    end
+    if (profile.collision_splash or 0) > 0 then
+        for _, neighbour in ipairs(formation_mod.neighbours(defender.formation, brick.row, brick.col)) do
+            damage_brick(battle, defender, neighbour, profile.collision_splash, "splice", 0)
+        end
+        append_event(battle, defender.id, "splice", {
+            brick = brick.id, row = brick.row, col = brick.col,
+            damage = profile.collision_splash,
+        })
+    end
+    if brick.alive and (profile.heal_after_hit or 0) > 0 then
+        local old = brick.hp
+        brick.hp = min(brick.max_hp, brick.hp + profile.heal_after_hit)
+        local box = battle.world:get_box(brick.body_id)
+        if box then box.data.hp = brick.hp end
+        if brick.hp > old then
+            append_event(battle, defender.id, "regenerate", {
+                brick = brick.id, row = brick.row, col = brick.col,
+                healed = brick.hp - old, hp_left = brick.hp,
+            })
+        end
+    end
+    if brick.alive and profile.rewind and brick.hp < hp_before then
+        brick.hp = hp_before
+        local box = battle.world:get_box(brick.body_id)
+        if box then box.data.hp = brick.hp end
+        append_event(battle, defender.id, "temporal", {
+            brick = brick.id, row = brick.row, col = brick.col, hp_left = brick.hp,
+        })
+    end
+    if profile.reflect and brick.alive then
+        local body = battle.world:get_body(marble.body_id)
+        if body then body.vx, body.vy = body.vx * 1.08, body.vy * 1.08 end
+        append_event(battle, defender.id, brick.behaviour == "mirror" and "mirror" or "reflect", {
+            brick = brick.id, row = brick.row, col = brick.col,
+            marble = marble.uid, nx = event.nx, ny = event.ny,
+        })
+    end
+    if marble.ricochet then
+        append_event(battle, attacker.id, "ricochet", {
+            marble = marble.uid, row = brick.row, col = brick.col,
+            nx = event.nx, ny = event.ny,
+        })
+    end
+    if profile.steer == "inward" then
+        append_event(battle, defender.id, "magnetic", {
+            brick = brick.id, row = brick.row, col = brick.col, marble = marble.uid,
+        })
+    end
+    if (profile.shell_wear or 0) > 1 then
+        append_event(battle, defender.id, "shatter", {
+            brick = brick.id, row = brick.row, col = brick.col,
+            marble = marble.uid, wear = profile.shell_wear,
+        })
+    end
+    if (profile.skip_rows or 0) > 0 then
+        append_event(battle, defender.id, "vault", {
+            brick = brick.id, row = brick.row, col = brick.col,
+            marble = marble.uid, impulse_delta = profile.momentum_delta or 0,
+        })
+    end
+    if profile.harmless then
+        append_event(battle, defender.id, "dummy", {
+            brick = brick.id, row = brick.row, col = brick.col, marble = marble.uid,
+        })
+    end
+    if profile.break_shell then
+        append_event(battle, defender.id, "void", {
+            brick = brick.id, row = brick.row, col = brick.col, marble = marble.uid,
+        })
+    end
+    if (profile.momentum_delta or 0) ~= 0 then
+        local body = battle.world:get_body(marble.body_id)
+        if body then
+            local speed = sqrt(body.vx * body.vx + body.vy * body.vy)
+            if speed > 0 then
+                local change = profile.momentum_delta * 7
+                local next_speed = max(0, speed + change)
+                body.vx, body.vy = body.vx / speed * next_speed, body.vy / speed * next_speed
             end
         end
     end
 
-    log(battle, attacker.id, "cascade_end", {
-        marble = marble.uid, reason = stop_reason, row = row, col = col, momentum_left = math.max(0, momentum),
-    })
-
-    if stop_reason == "destroyed" then
-        return
-    end
-
-    -- The marble survived. It comes to rest and rejoins the rack, preferring
-    -- the lane it launched from; if blowback filled that lane it settles in the
-    -- nearest free one.
-    marble.state = "ready"
-    marble_mod.assert_core_covered(marble)
-    local lane = nil
-    if not attacker.rack[home_lane] then
-        lane = home_lane
-    else
-        for offset = 1, attacker.lanes do
-            local left = home_lane - offset
-            local right = home_lane + offset
-            if left >= 1 and not attacker.rack[left] then lane = left break end
-            if right <= attacker.lanes and not attacker.rack[right] then lane = right break end
-        end
-    end
-    if not lane then
-        -- Cannot happen with #marbles <= lanes, but do not fail silently.
-        error("no free lane for returning marble " .. tostring(marble.uid))
-    end
-    marble.lane = lane
-    attacker.rack[lane] = marble
-    attacker.queue[#attacker.queue + 1] = marble
-    log(battle, attacker.id, "rack_return", { marble = marble.uid, lane = lane, shells_left = #marble.shells })
+    local wear = collision.durability_cost + (profile.shell_wear or 0)
+    if profile.harmless then wear = 0 end
+    if profile.break_shell then wear = max(wear, shell.durability) end
+    wear_shell(battle, attacker, marble, wear, "collision", brick.x, brick.y, 1)
 end
 
--- ---------------------------------------------------------------------------
--- Win conditions
--- ---------------------------------------------------------------------------
+local function handle_box_contact(battle, event)
+    local attacker = battle.marble_by_body[event.body]
+    local defender = battle.brick_by_body[event.box]
+    if not attacker or not defender then return end
+    collision_damage(battle, attacker.owner, defender.owner, attacker.marble, defender.brick, event)
+end
 
---- Evaluated once per volley, after BOTH cascades. Symmetric: all opponent
---- bricks destroyed is victory, all own marbles destroyed is defeat. If both
---- sides satisfy a winning condition in the same volley it is a draw — nobody
---- wins on resolution order.
+local function process_physics_events(battle, events)
+    for _, event in ipairs(events) do
+        if event.type == "box_collision" then handle_box_contact(battle, event)
+        elseif event.type == "body_collision" then handle_body_contact(battle, event)
+        elseif event.type == "wall_collision" then handle_wall_contact(battle, event)
+        elseif event.type == "field_contact" then apply_status_from_field(battle, event)
+        elseif event.type == "speed_clamped" then
+            local entry = battle.marble_by_body[event.body]
+            append_event(battle, entry and entry.owner.id or "-", "speed_clamped", {
+                marble = entry and entry.marble.uid or nil, speed = event.speed,
+            })
+        elseif event.type == "body_sleep" then
+            local entry = battle.marble_by_body[event.body]
+            if entry then
+                append_event(battle, entry.owner.id, "marble_sleep", { marble = entry.marble.uid })
+            end
+        end
+    end
+end
+
+local function tick_statuses(battle)
+    for _, side_id in ipairs(battle.order) do
+        local owner = battle.sides[side_id]
+        local roster = {}
+        for _, marble in ipairs(owner.roster) do roster[#roster + 1] = marble end
+        for _, marble in ipairs(roster) do
+            local poison = marble.statuses.poison
+            if poison and poison.expires <= battle.tick then
+                marble.statuses.poison = nil
+                append_event(battle, owner.id, "status_expired", {
+                    marble = marble.uid, status = "poison",
+                })
+            elseif poison and poison.next_tick and poison.next_tick <= battle.tick then
+                local body = battle.world:get_body(marble.body_id)
+                append_event(battle, owner.id, "status_tick", {
+                    marble = marble.uid, status = "poison",
+                })
+                poison.next_tick = poison.next_tick + 120
+                wear_shell(battle, owner, marble, 1, "poison",
+                    body and body.x or 0, body and body.y or 0, 1)
+            end
+            local freeze = marble.statuses.freeze
+            if freeze and freeze.expires <= battle.tick then
+                marble.statuses.freeze = nil
+                append_event(battle, owner.id, "status_expired", {
+                    marble = marble.uid, status = "freeze",
+                })
+            end
+        end
+    end
+end
+
 local function evaluate(battle)
     local a, b = battle.sides.A, battle.sides.B
     local a_reasons, b_reasons = {}, {}
-
     if b.formation.alive == 0 then a_reasons[#a_reasons + 1] = "bricks_destroyed" end
     if #b.roster == 0 then a_reasons[#a_reasons + 1] = "opponent_marbles_destroyed" end
     if a.formation.alive == 0 then b_reasons[#b_reasons + 1] = "bricks_destroyed" end
     if #a.roster == 0 then b_reasons[#b_reasons + 1] = "opponent_marbles_destroyed" end
-
-    local a_wins = #a_reasons > 0
-    local b_wins = #b_reasons > 0
-
-    if a_wins and b_wins then
+    if #a_reasons > 0 and #b_reasons > 0 then
         return {
             outcome = "draw", winner = nil, reason = "mutual",
-            a_reason = table.concat(a_reasons, "+"), b_reason = table.concat(b_reasons, "+"),
-            volleys = battle.volley,
+            a_reason = table.concat(a_reasons, "+"),
+            b_reason = table.concat(b_reasons, "+"),
+            exchanges = battle.exchange, volleys = battle.exchange,
         }
-    elseif a_wins then
-        return { outcome = "victory", winner = "A", reason = table.concat(a_reasons, "+"), volleys = battle.volley }
-    elseif b_wins then
-        return { outcome = "victory", winner = "B", reason = table.concat(b_reasons, "+"), volleys = battle.volley }
+    end
+    if #a_reasons > 0 then
+        return {
+            outcome = "victory", winner = battle.result_ids.A,
+            reason = table.concat(a_reasons, "+"),
+            exchanges = battle.exchange, volleys = battle.exchange,
+        }
+    end
+    if #b_reasons > 0 then
+        return {
+            outcome = "victory", winner = battle.result_ids.B,
+            reason = table.concat(b_reasons, "+"),
+            exchanges = battle.exchange, volleys = battle.exchange,
+        }
     end
     return nil
 end
 
--- ---------------------------------------------------------------------------
--- Volley loop
--- ---------------------------------------------------------------------------
-
---- Run the battle to completion. Returns the result table.
-function M.run(battle)
-    while battle.result == nil do
-        if battle.volley >= battle.max_volleys then
-            battle.result = {
-                outcome = "draw", winner = nil, reason = "volley_limit", volleys = battle.volley,
-            }
-            break
+local function park_marble(battle, marble, timeout)
+    if marble.state == "destroyed" then return end
+    local entry = battle.marble_by_body[marble.body_id]
+    if not entry then return end
+    local owner = entry.owner
+    local lane = marble.lane or marble.home_lane
+    if owner.rack[lane] and owner.rack[lane] ~= marble then
+        for offset = 1, owner.lanes do
+            local left, right = lane - offset, lane + offset
+            if left >= 1 and not owner.rack[left] then lane = left break end
+            if right <= owner.lanes and not owner.rack[right] then lane = right break end
         end
-
-        battle.volley = battle.volley + 1
-        log(battle, "-", "volley_start", {
-            a_marbles = #battle.sides.A.roster, b_marbles = #battle.sides.B.roster,
-            a_bricks = battle.sides.A.formation.alive, b_bricks = battle.sides.B.formation.alive,
-        })
-
-        -- Both sides commit their next marble BEFORE either cascade resolves.
-        -- This is the simultaneity: whatever the other side's marble does this
-        -- volley, your shot was already loaded.
-        local launchers = {}
-        local max_shots = 1
-        for _, id in ipairs(battle.order) do
-            local player = battle.sides[id]
-            local shots = math.max(1, player.sling.shots_per_volley or 1)
-            if shots > max_shots then max_shots = shots end
-            launchers[id] = {}
-            for shot = 1, shots do
-                launchers[id][shot] = table.remove(player.queue, 1)
-            end
-        end
-
-        -- Cascades resolve one at a time and to completion — a marble finishes
-        -- its whole run through the formation before the next one moves.
-        for shot = 1, max_shots do
-            for _, id in ipairs(battle.order) do
-                local player = battle.sides[id]
-                local expected = math.max(1, player.sling.shots_per_volley or 1)
-                if shot <= expected then
-                    local marble = launchers[id][shot]
-                    if marble then
-                        if marble.state == "destroyed" then
-                            -- Killed by the other side's blowback after it was loaded
-                            -- but before it fired. The shot is lost.
-                            log(battle, id, "launch_aborted", {
-                                marble = marble.uid, reason = "destroyed_before_launch", shot = shot,
-                            })
-                        else
-                            resolve_cascade(battle, player, opponent_of(battle, player), marble, shot)
-                        end
-                    else
-                        log(battle, id, "no_marble", { shot = shot })
-                    end
-                end
-            end
-        end
-
-        battle.result = evaluate(battle)
     end
+    marble.lane = lane
+    marble.state = "ready"
+    owner.rack[lane] = marble
+    local x, y = rack_position(owner.id, lane, owner.lanes)
+    battle.world:set_position(marble.body_id, x, y)
+    battle.world:set_dynamic(marble.body_id, false)
+    local body = battle.world:get_body(marble.body_id)
+    body.data.state = "ready"
+    if not contains(owner.queue, marble) then owner.queue[#owner.queue + 1] = marble end
+    append_event(battle, owner.id, "rack_return", {
+        marble = marble.uid, lane = lane, shells_left = #marble.shells,
+        timeout = timeout == true,
+    })
+end
 
-    log(battle, "-", "battle_end", {
-        outcome = battle.result.outcome,
-        winner = battle.result.winner or "none",
-        reason = battle.result.reason,
-        volleys = battle.result.volleys,
+local function finish_battle(battle)
+    if not battle.result then return end
+    battle.state = "finished"
+    append_event(battle, "-", "battle_end", {
+        outcome = battle.result.outcome, winner = battle.result.winner or "none",
+        reason = battle.result.reason, exchanges = battle.result.exchanges,
+        volleys = battle.result.exchanges,
         a_bricks = battle.sides.A.formation.alive,
         b_bricks = battle.sides.B.formation.alive,
         a_marbles = #battle.sides.A.roster,
         b_marbles = #battle.sides.B.roster,
     })
+    battle.recording.result = copy(battle.result)
+    battle.recording.final = M.snapshot(battle)
+    add_recorded_frame(battle, true)
+end
 
+local function complete_exchange(battle, timeout)
+    local active = {}
+    for _, marble in ipairs(battle.active) do active[#active + 1] = marble end
+    battle.active, battle.active_by_body = {}, {}
+    for _, marble in ipairs(active) do park_marble(battle, marble, timeout) end
+    battle.state = "boundary"
+    append_event(battle, "-", "exchange_end", {
+        reason = timeout and "timeout" or "settled",
+        duration_ticks = battle.tick - battle.exchange_started_tick,
+        a_bricks = battle.sides.A.formation.alive,
+        b_bricks = battle.sides.B.formation.alive,
+        a_marbles = #battle.sides.A.roster,
+        b_marbles = #battle.sides.B.roster,
+    })
+    battle.result = evaluate(battle)
+    if not battle.result and battle.exchange >= battle.max_exchanges then
+        battle.result = {
+            outcome = "draw", winner = nil, reason = "exchange_limit",
+            exchanges = battle.exchange, volleys = battle.exchange,
+        }
+    end
+    if battle.result then finish_battle(battle) end
+end
+
+function M.step(battle, dt)
+    assert(type(battle) == "table" and battle.world, "battle.step needs a BattleWorld")
+    if battle.result then return {} end
+    dt = dt or M.FIXED_DT
+    if abs(dt - M.FIXED_DT) > 1e-12 then
+        error(string.format("battle step must equal fixed dt %.12f", M.FIXED_DT))
+    end
+    if battle.state == "boundary" and not start_exchange(battle) then
+        if battle.result then finish_battle(battle) end
+        return M.drain_events(battle)
+    end
+
+    local physics_events = battle.world:step(M.FIXED_DT)
+    battle.tick = battle.world.tick
+    process_physics_events(battle, physics_events)
+    tick_statuses(battle)
+    if battle.tick % M.FRAME_INTERVAL == 0 then
+        add_recorded_frame(battle, battle.tick % M.KEYFRAME_INTERVAL == 0)
+    end
+
+    local timeout = battle.tick - battle.exchange_started_tick >= battle.max_exchange_ticks
+    local settled = #battle.active == 0 or battle.world:is_settled()
+    if timeout or settled then complete_exchange(battle, timeout) end
+    return M.drain_events(battle)
+end
+
+function M.run(battle)
+    while not battle.result do M.step(battle, M.FIXED_DT) end
     return battle.result
 end
 
---- Convenience: build and run in one call. Returns battle, result.
 function M.simulate(opts)
-    local battle = M.new_battle(opts)
+    local battle = M.new(opts)
     local result = M.run(battle)
     return battle, result
+end
+
+function M.result(battle)
+    return battle.result and copy(battle.result) or nil
+end
+
+function M.drain_events(battle)
+    local events = battle.pending_events
+    battle.pending_events = {}
+    return events
+end
+
+local function snapshot_side(battle, player)
+    local side = {
+        id = player.id, name = player.name,
+        sling_id = player.sling.id, sling_name = player.sling.name or player.sling.id,
+        rows = player.formation.rows, cols = player.formation.cols,
+        bricks_alive = player.formation.alive, marbles_alive = #player.roster,
+        bricks = {}, marbles = {}, queue = {}, bag = copy(player.bag),
+    }
+    for row = 1, player.formation.rows do
+        for col = 1, player.formation.cols do
+            local brick = player.formation.grid[row][col]
+            if brick then
+                side.bricks[#side.bricks + 1] = {
+                    body_id = brick.body_id, id = brick.id, uid = brick.uid,
+                    name = brick.name,
+                    family = brick.family, behaviour = brick.behaviour,
+                    row = row, col = col, hp = brick.hp, max_hp = brick.max_hp,
+                    alive = brick.alive, x = brick.x, y = brick.y,
+                    width = M.ARENA.brick_width, height = M.ARENA.brick_height,
+                }
+            end
+        end
+    end
+    for _, marble in ipairs(player.all_marbles) do
+        local body = battle.world:get_body(marble.body_id)
+        local item = {
+            body_id = marble.body_id, uid = marble.uid, name = marble.name,
+            rarity = marble.rarity, core = marble.core.name, core_id = marble.core.id,
+            lane = marble.lane, state = marble.state,
+            alive = marble.state ~= "destroyed", radius = M.ARENA.marble_radius,
+            statuses = copy(marble.statuses), shells = {},
+        }
+        if body then
+            item.x, item.y = quantize(body.x), quantize(body.y)
+            item.previous_x, item.previous_y = quantize(body.previous_x), quantize(body.previous_y)
+            item.vx, item.vy = quantize(body.vx), quantize(body.vy)
+            item.asleep = body.asleep
+        end
+        for _, shell in ipairs(marble.shells) do
+            item.shells[#item.shells + 1] = {
+                mineral = shell.mineral, pattern = shell.pattern,
+                durability = shell.durability, max_durability = shell.max_durability,
+            }
+        end
+        side.marbles[#side.marbles + 1] = item
+    end
+    for _, marble in ipairs(player.queue) do side.queue[#side.queue + 1] = marble.uid end
+    return side
+end
+
+function M.snapshot(battle)
+    return {
+        schema_version = M.SCHEMA_VERSION,
+        rules_version = battle.rules_version,
+        seed = battle.seed,
+        tick = battle.tick,
+        time = quantize(battle.tick * M.FIXED_DT),
+        fixed_dt = M.FIXED_DT,
+        exchange = battle.exchange,
+        volley = battle.exchange,
+        phase = battle.result and "result" or "battle",
+        state = battle.state,
+        arena = copy(M.ARENA),
+        world = battle.world:snapshot(),
+        sides = {
+            A = snapshot_side(battle, battle.sides.A),
+            B = snapshot_side(battle, battle.sides.B),
+        },
+        result = battle.result and copy(battle.result) or nil,
+    }
+end
+
+function M.recording(battle)
+    local recording = copy(battle.recording)
+    if battle.result and not recording.final then recording.final = M.snapshot(battle) end
+    return recording
 end
 
 return M

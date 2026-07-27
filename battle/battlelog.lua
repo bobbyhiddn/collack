@@ -1,7 +1,8 @@
 -- battle/battlelog.lua — the battle log.
 --
--- The log is the engine's output of record. The determinism requirement is
--- stated in terms of it: same seed + same setup => byte-identical log.
+-- The log is an audit and replay-cue output from the canonical continuous
+-- world. It never supplies or invents motion. Same seed + same setup still
+-- yields byte-identical events.
 --
 -- Every event is rendered as one line:
 --   0042 v03 A shell_break marble=7 mineral=jade shells_left=1

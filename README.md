@@ -1,8 +1,19 @@
 # Callack Auto-Battler
 
 Callack is a deterministic two-player marble-and-brick auto battler built with
-LÖVE/Lua. The pure engine in `battle/` resolves fixed-grid, volley-locked
-battles; `src/` is a thin controller and renderer that animates its event log.
+LÖVE/Lua. The pure engine in `battle/` advances a canonical fixed-timestep
+continuous world; `src/` renders interpolated snapshots and replays recorded
+canonical frames. The event log is an exact-tick audit/effect output, not a
+trajectory script.
+
+The implementation follows
+[`ADR 0005`](docs/decisions/0005-continuous-vertical-slice.md) and the
+[`Battle Engine vertical slice`](docs/specs/battle-engine-vertical-slice.md):
+draft, setup, canonical continuous autobattle and recorded-state result/replay.
+The pure-Lua draft/setup controller and its presentation boundary are now
+implemented and documented in
+[`Draft and setup controller contract`](docs/specs/draft-setup-controller.md).
+The value-only battle API is documented in [`battle/README.md`](battle/README.md).
 
 ## Quick start
 
@@ -26,21 +37,30 @@ npm run verify:web
 
 The web result is written to `dist/web/` with content-addressed JavaScript,
 data, and WebAssembly filenames. Serve that directory with any static HTTP
-server. The browser verifier starts and stops its own local server, boots the
-packaged canvas at 390x844, and exercises mouse replay plus touch new-seed
-input. The in-canvas controls use `R` and `N` as keyboard equivalents, with
-Space to pause and Right Arrow to single-step.
+server. The browser verifier starts and stops its own local server, completes
+the full flow at both 390×844 and 1280×800, validates moving canonical physics,
+and writes review captures to `dist/verification/`.
+
+Touch or click the visible controls; drag a selected brick or marble onto a
+legal destination, or use the equivalent tap sequence. Tab and Enter navigate
+the same semantic actions. During battle, tap or click any marble or brick to
+inspect its owner, mechanic, and material state; activate it again to close the
+inspector. Space pauses and Right Arrow advances one exact fixed step. `M`
+toggles generated audio and `V` toggles reduced motion. On the result screen,
+`R` opens replay and `N` starts the next seeded run. Mute and reduced-motion
+preferences persist across runs.
 
 ## Repository map
 
 ```
-battle/                 Canonical deterministic pure-Lua simulation and content
-src/                    LÖVE event-log adapter UI; no combat rules
-tests/                  Plain-Lua presentation/replay tests
+battle/                 Pure-Lua draft, setup, continuous physics, rules, recording
+src/                    LÖVE and pure presentation controllers; no combat rules
+tests/                  Plain-Lua run, snapshot, and recorded-frame replay tests
 scripts/                love.js, desktop, and Capacitor packaging
 web-shell/              Responsive 390x844 browser shell
 capacitor/              Preserved mobile wrapper and iOS scaffold
 docs/decisions/          Settled engine and simulation decisions
+docs/art-direction/      Accepted presentation contract and reference boards
 ```
 
 ## Runtime pins

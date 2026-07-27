@@ -103,7 +103,7 @@ function M.build(def, sling, owner_id)
     end
 
     return {
-        uid = alloc_uid(),
+        uid = def.uid ~= nil and def.uid or alloc_uid(),
         name = def.name,
         rarity = def.rarity,
         owner = owner_id,
@@ -114,8 +114,8 @@ function M.build(def, sling, owner_id)
             release = core_def.release,
         },
         shells = built_shells,
-        -- Momentum is how many collisions the marble can push through before it
-        -- comes to rest. More shells = more mass = further into the formation.
+        -- Momentum contributes to canonical launch speed and physical mass.
+        -- More shells make a heavier, more persistent shot.
         momentum = #built_shells + (sling.momentum_bonus or 0),
         damage_bonus = sling.damage_bonus or 0,
         scatter = sling.scatter or 0,
@@ -142,7 +142,7 @@ end
 --- Invariant check used by the engine and by the tests.
 function M.assert_core_covered(marble)
     if #marble.shells < 1 then
-        error(string.format("marble %s (uid %d) has an exposed core while still in play",
+        error(string.format("marble %s (uid %s) has an exposed core while still in play",
             tostring(marble.name), marble.uid))
     end
 end
