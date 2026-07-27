@@ -34,6 +34,7 @@ harness.run({
     require("battle.tests.test_run_state"),
     require("battle.tests.test_run_controller"),
     require("battle.tests.test_run_presentation"),
+    require("battle.tests.test_experience_presentation"),
     require("battle.tests.test_data_model"),
     require("battle.tests.test_event_protocol"),
     require("battle.tests.test_physics"),

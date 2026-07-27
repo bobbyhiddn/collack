@@ -64,6 +64,7 @@ M.palette = {
     chalk = colour("#FFF4DE"),
     muted = colour("#CBB995"),
     brass_600 = colour("#B88636"),
+    brass_ink = colour("#6D4B17"),
     brass_300 = colour("#E3C06B"),
     brass_100 = colour("#F7E3A2"),
     damage = colour("#DF684F"),
@@ -241,6 +242,39 @@ M.status = {
         label = "FREEZE", colour = "status_freeze",
         mark = "three_edge_ticks", anchor = "upper_right",
     },
+}
+
+-- A compact mark and canonical verb label shared by card inspection and live
+-- battle attribution. These tokens carry identity only; rule meaning remains
+-- in battle/rule_ast.lua.
+M.rule_operation = {
+    accelerate = { label = "ACCELERATE", mark = "ACC" },
+    aim = { label = "AIM", mark = "AIM" },
+    amplify = { label = "AMPLIFY", mark = "AMP" },
+    apply_status = { label = "APPLY STATUS", mark = "STS" },
+    ["break"] = { label = "BREAK", mark = "BRK" },
+    cover = { label = "COVER", mark = "COV" },
+    deal = { label = "DEAL", mark = "DMG" },
+    heal = { label = "RESTORE", mark = "RST" },
+    hold = { label = "HOLD", mark = "HLD" },
+    launch = { label = "LAUNCH", mark = "LCH" },
+    negate = { label = "NEGATE", mark = "NEG" },
+    persist = { label = "PERSIST", mark = "DUR" },
+    pierce = { label = "PIERCE", mark = "PRC" },
+    prevent = { label = "PREVENT", mark = "PRV" },
+    protect = { label = "PROTECT", mark = "GRD" },
+    pull = { label = "PULL", mark = "PUL" },
+    push = { label = "PUSH", mark = "PSH" },
+    rebound = { label = "REBOUND", mark = "RBD" },
+    redirect = { label = "REDIRECT", mark = "DIR" },
+    rewind = { label = "REWIND", mark = "RWD" },
+    scatter = { label = "SCATTER", mark = "SCT" },
+    scorch = { label = "SCORCH", mark = "FIR" },
+    set = { label = "SET", mark = "SET" },
+    slow = { label = "SLOW", mark = "SLW" },
+    splash = { label = "SPLASH", mark = "SPL" },
+    target = { label = "TARGET", mark = "TGT" },
+    wear = { label = "WEAR", mark = "WER" },
 }
 
 M.sling = {

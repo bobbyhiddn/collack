@@ -12,6 +12,7 @@ const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(scriptDirectory, "..");
 const webRoot = path.join(root, "dist", "web");
 const verificationRoot = path.join(root, "dist", "verification");
+const battleTimeout = 180_000;
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -58,8 +59,46 @@ const audioReady = new Set();
 const settingSamples = [];
 const guidanceSamples = [];
 const inspectionSamples = [];
+const ruleCallouts = [];
 const canonicalSweeps = [];
 const canonicalBlowbacks = [];
+const expectedRuleMarks = {
+  accelerate: "ACC",
+  aim: "AIM",
+  amplify: "AMP",
+  apply_status: "STS",
+  break: "BRK",
+  cover: "COV",
+  deal: "DMG",
+  heal: "RST",
+  hold: "HLD",
+  launch: "LCH",
+  negate: "NEG",
+  persist: "DUR",
+  pierce: "PRC",
+  prevent: "PRV",
+  protect: "GRD",
+  pull: "PUL",
+  push: "PSH",
+  rebound: "RBD",
+  redirect: "DIR",
+  rewind: "RWD",
+  scatter: "SCT",
+  scorch: "FIR",
+  set: "SET",
+  slow: "SLW",
+  splash: "SPL",
+  target: "TGT",
+  wear: "WER",
+};
+
+function assertSharedRuleIdentity(text, label) {
+  const icon = text.match(/\bicon=(\S+)/)?.[1];
+  const verb = text.match(/\bverb=(\S+)/)?.[1];
+  assert(icon && verb, `${label}: missing shared icon/verb identity: ${text}`);
+  assert(expectedRuleMarks[verb] === icon,
+    `${label}: ${verb} used ${icon}, expected shared mark ${expectedRuleMarks[verb]}`);
+}
 
 function observePage(page, label) {
   page.on("console", (message) => {
@@ -77,6 +116,9 @@ function observePage(page, label) {
     }
     if (text.startsWith("CALLACK_INSPECTION ")) {
       inspectionSamples.push({ label, text });
+    }
+    if (text.startsWith("CALLACK_RULE_CALLOUT ")) {
+      ruleCallouts.push({ label, text });
     }
     const sweep = text.match(
       /CALLACK_CANONICAL_SWEEP kind=(\S+) speed=(-?\d+\.\d+) toi=(-?\d+\.\d+) reflected=(true|false) tunneled=(true|false) substeps=(\d+) iterations=(\d+)/
@@ -207,6 +249,13 @@ async function inspectAction(runtime, pointer, x, y, action, type, timeout = 20_
     assert(/owner=[^ ]+/.test(detail) && !detail.includes("mechanic=none"),
       `entity inspection did not expose owner/mechanic detail: ${detail}`);
   }
+  for (const field of [
+    "rule", "trigger", "target", "icon", "verb", "magnitude", "limit", "drawback",
+  ]) {
+    assert(new RegExp(`${field}=[^ ]+`).test(detail),
+      `${type} inspection omitted exact ${field} identity: ${detail}`);
+  }
+  assertSharedRuleIdentity(detail, `${type} inspection`);
   return detail;
 }
 
@@ -246,12 +295,30 @@ async function waitForNewPhysics(label, priorCount, timeout = 30_000) {
   return physicsSamples.filter((sample) => sample.label === label).at(-1);
 }
 
+async function waitForNewRuleCallout(label, priorCount, timeout = 30_000) {
+  const started = Date.now();
+  while (ruleCallouts.filter((sample) => sample.label === label).length <= priorCount) {
+    if (Date.now() - started > timeout) {
+      throw new Error(`${label}: battle did not emit a canonical rule callout`);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  const callout = ruleCallouts.filter((sample) => sample.label === label).at(-1);
+  for (const field of ["rule", "source", "icon", "verb", "target", "magnitude", "unit"]) {
+    assert(new RegExp(`${field}=[^ ]+`).test(callout.text),
+      `${label}: callout omitted ${field}: ${callout.text}`);
+  }
+  assertSharedRuleIdentity(callout.text, `${label} battle callout`);
+  return callout;
+}
+
 function digest(buffer) {
   return createHash("sha256").update(buffer).digest("hex");
 }
 
 async function completeMobile(runtime) {
   await screenshot(runtime, "phone-setup-start.png");
+  await screenshot(runtime, "phone-scout.png");
   const setupDetail = guidanceSamples.find((sample) =>
     sample.label === "phone" && sample.text.includes("screen=setup")
   )?.text ?? "";
@@ -280,14 +347,19 @@ async function completeMobile(runtime) {
   const firstRefitReached = waitForConsole(
     runtime.page,
     "CALLACK_ACTION phase_draft",
-    120_000
+    battleTimeout
   );
   await touchAction(runtime, 195, 800, "lock_setup");
   await battleReached;
+  await touchAction(runtime, 147, 796, "battle_speed");
   await firstRefitReached;
   await screenshot(runtime, "phone-refit-1.png");
+  await screenshot(runtime, "phone-draft-scout.png");
   await inspectAction(runtime, "touch", 195, 180, "offer:", "choice");
   await screenshot(runtime, "phone-refit-inspection.png");
+  await touchAction(runtime, 310, 664, "inspection_next");
+  await screenshot(runtime, "phone-refit-rule-2.png");
+  await touchAction(runtime, 80, 664, "inspection_prev");
   await touchAction(runtime, 195, 732, "select:");
   const secondSetupReached = waitForConsole(
     runtime.page,
@@ -296,6 +368,7 @@ async function completeMobile(runtime) {
   );
   await touchAction(runtime, 195, 800, "confirm_offer");
   await secondSetupReached;
+  await screenshot(runtime, "phone-reward.png");
 
   const secondBattleReached = waitForConsole(
     runtime.page,
@@ -305,14 +378,18 @@ async function completeMobile(runtime) {
   const secondRefitReached = waitForConsole(
     runtime.page,
     "CALLACK_ACTION phase_draft",
-    120_000
+    battleTimeout
   );
   const secondPhysicsBaseline =
     physicsSamples.filter((sample) => sample.label === "phone").length;
+  const secondRuleBaseline =
+    ruleCallouts.filter((sample) => sample.label === "phone").length;
   await touchAction(runtime, 195, 800, "lock_setup");
   await secondBattleReached;
   await waitForNewPhysics("phone", secondPhysicsBaseline);
+  await waitForNewRuleCallout("phone", secondRuleBaseline);
   await touchAction(runtime, 57, 796, "battle_pause");
+  await screenshot(runtime, "phone-battle-trigger.png");
   await inspectAction(
     runtime,
     "touch",
@@ -323,7 +400,6 @@ async function completeMobile(runtime) {
   );
   await screenshot(runtime, "phone-battle-inspection.png");
   await touchAction(runtime, 57, 796, "battle_pause");
-  await touchAction(runtime, 147, 796, "battle_speed");
   await waitForPhysics("phone", 2);
   const firstBattle = await runtime.canvas.screenshot();
   await screenshot(runtime, "phone-battle.png");
@@ -365,27 +441,32 @@ async function completeMobile(runtime) {
   const resultReached = waitForConsole(
     runtime.page,
     "CALLACK_ACTION phase_result",
-    120_000
+    battleTimeout
   );
   await touchAction(runtime, 195, 800, "lock_setup");
   await thirdBattleReached;
   await resultReached;
   await screenshot(runtime, "phone-result.png");
+  await screenshot(runtime, "phone-terminal-result.png");
 
   await touchAction(runtime, 103, 788, "review_battle");
   await runtime.page.waitForTimeout(450);
   await touchAction(runtime, 103, 788, "review_battle");
   await touchAction(runtime, 287, 788, "replay_battle");
   await runtime.page.waitForTimeout(450);
+  const replayResultReached = waitForConsole(
+    runtime.page,
+    "CALLACK_ACTION phase_result",
+    20_000
+  );
   await touchAction(runtime, 287, 788, "replay_close");
-  await runtime.page.waitForTimeout(450);
-  await touchAction(runtime, 195, 720, "new_run");
-  await runtime.page.waitForTimeout(1_400);
-  await mouseAction(runtime, 60, 386, "brick:");
+  await replayResultReached;
+  await screenshot(runtime, "phone-result-after-replay.png");
 }
 
 async function completeDesktop(runtime) {
   await screenshot(runtime, "desktop-setup-start.png");
+  await screenshot(runtime, "desktop-scout.png");
   const setupDetail = guidanceSamples.find((sample) =>
     sample.label === "desktop" && sample.text.includes("screen=setup")
   )?.text ?? "";
@@ -412,14 +493,19 @@ async function completeDesktop(runtime) {
   const firstRefitReached = waitForConsole(
     runtime.page,
     "CALLACK_ACTION phase_draft",
-    120_000
+    battleTimeout
   );
   await mouseAction(runtime, 1122, 732, "lock_setup");
   await battleReached;
+  await mouseAction(runtime, 940, 732, "battle_speed");
   await firstRefitReached;
   await screenshot(runtime, "desktop-refit-1.png");
+  await screenshot(runtime, "desktop-draft-scout.png");
   await inspectAction(runtime, "mouse", 456, 348, "offer:", "choice");
   await screenshot(runtime, "desktop-refit-inspection.png");
+  await mouseAction(runtime, 1016, 620, "inspection_next");
+  await screenshot(runtime, "desktop-refit-rule-2.png");
+  await mouseAction(runtime, 892, 620, "inspection_prev");
   await mouseAction(runtime, 880, 732, "select:");
   const secondSetupReached = waitForConsole(
     runtime.page,
@@ -428,6 +514,7 @@ async function completeDesktop(runtime) {
   );
   await mouseAction(runtime, 1122, 732, "confirm_offer");
   await secondSetupReached;
+  await screenshot(runtime, "desktop-reward.png");
 
   const secondBattleReached = waitForConsole(
     runtime.page,
@@ -437,14 +524,18 @@ async function completeDesktop(runtime) {
   const secondRefitReached = waitForConsole(
     runtime.page,
     "CALLACK_ACTION phase_draft",
-    120_000
+    battleTimeout
   );
   const secondPhysicsBaseline =
     physicsSamples.filter((sample) => sample.label === "desktop").length;
+  const secondRuleBaseline =
+    ruleCallouts.filter((sample) => sample.label === "desktop").length;
   await mouseAction(runtime, 1122, 732, "lock_setup");
   await secondBattleReached;
   await waitForNewPhysics("desktop", secondPhysicsBaseline);
+  await waitForNewRuleCallout("desktop", secondRuleBaseline);
   await mouseAction(runtime, 816, 732, "battle_pause");
+  await screenshot(runtime, "desktop-battle-trigger.png");
   await inspectAction(
     runtime,
     "mouse",
@@ -455,7 +546,9 @@ async function completeDesktop(runtime) {
   );
   await screenshot(runtime, "desktop-battle-inspection.png");
   await mouseAction(runtime, 816, 732, "battle_pause");
-  await mouseAction(runtime, 940, 732, "battle_speed");
+  await mouseAction(runtime, 1194, 732, "battle_motion");
+  await mouseAction(runtime, 1064, 732, "battle_mute");
+  await screenshot(runtime, "desktop-battle-settings.png");
   await waitForPhysics("desktop", 2);
   const firstBattle = await runtime.canvas.screenshot();
   await screenshot(runtime, "desktop-battle.png");
@@ -486,21 +579,27 @@ async function completeDesktop(runtime) {
   const resultReached = waitForConsole(
     runtime.page,
     "CALLACK_ACTION phase_result",
-    120_000
+    battleTimeout
   );
   await mouseAction(runtime, 1122, 732, "lock_setup");
   await thirdBattleReached;
   await resultReached;
   await screenshot(runtime, "desktop-result.png");
+  await screenshot(runtime, "desktop-terminal-result.png");
 
   await mouseAction(runtime, 818, 732, "review_battle");
   await runtime.page.waitForTimeout(450);
   await mouseAction(runtime, 818, 732, "review_battle");
   await mouseAction(runtime, 944, 732, "replay_battle");
   await runtime.page.waitForTimeout(450);
+  const replayResultReached = waitForConsole(
+    runtime.page,
+    "CALLACK_ACTION phase_result",
+    20_000
+  );
   await mouseAction(runtime, 1194, 732, "replay_close");
-  await runtime.page.waitForTimeout(450);
-  await mouseAction(runtime, 1122, 732, "new_run");
+  await replayResultReached;
+  await screenshot(runtime, "desktop-result-after-replay.png");
 }
 
 try {
@@ -560,10 +659,10 @@ try {
   for (const label of ["phone", "desktop"]) {
     const guidance = guidanceSamples.filter((sample) => sample.label === label);
     assert(guidance.some((sample) =>
-      /screen=draft .*scout=(?!none)[^ ]+ .*mechanic_cards=3/.test(sample.text)),
+      /screen=draft .*scout=(?!none)[^ ]+ .*pressure=(?!none)[^ ]+ .*mechanic_cards=3/.test(sample.text)),
     `${label}: refit did not publish next-scout and canonical mechanic guidance`);
     assert(guidance.some((sample) =>
-      /screen=setup .*scout=(?!none)[^ ]+ .*build=(?!none)[^ ]+/.test(sample.text)),
+      /screen=setup .*scout=(?!none)[^ ]+ .*pressure=(?!none)[^ ]+ .*build=(?!none)[^ ]+/.test(sample.text)),
     `${label}: setup did not publish scout and build synergy guidance`);
     const inspections = inspectionSamples.filter((sample) => sample.label === label);
     assert(inspections.some((sample) =>
@@ -573,6 +672,14 @@ try {
     `${label}: typed causal refit inspection was not exercised`);
     assert(inspections.some((sample) => sample.text.includes("type=entity")),
       `${label}: entity inspection regression was not exercised`);
+    const callouts = ruleCallouts.filter((sample) => sample.label === label);
+    assert(callouts.some((sample) =>
+      /rule=[^ ]+ source=[^ ]+ icon=[^ ]+ verb=[^ ]+ target=[^ ]+ magnitude=[^ ]+ unit=[^ ]+/
+        .test(sample.text)),
+    `${label}: canonical battle callout identity was not exercised`);
+    const settings = settingSamples.filter((sample) => sample.label === label);
+    assert(settings.some((sample) => sample.muted && sample.reducedMotion),
+      `${label}: pointer controls did not preserve mute plus reduced motion`);
     const sweep = canonicalSweeps.find((sample) => sample.label === label);
     assert(sweep?.kind === "box_collision"
       && sweep.speed >= 240
@@ -606,16 +713,16 @@ try {
     motionEvidence[label] = { first, moved };
   }
   const screenshotNames = [
+    "phone-draft-scout.png",
     "phone-refit-inspection.png",
-    "phone-setup.png",
-    "phone-setup-terminal.png",
-    "phone-battle-inspection.png",
-    "phone-battle.png",
+    "phone-reward.png",
+    "phone-battle-trigger.png",
+    "phone-terminal-result.png",
+    "desktop-draft-scout.png",
     "desktop-refit-inspection.png",
-    "desktop-setup.png",
-    "desktop-setup-terminal.png",
-    "desktop-battle-inspection.png",
-    "desktop-battle.png",
+    "desktop-reward.png",
+    "desktop-battle-trigger.png",
+    "desktop-terminal-result.png",
   ];
   const screenshotHashes = {};
   for (const name of screenshotNames) {
@@ -634,13 +741,15 @@ try {
       motionEvidence,
       guidance: guidanceSamples,
       inspections: inspectionSamples,
+      ruleCallouts,
+      settings: settingSamples,
       screenshotHashes,
     }, null, 2)}\n`
   );
 
   console.log(
-    `[web-browser] OK: phone + desktop sparse setup, three battles, two causal refits, `
-      + `attrition, terminal result, replay, settings, and new-run; `
+    `[web-browser] OK: phone + desktop scout/draft, exact refit inspection, reward, `
+      + `canonical battle trigger, terminal result, replay, and settings; `
       + `${physicsSamples.length} canonical moving-physics samples; swept TOI + allied/enemy `
       + `blowback; screenshots and evidence manifest in dist/verification`
   );

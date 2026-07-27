@@ -5,6 +5,7 @@
 local draft_content = require("battle.content.draft")
 local brick_content = require("battle.content.bricks")
 local shell_content = require("battle.content.shells")
+local rule_ast = require("battle.rule_ast")
 local util = require("battle.run_util")
 local battle_projection = require("presentation")
 local art = require("ui.art_tokens")
@@ -86,6 +87,258 @@ local function synergy_projection(synergy)
     }
 end
 
+local SHORT_TRIGGER = {
+    build = "BUILD",
+    collision = "CONTACT",
+    core_release = "CORE RELEASE",
+    damaging_collision = "DAMAGE HIT",
+    destroyed = "DESTROYED",
+    field_contact = "FIELD CONTACT",
+    launch = "LAUNCH",
+    non_chip_collision = "NON-CHIP HIT",
+    passive = "PASSIVE",
+    status_tick = "STATUS TICK",
+    survives_collision = "SURVIVE HIT",
+    wall_or_brick_contact = "WALL/BRICK HIT",
+}
+
+local SHORT_TARGET = {
+    all_owned_marbles = "ALL OWN MARBLES",
+    current_shell = "CURRENT SHELL",
+    launch = "LAUNCH",
+    nearby_marbles = "NEARBY MARBLES",
+    orthogonal_neighbours = "ADJACENT BRICKS",
+    release_area = "RELEASE AREA",
+    self = "SELF",
+    striking_marble = "STRIKING MARBLE",
+    struck_brick = "STRUCK BRICK",
+    target_column = "TARGET COLUMN",
+}
+
+local SHORT_UNIT = {
+    count = "",
+    damage = "DMG",
+    durability = "DURABILITY",
+    flag = "",
+    hp = "HP",
+    id = "",
+    launch_force = "FORCE",
+    multiplier = "×",
+    percent = "%",
+    radius = "RADIUS",
+    shots = "SHOTS",
+    strength = "STRENGTH",
+    ticks = "TICKS",
+    cells = "CELLS",
+}
+
+local function readable_identifier(value)
+    return tostring(value or "none"):gsub("_", " "):upper()
+end
+
+local function quantity_projection(quantity, kind)
+    if not quantity then
+        return {
+            kind = kind or "none",
+            value = nil,
+            unit = "none",
+            label = "NONE",
+        }
+    end
+    local value = quantity.value
+    local value_copy
+    if type(value) == "boolean" then
+        value_copy = value and "TRUE" or "FALSE"
+    else
+        value_copy = tostring(value):upper():gsub("_", " ")
+    end
+    local unit = SHORT_UNIT[quantity.unit] or readable_identifier(quantity.unit)
+    local label
+    if unit == "×" or unit == "%" then
+        label = value_copy .. unit
+    elseif unit == "" then
+        label = value_copy
+    else
+        label = value_copy .. " " .. unit
+    end
+    return {
+        kind = kind or "magnitude",
+        value = value,
+        unit = quantity.unit,
+        label = label,
+    }
+end
+
+local function cadence_projection(cadence)
+    cadence = cadence or { unit = "trigger", interval = 1 }
+    local interval = tonumber(cadence.interval) or 1
+    local label
+    local short_label
+    if cadence.charges then
+        label = string.format("%d CHARGE%s TOTAL", cadence.charges,
+            cadence.charges == 1 and "" or "S")
+        short_label = string.format("%d CHARGE%s", cadence.charges,
+            cadence.charges == 1 and "" or "S")
+    elseif cadence.limit then
+        label = string.format("CHAIN LIMIT %d", cadence.limit)
+        short_label = string.format("CHAIN %d", cadence.limit)
+    elseif interval > 1 then
+        label = string.format(
+            "EVERY %d %s · NO RULE CAP",
+            interval,
+            readable_identifier(cadence.unit)
+        )
+        short_label = string.format("EVERY %d %s", interval,
+            readable_identifier(cadence.unit))
+    else
+        label = "EVERY " .. readable_identifier(cadence.unit) .. " · NO RULE CAP"
+        short_label = "EACH " .. readable_identifier(cadence.unit)
+    end
+    return {
+        unit = cadence.unit,
+        interval = interval,
+        charges = cadence.charges,
+        limit = cadence.limit,
+        label = label,
+        short_label = short_label,
+    }
+end
+
+local function drawback_projection(drawback)
+    drawback = drawback or { kind = "none" }
+    if drawback.kind == "none" then
+        return {
+            kind = "none",
+            stat = nil,
+            magnitude = nil,
+            unit = nil,
+            label = "NONE",
+        }
+    end
+    local amount = quantity_projection({
+        value = drawback.magnitude,
+        unit = drawback.unit,
+    }, "drawback")
+    return {
+        kind = drawback.kind,
+        stat = drawback.stat,
+        magnitude = drawback.magnitude,
+        unit = drawback.unit,
+        label = string.format(
+            "%s · %s · %s",
+            readable_identifier(drawback.kind),
+            readable_identifier(drawback.stat),
+            amount.label
+        ),
+    }
+end
+
+local function rule_identity(rule)
+    local operation_token = art.rule_operation[rule.operation.verb] or {
+        label = readable_identifier(rule.operation.verb),
+        mark = readable_identifier(rule.operation.verb):sub(1, 3),
+    }
+    local quantity = rule.magnitude
+        and quantity_projection(rule.magnitude, "magnitude")
+        or quantity_projection(rule.duration, "duration")
+    local cadence = cadence_projection(rule.cadence)
+    local trigger_label = SHORT_TRIGGER[rule.trigger.event]
+        or readable_identifier(rule.trigger.event)
+    local target_label = SHORT_TARGET[rule.target.selector]
+        or readable_identifier(rule.target.selector)
+    return {
+        id = rule.id,
+        visibility = rule.visibility,
+        icon = operation_token.mark,
+        verb = rule.operation.verb,
+        verb_label = operation_token.label,
+        stat = rule.operation.stat,
+        mode = rule.operation.mode,
+        trigger = {
+            event = rule.trigger.event,
+            phase = rule.trigger.phase,
+            condition = rule.condition.predicate,
+            condition_value = rule.condition.value,
+            label = readable_identifier(rule.trigger.phase)
+                .. " " .. readable_identifier(rule.trigger.event),
+            short_label = trigger_label,
+        },
+        target = {
+            selector = rule.target.selector,
+            relation = rule.target.relation,
+            label = readable_identifier(rule.target.selector),
+            short_label = target_label,
+        },
+        magnitude = quantity,
+        cadence = cadence,
+        cost = util.deep_copy(rule.cost),
+        sentence = rule_ast.rule_sentence(rule),
+        comparison_lines = {
+            "ON " .. trigger_label .. " · " .. operation_token.label
+                .. (quantity.label ~= "NONE" and (" " .. quantity.label) or ""),
+            "TO " .. target_label .. " · " .. cadence.short_label,
+        },
+    }
+end
+
+local function visible_rules(rule_set)
+    local out = {}
+    for _, rule in ipairs((rule_set and rule_set.rules) or {}) do
+        if rule.visibility ~= "internal" then out[#out + 1] = rule end
+    end
+    return out
+end
+
+local function rule_inspection(rule_set, requested_index)
+    if not rule_set then return nil end
+    local rules = visible_rules(rule_set)
+    if #rules == 0 then return nil end
+    local index = math.max(1, math.min(#rules, math.floor(
+        tonumber(requested_index) or 1
+    )))
+    return {
+        rule_set_id = rule_set.id,
+        source_name = rule_set.name,
+        role = rule_set.role,
+        index = index,
+        count = #rules,
+        rule = rule_identity(rules[index]),
+        drawback = drawback_projection(rule_set.drawback),
+        compatibility = util.deep_copy(rule_set.compatibility),
+    }
+end
+
+local function comparison_rule(rule_set)
+    local inspection = rule_inspection(rule_set, 1)
+    if not inspection then return nil end
+    for _, rule in ipairs(rule_set.rules or {}) do
+        if rule.visibility == "compact" then
+            inspection.rule = rule_identity(rule)
+            return inspection
+        end
+    end
+    return inspection
+end
+
+local function pressure_projection(canonical_scout)
+    local out = {}
+    if not canonical_scout then return out end
+    local function append(item, kind)
+        if not item then return end
+        out[#out + 1] = {
+            kind = kind,
+            name = item.name,
+            compact_copy = item.compact_copy,
+            rule_set_id = item.rule_set_id,
+            rule_ids = util.deep_copy(item.rule_ids),
+        }
+    end
+    append(canonical_scout.sling, "sling")
+    for _, item in ipairs(canonical_scout.bricks or {}) do append(item, "brick") end
+    for _, item in ipairs(canonical_scout.marbles or {}) do append(item, "marble") end
+    return out
+end
+
 local function opponent_projection(opponent)
     return {
         recipe_id = opponent.recipe_id,
@@ -98,11 +351,40 @@ local function opponent_projection(opponent)
         brick_count = #(opponent.bricks or {}),
         art_id = "opponent_" .. opponent.recipe_id,
         canonical_scout = util.deep_copy(opponent.canonical_scout),
+        pressure = pressure_projection(opponent.canonical_scout),
         pool_items = util.deep_copy(opponent.pool_items),
     }
 end
 
-local function choice_card(choice, ui, index)
+local function operation_comparison(choice, state)
+    local operation = choice.operation or {}
+    local kind = operation.kind
+    if kind == "add_marble" then
+        return string.format("ADD · BAG %d>%d / CAP %d",
+            #state.player.marbles, #state.player.marbles + 1, state.limits.marbles)
+    elseif kind == "add_brick" then
+        return string.format("ADD · FORMATION %d>%d / CAP %d",
+            #state.player.bricks, #state.player.bricks + 1, state.limits.bricks)
+    elseif kind == "replace_marble" then
+        return "REPLACE · BAG COUNT HOLDS"
+    elseif kind == "replace_brick" then
+        return "RESHAPE · CELL HOLDS"
+    elseif kind == "repair_brick" then
+        return "REPAIR · RESTORE CASUALTY"
+    elseif kind == "remove_marble" then
+        return string.format("REMOVE · BAG %d>%d",
+            #state.player.marbles, #state.player.marbles - 1)
+    elseif kind == "remove_brick" then
+        return string.format("REMOVE · FORMATION %d>%d",
+            #state.player.bricks, #state.player.bricks - 1)
+    elseif kind == "reshape_sling" then
+        return "RESHAPE · SLING RULE CHANGES"
+    end
+    return "ROLE · " .. readable_identifier(choice.role)
+end
+
+local function choice_card(choice, ui, index, state)
+    local first_rule = comparison_rule(choice.rule_set)
     return {
         choice_id = choice.choice_id,
         content_id = choice.content_id,
@@ -126,6 +408,12 @@ local function choice_card(choice, ui, index)
         operation_verb = choice.operation_verb,
         operation_copy = choice.operation_copy,
         causal_attribution = util.deep_copy(choice.causal_attribution),
+        comparison = {
+            operation = operation_comparison(choice, state),
+            rule_count = first_rule and first_rule.count or 0,
+            primary_rule = first_rule and first_rule.rule or nil,
+            no_ellipsis = true,
+        },
         inspected = ui.inspected_choice_id == choice.choice_id,
         selected = ui.selected_choice_id == choice.choice_id,
         action_id = "offer:" .. choice.choice_id,
@@ -155,6 +443,7 @@ local function project_draft(presentation, state, ui)
             brick_count = offer.next_encounter.brick_count,
             art_id = "opponent_" .. tostring(offer.next_encounter.recipe_id),
             canonical_scout = util.deep_copy(offer.next_encounter.canonical_scout),
+            pressure = pressure_projection(offer.next_encounter.canonical_scout),
         }
     else
         presentation.title = "Choose your " ..
@@ -199,13 +488,19 @@ local function project_draft(presentation, state, ui)
         },
     }
     for index, choice in ipairs(offer.choices) do
-        local card = choice_card(choice, ui, index)
+        local card = choice_card(choice, ui, index, state)
+        if card.inspected then
+            card.rule_inspection = rule_inspection(
+                card.rule_set,
+                ui.inspection_rule_index
+            )
+        end
         presentation.draft.cards[#presentation.draft.cards + 1] = card
         add_action(presentation, action(
             card.action_id,
             "inspect_offer",
             "Inspect " .. choice.name,
-            true,
+            ui.inspected_choice_id == nil,
             token_bounds(art.layout.phone.draft.offers[index])
         ))
         if card.inspected then
@@ -216,6 +511,28 @@ local function project_draft(presentation, state, ui)
                 "Select " .. choice.name,
                 true,
                 { x = 16, y = 708, width = 358, height = 48 }
+            ))
+            local inspection = card.rule_inspection
+            add_action(presentation, action(
+                "inspection_prev",
+                "page_inspection",
+                "Previous canonical rule",
+                inspection and inspection.index > 1,
+                { x = 28, y = 640, width = 104, height = 48 }
+            ))
+            add_action(presentation, action(
+                "inspection_close",
+                "close_inspection",
+                "Close expanded rules",
+                true,
+                { x = 143, y = 640, width = 104, height = 48 }
+            ))
+            add_action(presentation, action(
+                "inspection_next",
+                "page_inspection",
+                "Next canonical rule",
+                inspection and inspection.index < inspection.count,
+                { x = 258, y = 640, width = 104, height = 48 }
             ))
         end
     end
@@ -307,6 +624,12 @@ local function project_setup(presentation, state, ui)
         bag = {},
         insertion_slots = {},
         selected_detail = nil,
+        recent_reward = state.workshop
+            and state.workshop.reward_history
+            and util.deep_copy(state.workshop.reward_history[
+                #state.workshop.reward_history
+            ])
+            or nil,
     }
 
     for index, brick in ipairs(state.player.bricks) do
@@ -343,6 +666,8 @@ local function project_setup(presentation, state, ui)
         if projected_brick.selected then
             presentation.setup.selected_detail = util.deep_copy(projected_brick)
             presentation.setup.selected_detail.type = "brick"
+            presentation.setup.selected_detail.rule_inspection =
+                rule_inspection(projected_brick.rule_set, ui.inspection_rule_index)
         end
         add_action(presentation, action(
             "brick:" .. brick.uid,
@@ -410,6 +735,8 @@ local function project_setup(presentation, state, ui)
         if projected_marble.selected then
             presentation.setup.selected_detail = util.deep_copy(projected_marble)
             presentation.setup.selected_detail.type = "marble"
+            presentation.setup.selected_detail.rule_inspection =
+                rule_inspection(projected_marble.rule_set, ui.inspection_rule_index)
         end
         add_action(presentation, action(
             "marble:" .. uid,
@@ -507,7 +834,7 @@ local function readable_title(value)
     end))
 end
 
-local function entity_inspection(frame, inspected_id)
+local function entity_inspection(frame, inspected_id, requested_rule_index)
     if not frame or inspected_id == nil then return nil end
     for _, entity in ipairs(frame.entities or {}) do
         local id = entity.id or entity.uid
@@ -533,6 +860,9 @@ local function entity_inspection(frame, inspected_id)
                     or nil
                 inspected.rule_set = definition and util.deep_copy(definition.rule_set) or nil
                 inspected.balance = definition and util.deep_copy(definition.balance) or nil
+                inspected.rule_inspection = definition
+                    and rule_inspection(definition.rule_set, requested_rule_index)
+                    or nil
                 inspected.hp = entity.hp
                 inspected.max_hp = entity.max_hp
                 inspected.integrity = math.floor(clamp((entity.hp_ratio or 0) * 100, 0, 100) + 0.5)
@@ -554,6 +884,9 @@ local function entity_inspection(frame, inspected_id)
                     or nil
                 inspected.rule_set = definition and util.deep_copy(definition.rule_set) or nil
                 inspected.balance = definition and util.deep_copy(definition.balance) or nil
+                inspected.rule_inspection = definition
+                    and rule_inspection(definition.rule_set, requested_rule_index)
+                    or nil
             end
             return inspected
         end
@@ -586,7 +919,11 @@ local function project_battle(presentation, state, ui, previous_frame, current_f
         tick = frame and frame.tick or (state.battle and state.battle.tick or 0),
         frame = frame,
         inspected_entity_id = ui.inspected_entity_id,
-        inspected = entity_inspection(frame, ui.inspected_entity_id),
+        inspected = entity_inspection(
+            frame,
+            ui.inspected_entity_id,
+            ui.inspection_rule_index
+        ),
         view = {
             paused = ui.paused == true,
             speed = ui.speed or 1,
@@ -648,6 +985,24 @@ local function project_battle(presentation, state, ui, previous_frame, current_f
         true,
         { x = 286, y = 768, width = 88, height = 56 }
     ))
+    if presentation.battle.inspected
+        and presentation.battle.inspected.rule_inspection then
+        local inspection = presentation.battle.inspected.rule_inspection
+        add_action(presentation, action(
+            "inspection_prev",
+            "page_inspection",
+            "Previous canonical rule",
+            inspection.index > 1,
+            { x = 28, y = 426, width = 64, height = 48 }
+        ))
+        add_action(presentation, action(
+            "inspection_next",
+            "page_inspection",
+            "Next canonical rule",
+            inspection.index < inspection.count,
+            { x = 298, y = 426, width = 64, height = 48 }
+        ))
+    end
 end
 
 local function recent_events(events, count)

@@ -14,6 +14,7 @@ local function fresh_ui(settings)
     settings = settings or {}
     return {
         inspected_choice_id = nil,
+        inspection_rule_index = 1,
         selected_choice_id = nil,
         selected_brick_uid = nil,
         selected_marble_uid = nil,
@@ -87,9 +88,58 @@ local function inspect_offer(model, action)
     end
     local next_model = util.deep_copy(model)
     next_model.ui.inspected_choice_id = action.choice_id
+    next_model.ui.inspection_rule_index = 1
     next_model.ui.selected_choice_id = nil
     return accepted(next_model, {
         { schema_version = 1, type = "choice_inspected", choice_id = action.choice_id },
+    })
+end
+
+local function close_inspection(model, action)
+    local next_model = util.deep_copy(model)
+    if model.run.phase == "draft" and model.ui.inspected_choice_id then
+        next_model.ui.inspected_choice_id = nil
+    elseif model.run.phase == "battle" and model.ui.inspected_entity_id then
+        next_model.ui.inspected_entity_id = nil
+    else
+        return nil, view_error(
+            model,
+            action,
+            "inspection_closed",
+            "No expanded inspection is open."
+        )
+    end
+    next_model.ui.inspection_rule_index = 1
+    return accepted(next_model, {
+        { schema_version = 1, type = "inspection_closed" },
+    })
+end
+
+local function page_inspection(model, action)
+    local has_inspection = model.run.phase == "draft"
+            and model.ui.inspected_choice_id ~= nil
+        or model.run.phase == "battle"
+            and model.ui.inspected_entity_id ~= nil
+    if not has_inspection then
+        return nil, view_error(
+            model,
+            action,
+            "inspection_closed",
+            "Open a card or piece before paging its canonical rules."
+        )
+    end
+    local next_model = util.deep_copy(model)
+    next_model.ui.inspection_rule_index = math.max(
+        1,
+        (tonumber(next_model.ui.inspection_rule_index) or 1)
+            + math.floor(tonumber(action.delta) or 0)
+    )
+    return accepted(next_model, {
+        {
+            schema_version = 1,
+            type = "inspection_rule_paged",
+            index = next_model.ui.inspection_rule_index,
+        },
     })
 end
 
@@ -138,6 +188,7 @@ local function confirm_offer(model, action)
     local next_model = util.deep_copy(model)
     next_model.run = result.state
     next_model.ui.inspected_choice_id = nil
+    next_model.ui.inspection_rule_index = 1
     next_model.ui.selected_choice_id = nil
     next_model.ui.last_error = nil
     return accepted(next_model, result.events)
@@ -156,6 +207,8 @@ local function select_brick(model, action)
     end
     local next_model = util.deep_copy(model)
     next_model.ui.selected_brick_uid = action.brick_uid
+    next_model.ui.selected_marble_uid = nil
+    next_model.ui.inspection_rule_index = 1
     return accepted(next_model, {
         { schema_version = 1, type = "brick_selected", brick_uid = action.brick_uid },
     })
@@ -191,6 +244,8 @@ local function select_marble(model, action)
     end
     local next_model = util.deep_copy(model)
     next_model.ui.selected_marble_uid = action.marble_uid
+    next_model.ui.selected_brick_uid = nil
+    next_model.ui.inspection_rule_index = 1
     return accepted(next_model, {
         { schema_version = 1, type = "marble_selected", marble_uid = action.marble_uid },
     })
@@ -241,6 +296,7 @@ local function inspect_entity(model, action)
     else
         next_model.ui.inspected_entity_id = action.entity_id
     end
+    next_model.ui.inspection_rule_index = 1
     return accepted(next_model, {
         {
             schema_version = 1,
@@ -391,6 +447,8 @@ function M.dispatch(model, action)
     end
     local kind = type(action) == "table" and (action.kind or action.type) or nil
     if kind == "inspect_offer" then return inspect_offer(model, action) end
+    if kind == "close_inspection" then return close_inspection(model, action) end
+    if kind == "page_inspection" then return page_inspection(model, action) end
     if kind == "select_offer" then return select_offer(model, action) end
     if kind == "confirm_offer" then return confirm_offer(model, action) end
     if kind == "select_brick" then return select_brick(model, action) end
@@ -428,6 +486,7 @@ function M.complete_battle(model, completion)
     local next_model = util.deep_copy(model)
     next_model.run = result.state
     next_model.ui.inspected_entity_id = nil
+    next_model.ui.inspection_rule_index = 1
     next_model.ui.replay = nil
     return accepted(next_model, result.events)
 end
@@ -489,7 +548,15 @@ function M.activate(model, action_id, source)
         battle_speed = "cycle_speed",
         battle_mute = "toggle_mute",
         battle_motion = "toggle_reduced_motion",
+        inspection_close = "close_inspection",
     }
+    if action_id == "inspection_prev" or action_id == "inspection_next" then
+        return M.dispatch(model, {
+            kind = "page_inspection",
+            delta = action_id == "inspection_prev" and -1 or 1,
+            source = source,
+        })
+    end
     if simple[action_id] then
         return M.dispatch(model, { kind = simple[action_id], source = source })
     end

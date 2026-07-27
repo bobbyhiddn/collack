@@ -27,6 +27,7 @@ local recent_touches = {}
 local last_pointer_press
 local last_screen
 local last_cue = "Scout the first rival, arrange three bricks, and order two marbles."
+local last_rule_callout
 local screen_age = 0
 local offer_age = 0
 local last_offer_id
@@ -35,6 +36,7 @@ local particles = {}
 local trails = {}
 local telemetry_tick = -100
 local last_guidance_signature
+local verification_mode = false
 
 local COLORS = {
     shadow = P.shadow.rgb,
@@ -50,6 +52,7 @@ local COLORS = {
     chalk = P.chalk.rgb,
     muted = P.muted.rgb,
     brass_dark = P.brass_600.rgb,
+    brass_ink = P.brass_ink.rgb,
     brass = P.brass_300.rgb,
     brass_light = P.brass_100.rgb,
     damage = P.damage.rgb,
@@ -132,6 +135,9 @@ local function desktop_action_bounds(action)
     if view.screen == "draft" then
         local index = index_by_action(view.draft.cards, id)
         if index then return 308 + (index - 1) * 316, 120, 296, 456 end
+        if id == "inspection_prev" then return 836, 592, 112, 56 end
+        if id == "inspection_close" then return 308, 592, 156, 56 end
+        if id == "inspection_next" then return 960, 592, 112, 56 end
         if id:match("^select:") then return 770, 704, 220, 56 end
         if id == "confirm_offer" then return 1012, 704, 220, 56 end
     elseif view.screen == "setup" then
@@ -161,6 +167,8 @@ local function desktop_action_bounds(action)
             battle_motion = { 1132, 704, 124, 56 },
         }
         if controls[id] then return unpack(controls[id]) end
+        if id == "inspection_prev" then return 560, 580, 72, 48 end
+        if id == "inspection_next" then return 648, 580, 72, 48 end
         local entity_id = id:match("^entity:(.+)$")
         if entity_id and view.battle.frame then
             for _, entity in ipairs(view.battle.frame.entities or {}) do
@@ -220,6 +228,29 @@ local function telemetry_tags(tags, counted)
     return #out > 0 and table.concat(out, ",") or "none"
 end
 
+local function telemetry_rule(inspection)
+    local rule = inspection and inspection.rule or {}
+    local trigger = rule.trigger or {}
+    local target = rule.target or {}
+    local magnitude = rule.magnitude or {}
+    local cadence = rule.cadence or {}
+    local drawback = inspection and inspection.drawback or {}
+    return string.format(
+        "rule=%s page=%d/%d trigger=%s target=%s icon=%s verb=%s magnitude=%s_%s limit=%s drawback=%s",
+        telemetry_value(rule.id),
+        inspection and inspection.index or 0,
+        inspection and inspection.count or 0,
+        telemetry_value(trigger.event),
+        telemetry_value(target.selector),
+        telemetry_value(rule.icon),
+        telemetry_value(rule.verb),
+        telemetry_value(magnitude.value),
+        telemetry_value(magnitude.unit),
+        telemetry_value(cadence.label),
+        telemetry_value(drawback.label)
+    )
+end
+
 local function report_guidance()
     local signature
     if view.screen == "draft" and view.draft then
@@ -232,9 +263,13 @@ local function report_guidance()
             end
         end
         signature = string.format(
-            "screen=draft rival=%s scout=%s counter_cards=%d mechanic_cards=%d offer=%s",
+            "screen=draft rival=%s scout=%s pressure=%s counter_cards=%d mechanic_cards=%d offer=%s",
             telemetry_value(view.opponent and view.opponent.name),
             telemetry_tags(view.draft.scout_tags),
+            telemetry_value(view.opponent
+                and view.opponent.pressure
+                and view.opponent.pressure[1]
+                and view.opponent.pressure[1].name),
             counter_cards,
             mechanic_cards,
             telemetry_value(view.draft.offer_id)
@@ -245,9 +280,13 @@ local function report_guidance()
             if link.active_synergy then active_links = active_links + 1 end
         end
         signature = string.format(
-            "screen=setup rival=%s scout=%s build=%s active_links=%d",
+            "screen=setup rival=%s scout=%s pressure=%s build=%s active_links=%d",
             telemetry_value(view.opponent and view.opponent.name),
             telemetry_tags(view.opponent and view.opponent.scout_tags),
+            telemetry_value(view.opponent
+                and view.opponent.pressure
+                and view.opponent.pressure[1]
+                and view.opponent.pressure[1].name),
             telemetry_tags(view.setup.build_tags, true),
             active_links
         )
@@ -264,6 +303,7 @@ local function refresh_view()
         last_screen = view.screen
         screen_age = 0
         trails = {}
+        if view.screen == "battle" then last_rule_callout = nil end
         update_title()
         report_action("phase_" .. view.screen)
     end
@@ -312,7 +352,7 @@ local function activate(action_id, source)
         and view.draft and view.draft.inspected or nil
     if inspected_choice then
         print(string.format(
-            "CALLACK_INSPECTION type=choice source=%s name=%s mechanics=%d operation=%s cause=%s counters=%s links=%s adds=%s",
+            "CALLACK_INSPECTION type=choice source=%s name=%s mechanics=%d operation=%s cause=%s counters=%s links=%s adds=%s %s",
             telemetry_value(source),
             telemetry_value(inspected_choice.name),
             #(inspected_choice.mechanics or {}),
@@ -322,21 +362,23 @@ local function activate(action_id, source)
                 and inspected_choice.causal_attribution.cause),
             telemetry_tags(inspected_choice.synergy and inspected_choice.synergy.counters),
             telemetry_tags(inspected_choice.synergy and inspected_choice.synergy.matched),
-            telemetry_tags(inspected_choice.synergy and inspected_choice.synergy.introduced)
+            telemetry_tags(inspected_choice.synergy and inspected_choice.synergy.introduced),
+            telemetry_rule(inspected_choice.rule_inspection)
         ))
     end
     local inspected_entity = action_id:match("^entity:")
         and view.battle and view.battle.inspected or nil
     if inspected_entity then
         print(string.format(
-            "CALLACK_INSPECTION type=entity source=%s id=%s name=%s owner=%s mechanic=%s",
+            "CALLACK_INSPECTION type=entity source=%s id=%s name=%s owner=%s mechanic=%s %s",
             telemetry_value(source),
             telemetry_value(inspected_entity.entity_id),
             telemetry_value(inspected_entity.name),
             telemetry_value(inspected_entity.owner_name),
             telemetry_value(inspected_entity.mechanic
                 or inspected_entity.core
-                or inspected_entity.state)
+                or inspected_entity.state),
+            telemetry_rule(inspected_entity.rule_inspection)
         ))
     end
     if action_id == "battle_mute" or action_id == "battle_motion" then
@@ -786,7 +828,7 @@ local function draw_draft_card(card, x, y, width, height, large, index)
     love.graphics.rectangle("line", x + 0.5, y + 0.5, width - 1, height - 1, 12, 12)
     love.graphics.setLineWidth(1)
 
-    local art_x = large and x + width / 2 or x + 56
+    local art_x = large and x + width / 2 or x + 48
     local art_y = large and y + 112 or y + height / 2
     local art_scale = large and 1.65 or 0.88
     local category = card.category or view.draft.category
@@ -811,9 +853,9 @@ local function draw_draft_card(card, x, y, width, height, large, index)
             brick_width, brick_height, second.family, second.behaviour, 1)
     end
 
-    local text_x = large and x + 18 or x + 112
+    local text_x = large and x + 18 or x + 94
     local text_y = large and y + 210 or y + 14
-    local text_width = large and width - 36 or width - 126
+    local text_width = large and width - 36 or width - 108
     love.graphics.setFont(fonts.card)
     set_color(COLORS.ink, alpha)
     love.graphics.printf(card.name, text_x, text_y, text_width, large and "center" or "left")
@@ -824,27 +866,29 @@ local function draw_draft_card(card, x, y, width, height, large, index)
             .. "  /  " .. string.upper(rarity or category or "kit"),
         text_x, text_y + 26, text_width, large and "center" or "left"
     )
-    love.graphics.setFont(large and fonts.body or fonts.meta)
+    local comparison = card.comparison or {}
+    local primary = comparison.primary_rule or {}
+    local lines = primary.comparison_lines or {}
+    love.graphics.setFont(large and fonts.meta or fonts.micro)
+    set_color(COLORS.brass_ink, alpha)
+    love.graphics.printf(comparison.operation or "", text_x, text_y + 52,
+        text_width, large and "center" or "left")
     set_color(COLORS.ink, alpha)
-    local mechanics = card.operation_copy or ((card.mechanics or {})[1] or "")
-    if large and #(card.mechanics or {}) > 0 then
-        mechanics = mechanics .. " " .. card.mechanics[1]
-        if #card.mechanics > 1 then
-            mechanics = mechanics .. string.format(
-                " Inspect for all %d canonical rules.",
-                #card.mechanics
-            )
-        end
-    end
-    draw_wrapped_limited(mechanics, text_x, text_y + 52, text_width,
-        large and 5 or 3, "left")
+    love.graphics.printf(lines[1] or "INSPECT FOR CANONICAL RULES",
+        text_x, text_y + (large and 88 or 72), text_width,
+        large and "center" or "left")
+    love.graphics.printf(lines[2] or "",
+        text_x, text_y + (large and 116 or 91), text_width,
+        large and "center" or "left")
     if large then
         local summary, summary_color = synergy_summary(card)
         if summary_color == COLORS.brass then summary_color = COLORS.brass_dark end
         if summary_color == COLORS.restore then summary_color = COLORS.felt_mid end
         love.graphics.setFont(fonts.micro)
         set_color(summary_color, alpha)
-        love.graphics.printf(summary, text_x, y + height - 73, text_width, "left")
+        love.graphics.printf(string.format("%d RULES  /  %s",
+            comparison.rule_count or 0, summary),
+            text_x, y + height - 73, text_width, "left")
     end
     draw_tag_chips(card.tags, text_x, large and y + height - 48 or y + height - 30, text_width)
     draw_beads(rarity or "common", x + width - 16, y + 16, -1)
@@ -882,35 +926,203 @@ local function draw_pick_progress(x, y, width)
     end
 end
 
+local function draw_rule_mark(rule, x, y, size, paper_surface)
+    local fill = paper_surface and COLORS.brass_ink or COLORS.brass
+    local ink = paper_surface and COLORS.paper or COLORS.ink
+    set_color(COLORS.shadow, 0.30)
+    love.graphics.circle("fill", x + 2, y + 3, size / 2)
+    set_color(fill)
+    love.graphics.circle("fill", x, y, size / 2)
+    set_color(paper_surface and COLORS.paper_edge or COLORS.brass_light)
+    love.graphics.setLineWidth(2)
+    love.graphics.circle("line", x, y, size / 2 - 2)
+    love.graphics.setLineWidth(1)
+    love.graphics.setFont(size >= 52 and fonts.label or fonts.micro)
+    set_color(ink)
+    love.graphics.printf(rule and rule.icon or "RUL",
+        x - size / 2, y - (size >= 52 and 8 or 6), size, "center")
+end
+
+local function draw_exact_row(label, value, x, y, width, paper_surface)
+    love.graphics.setFont(fonts.micro)
+    set_color(paper_surface and COLORS.brass_ink or COLORS.brass)
+    love.graphics.print(string.upper(label), x, y)
+    local label_width = 76
+    set_color(paper_surface and COLORS.ink or COLORS.chalk)
+    love.graphics.printf(tostring(value or "NONE"), x + label_width, y,
+        width - label_width, "left")
+end
+
+local function inspection_effect_copy(rule)
+    return string.format(
+        "%s %s / %s / %s",
+        rule.verb_label or tostring(rule.verb):upper(),
+        rule.magnitude and rule.magnitude.label or "NONE",
+        tostring(rule.stat or "none"):upper():gsub("_", " "),
+        tostring(rule.mode or "set"):upper()
+    )
+end
+
+local function inspection_trigger_copy(rule)
+    local trigger = rule.trigger or {}
+    return string.format(
+        "%s / IF %s",
+        trigger.label or "NONE",
+        tostring(trigger.condition or "always"):upper():gsub("_", " ")
+    )
+end
+
+local function inspection_target_copy(rule)
+    local target = rule.target or {}
+    local copy = target.label or "NONE"
+    if target.relation then
+        copy = copy .. " / " .. tostring(target.relation):upper():gsub("_", " ")
+    end
+    return copy
+end
+
+local function draw_pressure_preview(pressure, x, y, width, paper_surface)
+    if not pressure then return end
+    love.graphics.setFont(fonts.micro)
+    set_color(paper_surface and COLORS.brass_ink or COLORS.brass)
+    love.graphics.print("SCOUT PRESSURE  /  "
+        .. string.upper(pressure.name or pressure.kind or "UNKNOWN"), x, y)
+    set_color(paper_surface and COLORS.ink or COLORS.muted)
+    draw_wrapped_limited(pressure.compact_copy, x, y + 18, width, 4, "left")
+end
+
+local function draw_draft_inspection_phone(card)
+    local inspection = card.rule_inspection
+    local rule = inspection and inspection.rule or {}
+    panel(16, 108, 358, 588, "paper", 14)
+    love.graphics.setFont(fonts.section)
+    set_color(COLORS.ink)
+    love.graphics.print(string.upper(card.name), 30, 124)
+    love.graphics.setFont(fonts.micro)
+    set_color(COLORS.brass_ink)
+    love.graphics.printf(string.format(
+        "%s  /  RULE %d OF %d",
+        string.upper(card.operation_verb or card.role or "CHOICE"),
+        inspection and inspection.index or 0,
+        inspection and inspection.count or 0
+    ), 190, 130, 168, "right")
+    love.graphics.setFont(fonts.meta)
+    set_color(COLORS.ink)
+    draw_wrapped_limited(card.operation_copy, 30, 160, 328, 3, "left")
+    set_color(COLORS.paper_edge)
+    love.graphics.rectangle("fill", 30, 214, 328, 2)
+    draw_rule_mark(rule, 54, 250, 44, true)
+    love.graphics.setFont(fonts.label)
+    set_color(COLORS.brass_ink)
+    love.graphics.print(rule.verb_label or "CANONICAL RULE", 86, 231)
+    love.graphics.setFont(fonts.micro)
+    set_color(COLORS.ink, 0.72)
+    love.graphics.printf(inspection and inspection.rule_set_id or "",
+        86, 252, 272, "left")
+    draw_exact_row("TRIGGER", inspection_trigger_copy(rule), 30, 290, 328, true)
+    draw_exact_row("TARGET", inspection_target_copy(rule), 30, 324, 328, true)
+    draw_exact_row("EFFECT", inspection_effect_copy(rule), 30, 358, 328, true)
+    draw_exact_row("LIMIT", rule.cadence and rule.cadence.label, 30, 392, 328, true)
+    draw_exact_row("DRAWBACK", inspection and inspection.drawback.label,
+        30, 426, 328, true)
+    love.graphics.setFont(fonts.micro)
+    set_color(COLORS.brass_ink)
+    love.graphics.print("GENERATED RULE", 30, 468)
+    set_color(COLORS.ink)
+    draw_wrapped_limited(rule.sentence, 30, 486, 328, 4, "left")
+    local summary = synergy_summary(card)
+    love.graphics.setFont(fonts.micro)
+    set_color(COLORS.felt_mid)
+    love.graphics.printf(summary, 30, 558, 328, "left")
+    local pressure = view.opponent.pressure and view.opponent.pressure[1]
+    draw_pressure_preview(pressure, 30, 580, 328, true)
+    draw_button("inspection_prev", "PREV", COLORS.brass)
+    draw_button("inspection_close", "CLOSE", COLORS.brass)
+    draw_button("inspection_next", "NEXT", COLORS.brass)
+end
+
+local function draw_draft_inspection_desktop(card)
+    local inspection = card.rule_inspection
+    local rule = inspection and inspection.rule or {}
+    panel(288, 96, 968, 568, "paper", 16)
+    love.graphics.setFont(fonts.display)
+    set_color(COLORS.ink)
+    love.graphics.print(string.upper(card.name), 320, 126)
+    love.graphics.setFont(fonts.label)
+    set_color(COLORS.brass_ink)
+    love.graphics.print(string.format(
+        "%s  /  %d CANONICAL RULES",
+        string.upper(card.operation_verb or card.role or "CHOICE"),
+        inspection and inspection.count or 0
+    ), 320, 172)
+    draw_rule_mark(rule, 378, 246, 76, true)
+    love.graphics.setFont(fonts.section)
+    set_color(COLORS.brass_ink)
+    love.graphics.print(rule.verb_label or "CANONICAL RULE", 438, 218)
+    love.graphics.setFont(fonts.micro)
+    set_color(COLORS.ink, 0.68)
+    love.graphics.printf(inspection and inspection.rule_set_id or "",
+        438, 250, 194, "left")
+    love.graphics.setFont(fonts.body)
+    set_color(COLORS.ink)
+    draw_wrapped_limited(card.operation_copy, 320, 314, 312, 5, "left")
+    local summary = synergy_summary(card)
+    love.graphics.setFont(fonts.label)
+    set_color(COLORS.felt_mid)
+    love.graphics.printf(summary, 320, 410, 312, "left")
+    draw_pressure_preview(
+        view.opponent.pressure and view.opponent.pressure[1],
+        320, 448, 312, true
+    )
+
+    set_color(COLORS.paper_edge)
+    love.graphics.rectangle("fill", 656, 124, 2, 496)
+    love.graphics.setFont(fonts.section)
+    set_color(COLORS.ink)
+    love.graphics.print(string.format(
+        "RULE %d OF %d  /  %s",
+        inspection and inspection.index or 0,
+        inspection and inspection.count or 0,
+        rule.verb_label or "RULE"
+    ), 692, 132)
+    draw_exact_row("TRIGGER", inspection_trigger_copy(rule), 692, 198, 516, true)
+    draw_exact_row("TARGET", inspection_target_copy(rule), 692, 244, 516, true)
+    draw_exact_row("EFFECT", inspection_effect_copy(rule), 692, 290, 516, true)
+    draw_exact_row("LIMIT", rule.cadence and rule.cadence.label, 692, 336, 516, true)
+    draw_exact_row("DRAWBACK", inspection and inspection.drawback.label,
+        692, 382, 516, true)
+    love.graphics.setFont(fonts.label)
+    set_color(COLORS.brass_ink)
+    love.graphics.print("GENERATED RULE", 692, 438)
+    love.graphics.setFont(fonts.body)
+    set_color(COLORS.ink)
+    draw_wrapped_limited(rule.sentence, 692, 468, 516, 5, "left")
+    draw_button("inspection_prev", "PREVIOUS", COLORS.brass)
+    draw_button("inspection_close", "CLOSE RULES", COLORS.brass)
+    draw_button("inspection_next", "NEXT", COLORS.brass)
+end
+
 local function draw_draft_phone()
     draw_chrome()
     draw_pick_progress(16, 72, 358)
-    for index, card in ipairs(view.draft.cards) do
-        local x, y, width, height = action_bounds(action_by_id(card.action_id))
-        draw_draft_card(card, x, y, width, height, false, index)
-    end
-    panel(16, 584, 358, 112, "felt", 12)
     if view.draft.inspected then
-        love.graphics.setFont(fonts.label)
-        set_color(COLORS.brass)
-        love.graphics.print(string.upper(view.draft.inspected.name)
-            .. "  /  CANONICAL CHOICE", 28, 594)
-        love.graphics.setFont(fonts.micro)
-        set_color(COLORS.chalk)
-        draw_wrapped_limited(canonical_choice_copy(view.draft.inspected),
-            28, 614, 334, 4, "left")
-        love.graphics.setFont(fonts.micro)
-        set_color(COLORS.restore)
-        draw_wrapped_limited(choice_cause_summary(view.draft.inspected),
-            28, 676, 334, 1, "left")
+        draw_draft_inspection_phone(view.draft.inspected)
     else
+        for index, card in ipairs(view.draft.cards) do
+            local x, y, width, height = action_bounds(action_by_id(card.action_id))
+            draw_draft_card(card, x, y, width, height, false, index)
+        end
+        panel(16, 584, 358, 112, "felt", 12)
         love.graphics.setFont(fonts.label)
         set_color(COLORS.brass)
         love.graphics.print("RIVAL SCOUT  /  " .. string.upper(view.opponent.name), 28, 594)
         love.graphics.setFont(fonts.micro)
         set_color(COLORS.opponent)
         love.graphics.print(scout_loadout_copy(view.opponent), 28, 614)
-        draw_scout_rows(view.draft.scout_tags, 28, 634, 334, 2)
+        draw_pressure_preview(
+            view.opponent.pressure and view.opponent.pressure[1],
+            28, 636, 334, false
+        )
     end
     if view.draft.inspected then
         draw_button("select:" .. view.draft.inspected.choice_id,
@@ -919,7 +1131,7 @@ local function draw_draft_phone()
     else
         love.graphics.setFont(fonts.meta)
         set_color(COLORS.muted)
-        love.graphics.printf("Tap a card for full rules and its response to the scout.",
+        love.graphics.printf("Tap a card for exact trigger, target, effect, limit, and drawback.",
             16, 722, 358, "center")
     end
     local selected_name = "CHOOSE AN OFFER"
@@ -946,8 +1158,11 @@ local function draw_draft_desktop()
     love.graphics.setFont(fonts.body)
     set_color(COLORS.muted)
     love.graphics.printf(view.opponent.description, 44, 200, 200, "left")
-    draw_tag_chips(view.draft.scout_tags, 44, 270, 200)
-    draw_scout_rows(view.draft.scout_tags, 44, 296, 200, 2)
+    draw_pressure_preview(
+        view.opponent.pressure and view.opponent.pressure[1],
+        44, 270, 200, false
+    )
+    draw_tag_chips(view.draft.scout_tags, 44, 354, 200)
     love.graphics.setFont(fonts.label)
     set_color(COLORS.chalk)
     love.graphics.print("YOUR COLLECTION", 44, 390)
@@ -981,23 +1196,27 @@ local function draw_draft_desktop()
             view.draft.progress.broken)
         or string.format("PICK %d OF %d",
             view.draft.progress.total + 1, view.draft.progress.required), 44, 624)
-    for index, card in ipairs(view.draft.cards) do
-        local x, y, width, height = action_bounds(action_by_id(card.action_id))
-        draw_draft_card(card, x, y, width, height, true, index)
+    if view.draft.inspected then
+        draw_draft_inspection_desktop(view.draft.inspected)
+    else
+        for index, card in ipairs(view.draft.cards) do
+            local x, y, width, height = action_bounds(action_by_id(card.action_id))
+            draw_draft_card(card, x, y, width, height, true, index)
+        end
     end
     panel(24, 688, 1232, 88, "walnut", 14)
     if view.draft.inspected then
         local summary, summary_color = synergy_summary(view.draft.inspected)
         love.graphics.setFont(fonts.micro)
         set_color(summary_color)
-        love.graphics.printf(summary, 44, 704, 690, "left")
+        love.graphics.printf("EXPANDED RULES OPEN  /  " .. summary, 44, 704, 690, "left")
         set_color(COLORS.restore)
         draw_wrapped_limited(choice_cause_summary(view.draft.inspected),
             318, 704, 416, 1, "right")
         love.graphics.setFont(fonts.micro)
         set_color(COLORS.muted)
-        draw_wrapped_limited(canonical_choice_copy(view.draft.inspected),
-            44, 724, 690, 3, "left")
+        draw_wrapped_limited(view.draft.inspected.operation_copy,
+            44, 724, 690, 2, "left")
         draw_button("select:" .. view.draft.inspected.choice_id,
             view.draft.selected_choice_id and "CHOICE SET" or "CHOOSE CARD", COLORS.brass)
     else
@@ -1097,7 +1316,12 @@ local function draw_setup_phone()
     ), 154, 81, 202, "right")
     love.graphics.setFont(fonts.micro)
     set_color(COLORS.muted)
-    love.graphics.printf(scout_mechanic_copy(view.opponent),
+    love.graphics.printf("PRESSURE / " .. string.upper(
+        view.opponent.pressure
+            and view.opponent.pressure[1]
+            and view.opponent.pressure[1].name
+            or scout_mechanic_copy(view.opponent)
+    ),
         154, 99, 202, "right")
     panel(16, 124, 358, 220, "felt", 12)
     love.graphics.setFont(fonts.micro)
@@ -1161,18 +1385,33 @@ local function draw_setup_phone()
         end
     end
     panel(16, 648, 358, 108, "felt", 10)
-    love.graphics.setFont(fonts.micro)
-    set_color(COLORS.brass)
-    love.graphics.print("BUILD SYNERGY  /  " .. tostring(active_setup_links()) .. " ACTIVE LINKS",
-        26, 658)
-    draw_tag_chips(view.setup.build_tags, 26, 676, 338)
-    local selected_title, selected_copy = selected_setup_copy()
-    love.graphics.setFont(fonts.label)
-    set_color(COLORS.chalk)
-    love.graphics.print(selected_title, 26, 704)
-    love.graphics.setFont(fonts.micro)
-    set_color(COLORS.muted)
-    love.graphics.printf(selected_copy, 26, 724, 338, "left")
+    local reward_visible = view.setup.recent_reward and not view.setup.selected_detail
+    if reward_visible then
+        love.graphics.setFont(fonts.label)
+        set_color(COLORS.restore)
+        love.graphics.print("REWARD APPLIED  /  REFIT LOCKED", 26, 658)
+        love.graphics.setFont(fonts.micro)
+        set_color(COLORS.chalk)
+        draw_wrapped_limited(view.setup.recent_reward.operation_copy,
+            26, 680, 338, 3, "left")
+        set_color(COLORS.brass)
+        love.graphics.printf("NEXT PRESSURE  /  "
+            .. string.upper(view.opponent.pressure[1].name),
+            26, 724, 338, "left")
+    else
+        love.graphics.setFont(fonts.micro)
+        set_color(COLORS.brass)
+        love.graphics.print("BUILD SYNERGY  /  " .. tostring(active_setup_links())
+            .. " ACTIVE LINKS", 26, 658)
+        draw_tag_chips(view.setup.build_tags, 26, 676, 338)
+        local selected_title, selected_copy = selected_setup_copy()
+        love.graphics.setFont(fonts.label)
+        set_color(COLORS.chalk)
+        love.graphics.print(selected_title, 26, 704)
+        love.graphics.setFont(fonts.micro)
+        set_color(COLORS.muted)
+        love.graphics.printf(selected_copy, 26, 724, 338, "left")
+    end
     love.graphics.setFont(fonts.micro)
     set_color(view.setup.valid and COLORS.restore or COLORS.muted)
     love.graphics.printf(setup_progress_text(), 26, 739, 338, "right")
@@ -1243,7 +1482,10 @@ local function draw_setup_desktop()
     set_color(COLORS.opponent)
     love.graphics.printf(scout_loadout_copy(view.opponent),
         650, 540, 270, "right")
-    draw_scout_rows(view.opponent.scout_tags, 650, 558, 270, 2)
+    draw_pressure_preview(
+        view.opponent.pressure and view.opponent.pressure[1],
+        650, 558, 270, false
+    )
     love.graphics.setFont(fonts.section)
     set_color(COLORS.brass)
     love.graphics.print("ORDERED BAG", 990, 116)
@@ -1276,11 +1518,19 @@ local function draw_setup_desktop()
     draw_sling(1044, 596, 0.8, setup_sling().name)
     panel(24, 688, 1232, 88, "walnut", 14)
     love.graphics.setFont(fonts.body)
-    set_color(view.setup.valid and COLORS.restore or COLORS.muted)
-    love.graphics.printf(view.setup.valid
-        and "Every mineral is seated. The ordered bag is committed."
-        or (setup_progress_text() .. "  /  seat every drafted brick to lock."),
-        48, 716, 900, "left")
+    set_color(view.setup.recent_reward and not view.setup.selected_detail
+        and COLORS.restore
+        or view.setup.valid and COLORS.restore
+        or COLORS.muted)
+    local footer_copy
+    if view.setup.recent_reward and not view.setup.selected_detail then
+        footer_copy = "REWARD APPLIED  /  " .. view.setup.recent_reward.operation_copy
+    else
+        footer_copy = view.setup.valid
+            and "Every mineral is seated. The ordered bag is committed."
+            or (setup_progress_text() .. "  /  seat every drafted brick to lock.")
+    end
+    love.graphics.printf(footer_copy, 48, 716, 900, "left")
     draw_button("lock_setup", "LOCK FORMATION", COLORS.player)
 end
 
@@ -1429,12 +1679,12 @@ end
 
 local function inspection_summary(inspected)
     if inspected.type == "brick" then
-        return string.format("%s BRICK  •  %s  •  %d%% INTEGRITY",
+        return string.format("%s / %s / %d%%",
             string.upper(inspected.family or ""),
             string.upper(inspected.mechanic or "BASE"),
             inspected.integrity or 0)
     end
-    return string.format("%s MARBLE  •  %d SHELL%s  •  %s",
+    return string.format("%s / %d SHELL%s / %s",
         string.upper(inspected.rarity or ""),
         inspected.shell_count or 0,
         inspected.shell_count == 1 and "" or "S",
@@ -1452,6 +1702,32 @@ local function inspection_copy(inspected)
         tostring(inspected.core or "sealed"),
         inspected.shell_integrity or 0,
         statuses)
+end
+
+local function callout_amount(callout)
+    if not callout or callout.magnitude == nil then return "NO MAGNITUDE" end
+    local value = type(callout.magnitude) == "boolean"
+        and (callout.magnitude and "TRUE" or "FALSE")
+        or tostring(callout.magnitude):upper():gsub("_", " ")
+    local unit = tostring(callout.unit or ""):upper():gsub("_", " ")
+    return unit == "" and value or (value .. " " .. unit)
+end
+
+local function short_drawback(drawback)
+    if not drawback or drawback.kind == "none" then return "NONE" end
+    local value = drawback.magnitude ~= nil and tostring(drawback.magnitude) or ""
+    return string.format("%s %s %s",
+        tostring(drawback.kind):upper(),
+        tostring(drawback.stat or ""):upper():gsub("_", " "),
+        value)
+end
+
+local function draw_spine_field(label, value, y)
+    love.graphics.setFont(fonts.micro)
+    set_color(COLORS.brass_ink)
+    love.graphics.printf(label, 560, y, 160, "center")
+    set_color(COLORS.ink)
+    love.graphics.printf(value or "NONE", 560, y + 14, 160, "center")
 end
 
 local function draw_battle_overlay(replay)
@@ -1476,27 +1752,53 @@ local function draw_battle_overlay(replay)
         love.graphics.printf("EXCHANGE", 564, 172, 152, "center")
         local inspected = not replay and battle.inspected or nil
         if inspected then
+            local inspection = inspected.rule_inspection or {}
+            local rule = inspection.rule or {}
             love.graphics.setFont(fonts.micro)
-            set_color(COLORS.brass_dark)
+            set_color(COLORS.brass_ink)
             love.graphics.printf("INSPECTED  /  " .. string.upper(inspected.owner_name),
                 560, 216, 160, "center")
             love.graphics.setFont(fonts.body)
             set_color(COLORS.ink)
-            love.graphics.printf(inspected.name, 560, 248, 160, "center")
+            love.graphics.printf(inspected.name, 560, 242, 160, "center")
             love.graphics.setFont(fonts.micro)
-            set_color(COLORS.brass_dark)
+            set_color(COLORS.ink, 0.64)
             love.graphics.printf(inspection_summary(inspected), 560, 294, 160, "center")
-            love.graphics.setFont(fonts.meta)
-            set_color(COLORS.ink, 0.76)
-            love.graphics.printf(inspection_copy(inspected), 560, 354, 160, "center")
+            draw_rule_mark(rule, 640, 342, 40, true)
             love.graphics.setFont(fonts.micro)
-            set_color(COLORS.ink, 0.50)
-            love.graphics.printf("CLICK ANOTHER PIECE TO INSPECT", 560, 560, 160, "center")
+            set_color(COLORS.brass_ink)
+            love.graphics.printf(string.format("%s  /  RULE %d OF %d",
+                rule.verb_label or "RULE",
+                inspection.index or 0,
+                inspection.count or 0), 560, 366, 160, "center")
+            draw_spine_field("TRIGGER",
+                rule.trigger and rule.trigger.label or "NONE", 392)
+            draw_spine_field("TARGET",
+                rule.target and rule.target.label or "NONE", 432)
+            draw_spine_field("EFFECT",
+                tostring(rule.verb_label or "NONE") .. " "
+                    .. tostring(rule.magnitude and rule.magnitude.label or "NONE"),
+                472)
+            draw_spine_field("LIMIT",
+                rule.cadence and rule.cadence.short_label or "NONE", 512)
+            draw_spine_field("DRAWBACK",
+                short_drawback(inspection.drawback), 552)
+            draw_button("inspection_prev", "PREV", COLORS.brass)
+            draw_button("inspection_next", "NEXT", COLORS.brass)
         else
-            love.graphics.setFont(fonts.body)
-            set_color(COLORS.ink)
-            love.graphics.printf(replay and view.subtitle or last_cue, 564, 236, 152, "center")
-            if not replay then
+            if not replay and last_rule_callout then
+                love.graphics.setFont(fonts.micro)
+                set_color(COLORS.brass_ink)
+                love.graphics.printf("LIVE MIDLINE", 560, 216, 160, "center")
+                set_color(COLORS.ink, 0.42)
+                love.graphics.printf("RULE CALLOUT BELOW", 560, 560, 160, "center")
+            else
+                love.graphics.setFont(fonts.body)
+                set_color(COLORS.ink)
+                love.graphics.printf(replay and view.subtitle or last_cue,
+                    564, 236, 152, "center")
+            end
+            if not replay and not last_rule_callout then
                 love.graphics.setFont(fonts.micro)
                 set_color(COLORS.ink, 0.50)
                 love.graphics.printf("CLICK A PIECE TO INSPECT", 560, 560, 160, "center")
@@ -1504,7 +1806,7 @@ local function draw_battle_overlay(replay)
         end
         love.graphics.setFont(fonts.micro)
         set_color(COLORS.ink, 0.62)
-        love.graphics.printf(string.format("TICK %06d", battle.tick or 0), 564, 604, 152, "center")
+        love.graphics.printf(string.format("TICK %06d", battle.tick or 0), 564, 640, 152, "center")
         panel(24, 688, 1232, 88, "walnut", 14)
         if replay then
             love.graphics.setFont(fonts.body)
@@ -1513,10 +1815,29 @@ local function draw_battle_overlay(replay)
             draw_button("replay_next", "NEXT FRAME", COLORS.brass)
             draw_button("replay_close", "RESULT", COLORS.player)
         else
-            love.graphics.setFont(fonts.body)
-            set_color(COLORS.muted)
-            love.graphics.printf("Click any marble or brick to inspect  /  outcomes stay automatic",
-                48, 719, 680, "left")
+            if last_rule_callout and not inspected then
+                draw_rule_mark(last_rule_callout, 70, 732, 38, false)
+                love.graphics.setFont(fonts.micro)
+                set_color(COLORS.brass)
+                love.graphics.print("CANONICAL TRIGGER  /  "
+                    .. string.upper(last_rule_callout.source), 102, 704)
+                love.graphics.setFont(fonts.meta)
+                set_color(COLORS.chalk)
+                love.graphics.printf(last_rule_callout.text, 102, 724, 620, "left")
+                love.graphics.setFont(fonts.micro)
+                set_color(COLORS.restore)
+                love.graphics.printf(string.format("%s %s  /  %s",
+                    last_rule_callout.verb_label,
+                    callout_amount(last_rule_callout),
+                    tostring(last_rule_callout.target):upper():gsub("_", " ")),
+                    102, 748, 620, "left")
+            else
+                love.graphics.setFont(fonts.body)
+                set_color(COLORS.muted)
+                love.graphics.printf(
+                    "Click any marble or brick to inspect  /  outcomes stay automatic",
+                    48, 719, 680, "left")
+            end
             draw_button("battle_pause", battle.view.paused and "RESUME" or "PAUSE")
             draw_button("battle_speed", tostring(battle.view.speed) .. "X")
             draw_button("battle_mute", battle.view.muted and "MUTED" or "SOUND ON")
@@ -1535,30 +1856,72 @@ local function draw_battle_overlay(replay)
             or inspected and string.format("INSPECTED  •  EXCHANGE %02d", battle.exchange or 0)
             or string.format("EXCHANGE %02d", battle.exchange or 0), 28, 340, 334, "center")
         if inspected then
+            local inspection = inspected.rule_inspection or {}
+            local rule = inspection.rule or {}
             love.graphics.setFont(fonts.body)
             set_color(COLORS.ink)
-            love.graphics.printf(inspected.name, 38, 376, 314, "center")
-            love.graphics.setFont(fonts.meta)
-            set_color(COLORS.brass_dark)
-            love.graphics.printf(string.upper(inspected.owner_name) .. "  /  "
-                .. inspection_summary(inspected), 38, 404, 314, "center")
+            love.graphics.printf(inspected.name, 92, 366, 206, "center")
+            draw_rule_mark(rule, 62, 402, 34, true)
             love.graphics.setFont(fonts.micro)
-            set_color(COLORS.ink, 0.72)
-            love.graphics.printf(inspection_copy(inspected), 38, 438, 314, "center")
-        else
-            love.graphics.setFont(fonts.body)
+            set_color(COLORS.brass_ink)
+            love.graphics.printf(string.format("%s  /  %d OF %d",
+                rule.verb_label or "RULE",
+                inspection.index or 0,
+                inspection.count or 0), 98, 390, 194, "left")
             set_color(COLORS.ink)
-            love.graphics.printf(replay and view.subtitle or last_cue, 38, 378, 314, "center")
-            if not replay then
+            love.graphics.printf("TRG " .. tostring(
+                rule.trigger and rule.trigger.short_label or "NONE"),
+                98, 403, 194, "left")
+            love.graphics.printf("TGT " .. tostring(
+                rule.target and rule.target.short_label or "NONE"),
+                98, 416, 194, "left")
+            love.graphics.printf(string.format("FX %s %s",
+                rule.verb_label or "NONE",
+                rule.magnitude and rule.magnitude.label or "NONE"),
+                98, 429, 194, "left")
+            love.graphics.printf("LIM "
+                .. tostring(rule.cadence and rule.cadence.short_label or "NONE"),
+                98, 442, 194, "left")
+            love.graphics.printf("DRAW " .. short_drawback(inspection.drawback),
+                98, 455, 194, "left")
+            draw_button("inspection_prev", "PREV", COLORS.brass)
+            draw_button("inspection_next", "NEXT", COLORS.brass)
+        else
+            if not replay and last_rule_callout then
+                draw_rule_mark(last_rule_callout, 62, 404, 42, true)
+                love.graphics.setFont(fonts.micro)
+                set_color(COLORS.brass_ink)
+                love.graphics.print("CANONICAL TRIGGER  /  "
+                    .. string.upper(last_rule_callout.source), 92, 374)
+                love.graphics.setFont(fonts.meta)
+                set_color(COLORS.ink)
+                love.graphics.printf(last_rule_callout.text, 92, 398, 260, "left")
+                love.graphics.setFont(fonts.micro)
+                set_color(COLORS.brass_ink)
+                love.graphics.printf(string.format("%s %s  /  %s",
+                    last_rule_callout.verb_label,
+                    callout_amount(last_rule_callout),
+                    tostring(last_rule_callout.target):upper():gsub("_", " ")),
+                    92, 452, 260, "left")
+            else
+                love.graphics.setFont(fonts.body)
+                set_color(COLORS.ink)
+                love.graphics.printf(replay and view.subtitle or last_cue,
+                    38, 378, 314, "center")
+            end
+            if not replay and not last_rule_callout then
                 love.graphics.setFont(fonts.micro)
                 set_color(COLORS.ink, 0.52)
-                love.graphics.printf("TAP A MARBLE OR BRICK TO INSPECT", 38, 430, 314, "center")
+                love.graphics.printf("TAP A PIECE FOR THE SAME RULE IDENTITY",
+                    38, 430, 314, "center")
             end
         end
-        love.graphics.setFont(fonts.micro)
-        set_color(COLORS.ink, 0.65)
-        love.graphics.printf(string.format("CANONICAL TICK %06d", battle.tick or 0),
-            28, inspected and 466 or 454, 334, "center")
+        if not inspected then
+            love.graphics.setFont(fonts.micro)
+            set_color(COLORS.ink, 0.65)
+            love.graphics.printf(string.format("CANONICAL TICK %06d", battle.tick or 0),
+                28, 466, 334, "center")
+        end
         if replay then
             draw_button("replay_next", "NEXT FRAME", COLORS.brass)
             draw_button("replay_close", "BACK TO RESULT", COLORS.player)
@@ -1580,6 +1943,9 @@ local function draw_battle_overlay(replay)
             draw_sling(52, 687, 0.45)
         end
     end
+    -- The world pass already renders pieces in the event spine. Keep the
+    -- canonical copy last so live physics stays visible without covering the
+    -- shared trigger/target/effect identity.
 end
 
 local function draw_battle()
@@ -1832,6 +2198,39 @@ local function handle_event(event)
         }
         last_cue = battle_presentation.event_text(event, names)
     end
+    if event.rule_id then
+        local operation = art.rule_operation[event.rule_operation] or {
+            label = tostring(event.rule_operation or "trigger"):upper():gsub("_", " "),
+            mark = tostring(event.rule_operation or "rule"):upper():sub(1, 3),
+        }
+        last_rule_callout = {
+            rule_id = event.rule_id,
+            source = event.rule_source or "Rule",
+            role = event.rule_role,
+            verb = event.rule_operation,
+            verb_label = operation.label,
+            icon = operation.mark,
+            target = event.rule_target,
+            magnitude = event.rule_magnitude,
+            unit = event.rule_unit,
+            text = battle_presentation.event_text(event, {
+                A = app.model.run.player.name,
+                B = app.model.run.opponent.name,
+                player = app.model.run.player.name,
+                opponent = app.model.run.opponent.name,
+            }),
+        }
+        print(string.format(
+            "CALLACK_RULE_CALLOUT rule=%s source=%s icon=%s verb=%s target=%s magnitude=%s unit=%s",
+            telemetry_value(last_rule_callout.rule_id),
+            telemetry_value(last_rule_callout.source),
+            telemetry_value(last_rule_callout.icon),
+            telemetry_value(last_rule_callout.verb),
+            telemetry_value(last_rule_callout.target),
+            telemetry_value(last_rule_callout.magnitude),
+            telemetry_value(last_rule_callout.unit)
+        ))
+    end
     spawn_event_particles(event)
     if not app.model.ui.reduced_motion
         and (event.type == "collision" or event.type == "brick_destroyed"
@@ -1913,7 +2312,8 @@ function love.load(args)
     local touch = has_argument(args, "--touch")
     local desktop = has_argument(args, "--desktop")
     local reduced_default = has_argument(args, "--reduced-motion")
-    if has_argument(args, "--verify-canonical") then
+    verification_mode = has_argument(args, "--verify-canonical")
+    if verification_mode then
         local runtime_verification = require("battle.runtime_verification")
         local evidence = runtime_verification.run()
         print(string.format(
@@ -1984,7 +2384,16 @@ end
 
 function love.update(dt)
     update_effects(dt)
-    run_loop.update(app, dt)
+    if verification_mode
+        and app.model.run.phase == "battle"
+        and not app.model.ui.paused then
+        -- Packaged verification must not depend on a headless host's WebGL
+        -- frame rate. This advances the same fixed-step engine in bounded
+        -- batches; ordinary builds keep the real-time accumulator path.
+        run_loop.advance(app, 16 * (app.model.ui.speed or 1))
+    else
+        run_loop.update(app, dt)
+    end
     for _, event in ipairs(run_loop.drain_events(app)) do handle_event(event) end
     refresh_view()
     capture_motion()
