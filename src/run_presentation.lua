@@ -3,6 +3,7 @@
 -- calculates combat outcomes.
 
 local draft_content = require("battle.content.draft")
+local shell_content = require("battle.content.shells")
 local util = require("battle.run_util")
 local battle_projection = require("presentation")
 local art = require("ui.art_tokens")
@@ -75,6 +76,15 @@ local function counted_tag_projection(tags)
     return out
 end
 
+local function synergy_projection(synergy)
+    synergy = synergy or {}
+    return {
+        matched = tag_projection(synergy.matched),
+        introduced = tag_projection(synergy.introduced),
+        counters = tag_projection(synergy.counters),
+    }
+end
+
 local function opponent_projection(opponent)
     return {
         recipe_id = opponent.recipe_id,
@@ -98,7 +108,7 @@ local function choice_card(choice, ui, index)
         draft_value = choice.draft_value,
         mechanics = util.deep_copy(choice.mechanics),
         tags = tag_projection(choice.tags),
-        synergy = util.deep_copy(choice.synergy),
+        synergy = synergy_projection(choice.synergy),
         details = util.deep_copy(choice.details),
         suggested_placement = choice.suggested_placement,
         art_id = choice.art_id,
@@ -180,6 +190,20 @@ local function map_marbles(marbles)
     return out
 end
 
+local function shell_projection(shell_ids)
+    local out = {}
+    for _, shell_id in ipairs(shell_ids or {}) do
+        local shell = shell_content.by_id[shell_id]
+        out[#out + 1] = shell and {
+            id = shell.id,
+            mineral = shell.mineral,
+            pattern = shell.pattern,
+            collision = shell.collision,
+        } or { id = shell_id }
+    end
+    return out
+end
+
 local function project_setup(presentation, state, ui)
     presentation.title = "Arrange your collection"
     presentation.subtitle = "Tap a brick, then a legal cell. Bag index 1 launches first."
@@ -202,6 +226,8 @@ local function project_setup(presentation, state, ui)
             id = state.player.sling.id,
             name = state.player.sling.name,
             archetype = state.player.sling.archetype,
+            mechanics = util.deep_copy(state.player.sling.mechanics),
+            tags = tag_projection(state.player.sling.tags),
         } or nil,
         selected_brick_uid = ui.selected_brick_uid,
         selected_marble_uid = ui.selected_marble_uid,
@@ -209,14 +235,18 @@ local function project_setup(presentation, state, ui)
         bricks = {},
         bag = {},
         insertion_slots = {},
+        selected_detail = nil,
     }
 
     for index, brick in ipairs(state.player.bricks) do
-        presentation.setup.bricks[#presentation.setup.bricks + 1] = {
+        local behaviour = art.behaviour[brick.behaviour] or art.behaviour.inert
+        local projected_brick = {
             uid = brick.uid,
             content_id = brick.content_id,
             name = brick.name,
             behaviour = brick.behaviour,
+            mechanic_label = behaviour.label,
+            mechanic_description = behaviour.description,
             family = brick.family,
             hp = brick.hp,
             max_hp = brick.max_hp,
@@ -226,6 +256,11 @@ local function project_setup(presentation, state, ui)
             cell = util.deep_copy(placement[brick.uid]),
             action_id = "brick:" .. brick.uid,
         }
+        presentation.setup.bricks[#presentation.setup.bricks + 1] = projected_brick
+        if projected_brick.selected then
+            presentation.setup.selected_detail = util.deep_copy(projected_brick)
+            presentation.setup.selected_detail.type = "brick"
+        end
         add_action(presentation, action(
             "brick:" .. brick.uid,
             "select_brick",
@@ -268,18 +303,26 @@ local function project_setup(presentation, state, ui)
 
     for order, uid in ipairs(state.setup.bag_order) do
         local marble = marble_by_uid[uid]
-        presentation.setup.bag[#presentation.setup.bag + 1] = {
+        local projected_marble = {
             order = order,
             uid = uid,
             content_id = marble.content_id,
             name = marble.name,
             role = marble.role,
             rarity = marble.rarity,
+            core = marble.core,
+            shells = shell_projection(marble.shells),
+            mechanics = util.deep_copy(marble.mechanics),
             tags = tag_projection(marble.tags),
             art_id = marble.art_id,
             selected = ui.selected_marble_uid == uid,
             action_id = "marble:" .. uid,
         }
+        presentation.setup.bag[#presentation.setup.bag + 1] = projected_marble
+        if projected_marble.selected then
+            presentation.setup.selected_detail = util.deep_copy(projected_marble)
+            presentation.setup.selected_detail.type = "marble"
+        end
         add_action(presentation, action(
             "marble:" .. uid,
             "select_marble",
@@ -298,7 +341,7 @@ local function project_setup(presentation, state, ui)
             "insert_selected",
             "Insert before " .. marble.name,
             slot.enabled,
-            { x = 16 + (order - 1) * 89, y = 584, width = 48, height = 48 }
+            { x = 16 + (order - 1) * 73, y = 584, width = 48, height = 48 }
         ))
     end
     presentation.setup.insertion_slots[#presentation.setup.insertion_slots + 1] = {
@@ -311,8 +354,18 @@ local function project_setup(presentation, state, ui)
         "insert_selected",
         "Move to bag tail",
         ui.selected_marble_uid ~= nil,
-        { x = 326, y = 584, width = 48, height = 48 }
+        { x = 308, y = 584, width = 48, height = 48 }
     ))
+    local adjacencies = {}
+    for _, adjacency in ipairs(state.setup.adjacencies or {}) do
+        adjacencies[#adjacencies + 1] = {
+            left_uid = adjacency.left_uid,
+            right_uid = adjacency.right_uid,
+            active_synergy = adjacency.active_synergy == true,
+            tags = tag_projection(adjacency.tags),
+        }
+    end
+    presentation.setup.adjacencies = adjacencies
     add_action(presentation, action(
         "lock_setup",
         "lock_setup",
@@ -359,6 +412,55 @@ local function projected_frame(previous_frame, current_frame, alpha)
     return projected
 end
 
+local function readable_title(value)
+    value = tostring(value or ""):gsub("_", " ")
+    return (value:gsub("(%a)([%w']*)", function(first, rest)
+        return string.upper(first) .. string.lower(rest)
+    end))
+end
+
+local function entity_inspection(frame, inspected_id)
+    if not frame or inspected_id == nil then return nil end
+    for _, entity in ipairs(frame.entities or {}) do
+        local id = entity.id or entity.uid
+        if id and tostring(id) == tostring(inspected_id) then
+            local side = frame.sides and frame.sides[entity.owner] or nil
+            local fallback_name = readable_title(entity.type)
+            if fallback_name == "" then fallback_name = "Unknown piece" end
+            local inspected = {
+                entity_id = tostring(id),
+                type = entity.type,
+                name = entity.name or fallback_name,
+                owner = entity.owner,
+                owner_name = side and side.name
+                    or (entity.owner and tostring(entity.owner) or "Arena"),
+            }
+            if entity.type == "brick" then
+                local behaviour = art.behaviour[entity.behaviour] or art.behaviour.inert
+                inspected.family = readable_title(entity.family)
+                inspected.mechanic = readable_title(entity.behaviour)
+                inspected.mechanic_description = behaviour.description
+                inspected.hp = entity.hp
+                inspected.max_hp = entity.max_hp
+                inspected.integrity = math.floor(clamp((entity.hp_ratio or 0) * 100, 0, 100) + 0.5)
+            elseif entity.type == "marble" then
+                inspected.rarity = readable_title(entity.rarity)
+                inspected.core = entity.core
+                inspected.shell_count = entity.shell_count or #(entity.shells or {})
+                inspected.shell_integrity =
+                    math.floor(clamp((entity.shell_ratio or 0) * 100, 0, 100) + 0.5)
+                inspected.state = readable_title(entity.state)
+                inspected.statuses = {}
+                for _, status in ipairs(util.sorted_keys(entity.statuses or {})) do
+                    inspected.statuses[#inspected.statuses + 1] = readable_title(status)
+                end
+            end
+            return inspected
+        end
+    end
+    return nil
+end
+
 local function project_battle(presentation, state, ui, previous_frame, current_frame, alpha)
     presentation.title = "Automatic battle"
     presentation.subtitle = "Both bags commit together. No reflex input changes combat."
@@ -375,6 +477,7 @@ local function project_battle(presentation, state, ui, previous_frame, current_f
         tick = frame and frame.tick or (state.battle and state.battle.tick or 0),
         frame = frame,
         inspected_entity_id = ui.inspected_entity_id,
+        inspected = entity_inspection(frame, ui.inspected_entity_id),
         view = {
             paused = ui.paused == true,
             speed = ui.speed or 1,
@@ -388,7 +491,7 @@ local function project_battle(presentation, state, ui, previous_frame, current_f
         or {}
     ) do
         local id = entity.id or entity.uid
-        if id then
+        if id and (entity.type ~= "brick" or entity.alive) then
             local bounds = {
                 x = 20 + ((index - 1) % 7) * 50,
                 y = 250,
@@ -396,8 +499,8 @@ local function project_battle(presentation, state, ui, previous_frame, current_f
                 height = 48,
             }
             if frame.arena and type(entity.x) == "number" and type(entity.y) == "number" then
-                bounds.x = clamp(16 + entity.x / frame.arena.width * 358 - 24, 16, 326)
-                bounds.y = clamp(86 + entity.y / frame.arena.height * 650 - 24, 86, 688)
+                bounds.x = clamp(24 + entity.x / frame.arena.width * 342 - 24, 16, 326)
+                bounds.y = clamp(88 + entity.y / frame.arena.height * 632 - 24, 72, 688)
             end
             add_action(presentation, action(
                 "entity:" .. tostring(id),

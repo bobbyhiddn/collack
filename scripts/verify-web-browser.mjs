@@ -56,6 +56,8 @@ const requestedAssets = [];
 const physicsSamples = [];
 const audioReady = new Set();
 const settingSamples = [];
+const guidanceSamples = [];
+const inspectionSamples = [];
 
 function observePage(page, label) {
   page.on("console", (message) => {
@@ -67,6 +69,12 @@ function observePage(page, label) {
     if (text.includes("CALLACK_AUDIO ready")) audioReady.add(label);
     if (text.includes("CALLACK_AUDIO unavailable")) {
       runtimeErrors.push(`${label}: procedural audio failed to initialize: ${text}`);
+    }
+    if (text.startsWith("CALLACK_GUIDANCE ")) {
+      guidanceSamples.push({ label, text });
+    }
+    if (text.startsWith("CALLACK_INSPECTION ")) {
+      inspectionSamples.push({ label, text });
     }
     const setting = text.match(
       /CALLACK_SETTING muted=(true|false) reduced_motion=(true|false) source=(\S+)/
@@ -142,6 +150,33 @@ async function mouseAction(runtime, x, y, action, timeout = 20_000) {
   await handled;
 }
 
+async function inspectAction(runtime, pointer, x, y, action, type, timeout = 20_000) {
+  const handled = waitForConsole(runtime.page, `CALLACK_ACTION ${action}`, timeout);
+  const inspected = waitForConsole(
+    runtime.page,
+    `CALLACK_INSPECTION type=${type}`,
+    timeout
+  );
+  if (pointer === "touch") {
+    await runtime.page.touchscreen.tap(runtime.bounds.x + x, runtime.bounds.y + y);
+  } else {
+    await runtime.page.mouse.click(runtime.bounds.x + x, runtime.bounds.y + y);
+  }
+  const detail = (await inspected).text();
+  await handled;
+  assert(/name=[^ ]+/.test(detail), `${type} inspection did not expose a readable name: ${detail}`);
+  if (type === "choice") {
+    assert(/mechanics=[1-9]\d*/.test(detail),
+      `choice inspection did not expose mechanics: ${detail}`);
+    assert(!detail.includes("counters=none links=none adds=none"),
+      `choice inspection did not expose meaningful synergy: ${detail}`);
+  } else {
+    assert(/owner=[^ ]+/.test(detail) && !detail.includes("mechanic=none"),
+      `entity inspection did not expose owner/mechanic detail: ${detail}`);
+  }
+  return detail;
+}
+
 async function screenshot(runtime, name, options = {}) {
   await runtime.page.screenshot({
     path: path.join(verificationRoot, name),
@@ -173,11 +208,20 @@ function digest(buffer) {
 
 async function completeMobile(runtime) {
   await screenshot(runtime, "phone-draft.png");
+  const setupGuidance = waitForConsole(runtime.page, "CALLACK_GUIDANCE screen=setup", 40_000);
   for (let offer = 0; offer < 9; offer += 1) {
-    await touchAction(runtime, 195, 180, "offer:");
+    if (offer === 0) {
+      await inspectAction(runtime, "touch", 195, 180, "offer:", "choice");
+      await screenshot(runtime, "phone-draft-inspection.png");
+    } else {
+      await touchAction(runtime, 195, 180, "offer:");
+    }
     await touchAction(runtime, 195, 732, "select:");
     await touchAction(runtime, 195, 800, "confirm_offer");
   }
+  const setupDetail = (await setupGuidance).text();
+  assert(/scout=(?!none)[^ ]+/.test(setupDetail) && /build=(?!none)[^ ]+/.test(setupDetail),
+    `phone setup guidance is not meaningful: ${setupDetail}`);
 
   await touchAction(runtime, 59, 548, "marble:");
   await touchAction(runtime, 350, 608, "slot:tail");
@@ -199,6 +243,8 @@ async function completeMobile(runtime) {
   const resultReached = waitForConsole(runtime.page, "CALLACK_ACTION phase_result", 120_000);
   await touchAction(runtime, 195, 800, "lock_setup");
   await battleReached;
+  await inspectAction(runtime, "touch", 59, 557, "entity:", "entity");
+  await screenshot(runtime, "phone-battle-inspection.png");
   await touchAction(runtime, 147, 796, "battle_speed");
   await waitForPhysics("phone", 2);
   const firstBattle = await runtime.canvas.screenshot();
@@ -230,14 +276,23 @@ async function completeMobile(runtime) {
 
 async function completeDesktop(runtime) {
   await screenshot(runtime, "desktop-draft.png");
+  const setupGuidance = waitForConsole(runtime.page, "CALLACK_GUIDANCE screen=setup", 40_000);
   for (let offer = 0; offer < 9; offer += 1) {
-    await mouseAction(runtime, 456, 348, "offer:");
+    if (offer === 0) {
+      await inspectAction(runtime, "mouse", 456, 348, "offer:", "choice");
+      await screenshot(runtime, "desktop-draft-inspection.png");
+    } else {
+      await mouseAction(runtime, 456, 348, "offer:");
+    }
     await mouseAction(runtime, 880, 732, "select:");
     await mouseAction(runtime, 1122, 732, "confirm_offer");
   }
+  const setupDetail = (await setupGuidance).text();
+  assert(/scout=(?!none)[^ ]+/.test(setupDetail) && /build=(?!none)[^ ]+/.test(setupDetail),
+    `desktop setup guidance is not meaningful: ${setupDetail}`);
 
-  await mouseAction(runtime, 1100, 156, "marble:");
-  await mouseAction(runtime, 1204, 588, "slot:tail");
+  await mouseAction(runtime, 1100, 190, "marble:");
+  await mouseAction(runtime, 1204, 556, "slot:tail");
   const bench = [
     [96, 180], [224, 180], [96, 292], [224, 292],
     [96, 404], [224, 404], [96, 516], [224, 516],
@@ -256,6 +311,8 @@ async function completeDesktop(runtime) {
   const resultReached = waitForConsole(runtime.page, "CALLACK_ACTION phase_result", 120_000);
   await mouseAction(runtime, 1122, 732, "lock_setup");
   await battleReached;
+  await inspectAction(runtime, "mouse", 930, 174, "entity:", "entity");
+  await screenshot(runtime, "desktop-battle-inspection.png");
   await mouseAction(runtime, 940, 732, "battle_speed");
   await waitForPhysics("desktop", 2);
   const firstBattle = await runtime.canvas.screenshot();
@@ -318,10 +375,24 @@ try {
     "browser did not request hashed WebAssembly");
   assert(audioReady.has("phone") && audioReady.has("desktop"),
     "procedural audio did not initialize in both browser layouts");
+  for (const label of ["phone", "desktop"]) {
+    const guidance = guidanceSamples.filter((sample) => sample.label === label);
+    assert(guidance.some((sample) =>
+      /screen=draft .*scout=(?!none)[^ ]+ .*mechanic_cards=3/.test(sample.text)),
+    `${label}: draft did not publish scout and mechanic guidance`);
+    assert(guidance.some((sample) =>
+      /screen=setup .*scout=(?!none)[^ ]+ .*build=(?!none)[^ ]+/.test(sample.text)),
+    `${label}: setup did not publish scout and build synergy guidance`);
+    const inspections = inspectionSamples.filter((sample) => sample.label === label);
+    assert(inspections.some((sample) => sample.text.includes("type=choice")),
+      `${label}: card inspection regression was not exercised`);
+    assert(inspections.some((sample) => sample.text.includes("type=entity")),
+      `${label}: entity inspection regression was not exercised`);
+  }
   assert(runtimeErrors.length === 0, runtimeErrors.join("\n"));
 
   console.log(
-    `[web-browser] OK: phone + desktop draft/setup/bag-order/battle/result/replay/new-run; `
+    `[web-browser] OK: phone + desktop scout/draft/setup/inspection/battle/result/replay/new-run; `
       + `${physicsSamples.length} canonical moving-physics samples; screenshots in dist/verification`
   );
 } finally {

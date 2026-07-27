@@ -125,8 +125,10 @@ function M.project_battle(current, previous, alpha)
         for _, brick in ipairs(side.bricks) do
             state.entities[#state.entities + 1] = {
                 type = "brick", owner = side_id, id = brick.body_id,
+                name = brick.name, content_id = brick.id,
                 art_id = "brick." .. brick.id, behaviour = brick.behaviour,
-                family = brick.family, x = brick.x, y = brick.y,
+                family = brick.family, hp = brick.hp, max_hp = brick.max_hp,
+                x = brick.x, y = brick.y,
                 width = brick.width, height = brick.height,
                 hp_ratio = brick.hp_ratio, alive = brick.alive,
             }
@@ -135,7 +137,11 @@ function M.project_battle(current, previous, alpha)
             if marble.alive and marble.render_x then
                 state.entities[#state.entities + 1] = {
                     type = "marble", owner = side_id, id = marble.body_id,
-                    uid = marble.uid, art_id = "marble." .. marble.rarity,
+                    uid = marble.uid, name = marble.name, rarity = marble.rarity,
+                    core = marble.core, core_id = marble.core_id,
+                    shell_count = #(marble.shells or {}),
+                    shells = copy(marble.shells),
+                    art_id = "marble." .. marble.rarity,
                     x = marble.render_x, y = marble.render_y,
                     radius = marble.radius, state = marble.state,
                     shell_ratio = marble.shell_ratio, statuses = copy(marble.statuses),
