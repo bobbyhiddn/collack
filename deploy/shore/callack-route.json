@@ -1,0 +1,13 @@
+{
+  "name": "collack",
+  "description": "Callack — deterministic two-player marble-and-brick auto-battler (LÖVE web build)",
+  "category": "Games",
+  "tags": [
+    "game",
+    "auto-battler",
+    "love2d"
+  ],
+  "mode": "proxy",
+  "port": 7912,
+  "health_endpoint": "/"
+}

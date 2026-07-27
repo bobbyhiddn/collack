@@ -104,6 +104,7 @@ REQUIRED_RUNTIME_FILES=(
     "ui/procedural_audio.lua"
     "battle/engine.lua"
     "battle/physics.lua"
+    "battle/runtime_verification.lua"
     "battle/checkpoints.lua"
     "battle/run.lua"
     "battle/draft.lua"

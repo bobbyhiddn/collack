@@ -175,6 +175,9 @@
       if (HAS_TOUCH) LOVE_ARGS.push("--touch");
       if (DESKTOP_LAYOUT) LOVE_ARGS.push("--desktop");
       if (REDUCED_MOTION) LOVE_ARGS.push("--reduced-motion");
+      if (new URLSearchParams(window.location.search).get("verify") === "canonical") {
+        LOVE_ARGS.push("--verify-canonical");
+      }
 
       var Module = {
         arguments: LOVE_ARGS,

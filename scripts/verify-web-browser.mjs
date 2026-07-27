@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { createReadStream } from "node:fs";
-import { mkdir, stat } from "node:fs/promises";
+import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { createHash } from "node:crypto";
 import path from "node:path";
@@ -58,6 +58,8 @@ const audioReady = new Set();
 const settingSamples = [];
 const guidanceSamples = [];
 const inspectionSamples = [];
+const canonicalSweeps = [];
+const canonicalBlowbacks = [];
 
 function observePage(page, label) {
   page.on("console", (message) => {
@@ -75,6 +77,37 @@ function observePage(page, label) {
     }
     if (text.startsWith("CALLACK_INSPECTION ")) {
       inspectionSamples.push({ label, text });
+    }
+    const sweep = text.match(
+      /CALLACK_CANONICAL_SWEEP kind=(\S+) speed=(-?\d+\.\d+) toi=(-?\d+\.\d+) reflected=(true|false) tunneled=(true|false) substeps=(\d+) iterations=(\d+)/
+    );
+    if (sweep) {
+      canonicalSweeps.push({
+        label,
+        kind: sweep[1],
+        speed: Number(sweep[2]),
+        toi: Number(sweep[3]),
+        reflected: sweep[4] === "true",
+        tunneled: sweep[5] === "true",
+        substeps: Number(sweep[6]),
+        iterations: Number(sweep[7]),
+      });
+    }
+    const blowback = text.match(
+      /CALLACK_CANONICAL_BLOWBACK allied=(true|false) enemy=(true|false) affected=(\d+) ally_dx=(-?\d+\.\d+) enemy_dx=(-?\d+\.\d+) substeps=(\d+) iterations=(\d+) tick=(\d+)/
+    );
+    if (blowback) {
+      canonicalBlowbacks.push({
+        label,
+        allied: blowback[1] === "true",
+        enemy: blowback[2] === "true",
+        affected: Number(blowback[3]),
+        allyDx: Number(blowback[4]),
+        enemyDx: Number(blowback[5]),
+        substeps: Number(blowback[6]),
+        iterations: Number(blowback[7]),
+        tick: Number(blowback[8]),
+      });
     }
     const setting = text.match(
       /CALLACK_SETTING muted=(true|false) reduced_motion=(true|false) source=(\S+)/
@@ -350,7 +383,13 @@ try {
     hasTouch: true,
     isMobile: true,
   });
-  const phone = await bootPage(phoneContext, url, { width: 390, height: 844 }, "phone");
+  const verificationUrl = `${url}?verify=canonical`;
+  const phone = await bootPage(
+    phoneContext,
+    verificationUrl,
+    { width: 390, height: 844 },
+    "phone"
+  );
   await completeMobile(phone);
   await phoneContext.close();
 
@@ -358,7 +397,12 @@ try {
     viewport: { width: 1280, height: 800 },
     deviceScaleFactor: 1,
   });
-  const desktop = await bootPage(desktopContext, url, { width: 1280, height: 800 }, "desktop");
+  const desktop = await bootPage(
+    desktopContext,
+    verificationUrl,
+    { width: 1280, height: 800 },
+    "desktop"
+  );
   await completeDesktop(desktop);
   await desktopContext.close();
 
@@ -388,12 +432,73 @@ try {
       `${label}: card inspection regression was not exercised`);
     assert(inspections.some((sample) => sample.text.includes("type=entity")),
       `${label}: entity inspection regression was not exercised`);
+    const sweep = canonicalSweeps.find((sample) => sample.label === label);
+    assert(sweep?.kind === "box_collision"
+      && sweep.speed >= 240
+      && sweep.toi > 0
+      && sweep.toi < 1 / 120
+      && sweep.reflected
+      && !sweep.tunneled
+      && sweep.substeps === 1
+      && sweep.iterations === 1,
+    `${label}: packaged canonical sweep evidence is incomplete: ${JSON.stringify(sweep)}`);
+    const blowback = canonicalBlowbacks.find((sample) => sample.label === label);
+    assert(blowback?.allied
+      && blowback.enemy
+      && blowback.affected >= 2
+      && blowback.allyDx < 0
+      && blowback.enemyDx > 0
+      && blowback.substeps === 1
+      && blowback.iterations >= 1,
+    `${label}: packaged allied/enemy blowback evidence is incomplete: ${JSON.stringify(blowback)}`);
   }
   assert(runtimeErrors.length === 0, runtimeErrors.join("\n"));
 
+  const motionEvidence = {};
+  for (const label of ["phone", "desktop"]) {
+    const samples = physicsSamples.filter((sample) => sample.label === label);
+    const first = samples[0];
+    const moved = samples.find((sample) =>
+      sample.tick !== first.tick
+        && (Math.abs(sample.x - first.x) > 0.01 || Math.abs(sample.y - first.y) > 0.01)
+    );
+    motionEvidence[label] = { first, moved };
+  }
+  const screenshotNames = [
+    "phone-draft-inspection.png",
+    "phone-setup.png",
+    "phone-battle-inspection.png",
+    "phone-battle.png",
+    "desktop-draft-inspection.png",
+    "desktop-setup.png",
+    "desktop-battle-inspection.png",
+    "desktop-battle.png",
+  ];
+  const screenshotHashes = {};
+  for (const name of screenshotNames) {
+    screenshotHashes[name] = digest(await readFile(path.join(verificationRoot, name)));
+  }
+  await writeFile(
+    path.join(verificationRoot, "packaged-runtime-evidence.json"),
+    `${JSON.stringify({
+      schemaVersion: 1,
+      viewports: {
+        phone: { width: 390, height: 844, touch: true },
+        desktop: { width: 1280, height: 800, touch: false },
+      },
+      canonicalSweeps,
+      canonicalBlowbacks,
+      motionEvidence,
+      guidance: guidanceSamples,
+      inspections: inspectionSamples,
+      screenshotHashes,
+    }, null, 2)}\n`
+  );
+
   console.log(
     `[web-browser] OK: phone + desktop scout/draft/setup/inspection/battle/result/replay/new-run; `
-      + `${physicsSamples.length} canonical moving-physics samples; screenshots in dist/verification`
+      + `${physicsSamples.length} canonical moving-physics samples; swept TOI + allied/enemy `
+      + `blowback; screenshots and evidence manifest in dist/verification`
   );
 } finally {
   if (browser) await browser.close();

@@ -1,0 +1,13 @@
+[Unit]
+Description=Periodically reconcile Callack's Shore route
+Documentation=file://%h/Code/ForgeProjects/collack-framework-spike/deploy/shore/README.md
+
+[Timer]
+OnBootSec=30s
+OnUnitActiveSec=1min
+AccuracySec=5s
+Persistent=true
+Unit=callack-route-reconcile.service
+
+[Install]
+WantedBy=timers.target

@@ -29,6 +29,7 @@ harness.run({
     require("battle.tests.test_event_protocol"),
     require("battle.tests.test_physics"),
     require("battle.tests.test_continuous_battle"),
+    require("battle.tests.test_runtime_verification"),
     require("battle.tests.test_determinism"),
     require("battle.tests.test_full_run_integration"),
     require("battle.tests.test_purity"),

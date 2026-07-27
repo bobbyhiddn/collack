@@ -1,0 +1,10 @@
+[Unit]
+Description=Reconcile Callack's Shore route
+Documentation=file://%h/Code/ForgeProjects/collack-framework-spike/deploy/shore/README.md
+Wants=shore.service callack-release.service
+After=shore.service callack-release.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/Code/ForgeProjects/collack-framework-spike
+ExecStart=/usr/bin/bash %h/Code/ForgeProjects/collack-framework-spike/deploy/shore/register-callack-route.sh

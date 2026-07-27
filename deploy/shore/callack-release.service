@@ -1,0 +1,37 @@
+[Unit]
+Description=Callack production Nginx release 40335c00
+Documentation=file://%h/Code/ForgeProjects/collack-framework-spike/deploy/shore/README.md
+Wants=network-online.target shore.service callack-route-reconcile.timer
+After=network-online.target shore.service
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=notify
+NotifyAccess=all
+WorkingDirectory=%h/Code/ForgeProjects/collack-framework-spike
+ExecStart=/usr/bin/podman run \
+    --rm \
+    --replace \
+    --name callack-release \
+    --pull=never \
+    --publish 127.0.0.1:7912:8080 \
+    --health-cmd "wget -q -O /dev/null http://127.0.0.1:8080/index.html" \
+    --health-interval=10s \
+    --health-retries=3 \
+    --health-start-period=5s \
+    --health-timeout=3s \
+    --health-on-failure=kill \
+    --sdnotify=healthy \
+    localhost/callack-release@sha256:38ca764b0e9e5447f346dfebba6f655b8bed27df0d4d20e75193acbe834185d1
+ExecStartPost=/usr/bin/bash %h/Code/ForgeProjects/collack-framework-spike/deploy/shore/register-callack-route.sh --force
+ExecStop=/usr/bin/podman stop --ignore --time 10 callack-release
+ExecStopPost=-/usr/bin/podman rm --force --ignore callack-release
+Restart=always
+RestartSec=2s
+TimeoutStartSec=2min
+TimeoutStopSec=30s
+KillMode=mixed
+
+[Install]
+WantedBy=default.target

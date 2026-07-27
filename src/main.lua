@@ -1739,6 +1739,31 @@ function love.load(args)
     local touch = has_argument(args, "--touch")
     local desktop = has_argument(args, "--desktop")
     local reduced_default = has_argument(args, "--reduced-motion")
+    if has_argument(args, "--verify-canonical") then
+        local runtime_verification = require("battle.runtime_verification")
+        local evidence = runtime_verification.run()
+        print(string.format(
+            "CALLACK_CANONICAL_SWEEP kind=%s speed=%.3f toi=%.6f reflected=%s tunneled=%s substeps=%d iterations=%d",
+            evidence.sweep.kind,
+            evidence.sweep.speed,
+            evidence.sweep.toi,
+            tostring(evidence.sweep.reflected),
+            tostring(evidence.sweep.tunneled),
+            evidence.sweep.substeps,
+            evidence.sweep.iterations
+        ))
+        print(string.format(
+            "CALLACK_CANONICAL_BLOWBACK allied=%s enemy=%s affected=%d ally_dx=%.6f enemy_dx=%.6f substeps=%d iterations=%d tick=%d",
+            tostring(evidence.blowback.allied),
+            tostring(evidence.blowback.enemy),
+            evidence.blowback.affected,
+            evidence.blowback.ally_dx,
+            evidence.blowback.enemy_dx,
+            evidence.blowback.substeps,
+            evidence.blowback.iterations,
+            evidence.blowback.tick
+        ))
+    end
     if not touch and not desktop and love.system.getOS() ~= "Web" then
         local desktop_width, desktop_height = love.window.getDesktopDimensions()
         desktop = desktop_width >= 1024 and desktop_width / desktop_height >= 1.15
