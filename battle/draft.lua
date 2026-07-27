@@ -9,6 +9,7 @@ local slings = require("battle.content.slings")
 local cores = require("battle.content.cores")
 local shells = require("battle.content.shells")
 local bricks = require("battle.content.bricks")
+local rule_ast = require("battle.rule_ast")
 local util = require("battle.run_util")
 
 local M = {}
@@ -262,6 +263,11 @@ local function choice_from_item(item, category, current, scouts)
         rarity = item.rarity,
         draft_value = item.draft_value,
         mechanics = util.deep_copy(item.mechanics),
+        compact_copy = item.compact_copy,
+        inspection_copy = util.deep_copy(item.inspection_copy),
+        rule_set = util.deep_copy(item.rule_set),
+        compatibility = util.deep_copy(item.compatibility),
+        balance = util.deep_copy(item.balance),
         tags = util.deep_copy(item.tags),
         tag_metadata = tag_metadata(item.tags),
         synergy = {
@@ -326,6 +332,11 @@ function M.instantiate_sling(choice)
         if out[key] == nil then out[key] = util.deep_copy(value) end
     end
     out.content_id = item.id
+    out.rule_set = util.deep_copy(item.rule_set)
+    out.compact_copy = item.compact_copy
+    out.inspection_copy = util.deep_copy(item.inspection_copy)
+    out.balance = util.deep_copy(item.balance)
+    out.compatibility = util.deep_copy(item.compatibility)
     return out
 end
 
@@ -342,6 +353,11 @@ function M.instantiate_marble(choice, index, owner)
         shells = util.deep_copy(item.shells),
         draft_value = item.draft_value,
         mechanics = util.deep_copy(item.mechanics),
+        compact_copy = item.compact_copy,
+        inspection_copy = util.deep_copy(item.inspection_copy),
+        rule_set = util.deep_copy(item.rule_set),
+        compatibility = util.deep_copy(item.compatibility),
+        balance = util.deep_copy(item.balance),
         tags = util.deep_copy(item.tags),
         art_id = item.art_id,
     }
@@ -364,6 +380,12 @@ function M.instantiate_kit(choice, first_brick_index, owner)
             max_hp = definition.hp,
             tags = util.deep_copy(item.tags),
             art_id = "brick_" .. definition.id,
+            mechanics = rule_ast.compact_lines(definition.rule_set, 1),
+            compact_copy = definition.compact_copy,
+            inspection_copy = util.deep_copy(definition.inspection_copy),
+            rule_set = util.deep_copy(definition.rule_set),
+            compatibility = util.deep_copy(definition.rule_set.compatibility),
+            balance = util.deep_copy(definition.balance),
         }
     end
     return {
@@ -372,6 +394,11 @@ function M.instantiate_kit(choice, first_brick_index, owner)
         role = item.role,
         tags = util.deep_copy(item.tags),
         mechanics = util.deep_copy(item.mechanics),
+        compact_copy = item.compact_copy,
+        inspection_copy = util.deep_copy(item.inspection_copy),
+        rule_set = util.deep_copy(item.rule_set),
+        compatibility = util.deep_copy(item.compatibility),
+        balance = util.deep_copy(item.balance),
         suggested_placement = item.suggested_placement,
         draft_value = item.draft_value,
         art_id = item.art_id,
@@ -386,6 +413,8 @@ function M.catalog_summary()
         brick_kits = #catalog.BRICK_KITS,
         brick_archetypes = #bricks.list,
         tags = #util.sorted_keys(catalog.TAGS),
+        comprehension_pool = catalog.COMPREHENSION_POOL_SIZE,
+        legacy_marbles = #catalog.LEGACY_MARBLES,
     }
 end
 

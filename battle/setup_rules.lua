@@ -2,6 +2,10 @@
 
 local contract = require("battle.vslice_contract")
 local util = require("battle.run_util")
+local rule_ast = require("battle.rule_ast")
+local draft_content = require("battle.content.draft")
+local brick_content = require("battle.content.bricks")
+local sling_content = require("battle.content.slings")
 
 local M = {}
 
@@ -28,6 +32,14 @@ local function contract_shape(loadout)
     }
 end
 
+local function same_rule_set(left, right)
+    local left_valid = left and rule_ast.validate(left)
+    local right_valid = right and rule_ast.validate(right)
+    return left_valid == true
+        and right_valid == true
+        and rule_ast.canonical(left) == rule_ast.canonical(right)
+end
+
 function M.validate(loadout)
     local errors = {}
     if type(loadout) ~= "table" then
@@ -39,12 +51,52 @@ function M.validate(loadout)
         errors[#errors + 1] = error_item("contract_invalid", message, "setup")
     end
 
+    local canonical_rules = {}
+    local sling_id = loadout.sling_id or (loadout.sling and loadout.sling.id)
+    local sling_definition = sling_content.by_id[sling_id]
+    local sling_rules = loadout.sling and loadout.sling.rule_set
+        or (sling_definition and sling_definition.rule_set)
+    if not sling_definition or not sling_rules then
+        errors[#errors + 1] = error_item(
+            "sling_rules_missing",
+            "The drafted sling needs a known canonical rule set.",
+            "sling"
+        )
+    else
+        canonical_rules[#canonical_rules + 1] = sling_rules
+        if not same_rule_set(sling_rules, sling_definition.rule_set) then
+            errors[#errors + 1] = error_item(
+                "sling_rules_mismatch",
+                "The drafted sling rules do not match its content identity.",
+                "sling"
+            )
+        end
+    end
+
     local marble_ids = {}
     for _, marble in ipairs(loadout.marbles or {}) do
         if marble.content_id == nil then
             errors[#errors + 1] = error_item(
                 "marble_content_missing",
                 "Every drafted marble needs a content identity.",
+                "marbles"
+            )
+        end
+        local definition = draft_content.marble_by_id[marble.content_id]
+        local rules = marble.rule_set or (definition and definition.rule_set)
+        if definition and rules then
+            canonical_rules[#canonical_rules + 1] = rules
+            if not same_rule_set(rules, definition.rule_set) then
+                errors[#errors + 1] = error_item(
+                    "marble_rules_mismatch",
+                    "A drafted marble's rules do not match its content identity.",
+                    "marbles"
+                )
+            end
+        else
+            errors[#errors + 1] = error_item(
+                "marble_rules_missing",
+                "Every drafted marble needs canonical rules.",
                 "marbles"
             )
         end
@@ -60,7 +112,36 @@ function M.validate(loadout)
                 "bricks"
             )
         end
+        local definition = brick_content.by_id[brick.content_id]
+        local rules = brick.rule_set or (definition and definition.rule_set)
+        if definition and rules then
+            canonical_rules[#canonical_rules + 1] = rules
+            if not same_rule_set(rules, definition.rule_set) then
+                errors[#errors + 1] = error_item(
+                    "brick_rules_mismatch",
+                    "A drafted brick's rules do not match its content identity.",
+                    "bricks"
+                )
+            end
+        else
+            errors[#errors + 1] = error_item(
+                "brick_rules_missing",
+                "Every drafted brick needs canonical rules.",
+                "bricks"
+            )
+        end
         brick_ids[brick.uid] = true
+    end
+
+    local compatible, compatibility_errors = rule_ast.validate_collection(canonical_rules)
+    if not compatible then
+        for _, message in ipairs(compatibility_errors) do
+            errors[#errors + 1] = error_item(
+                "rules_incompatible",
+                message,
+                "loadout"
+            )
+        end
     end
 
     for _, uid in ipairs(loadout.bag_order or {}) do

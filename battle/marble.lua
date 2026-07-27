@@ -104,6 +104,7 @@ function M.build(def, sling, owner_id)
 
     return {
         uid = def.uid ~= nil and def.uid or alloc_uid(),
+        content_id = def.content_id,
         name = def.name,
         rarity = def.rarity,
         owner = owner_id,
@@ -123,6 +124,10 @@ function M.build(def, sling, owner_id)
         precision = sling.precision == true,
         effect_power = sling.effect_power or 0,
         sling_id = sling.id,
+        rule_set = def.rule_set,
+        compact_copy = def.compact_copy,
+        inspection_copy = def.inspection_copy,
+        balance = def.balance,
         lane = nil,
         statuses = {},
         state = "ready", -- ready | flying | destroyed

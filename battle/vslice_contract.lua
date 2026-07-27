@@ -2,6 +2,8 @@
 -- slice. Draft/setup work and the continuous battle import these values rather
 -- than silently choosing different counts, phases, timing, or seed coupling.
 
+local rule_ast = require("battle.rule_ast")
+
 local M = {}
 
 M.VERSION = 1
@@ -111,6 +113,13 @@ function M.validate_offer(offer)
         end
         if sequence_length(choice.tags) == 0 then
             return fail("every choice needs synergy tags")
+        end
+        local rules_valid, rule_errors = rule_ast.validate(choice.rule_set)
+        if not rules_valid then
+            return fail("choice rule_set is invalid: " .. tostring(rule_errors[1]))
+        end
+        if choice.compact_copy ~= rule_ast.compact(choice.rule_set) then
+            return fail("choice compact copy must derive from rule_set")
         end
         if offer.category == "brick_kit"
             and sequence_length(choice.content_ids) ~= M.DRAFT.BRICKS_PER_KIT then

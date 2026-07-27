@@ -165,71 +165,54 @@ M.rarity = {
 M.behaviour = {
     inert = {
         family = "basic", label = "BASE", sigil = "centre_dot",
-        description = "A sturdy body with no triggered effect.",
     },
     absorb = {
         family = "defensive", label = "ABS", sigil = "inward_brackets",
-        description = "Prevents one impact damage and wears the striking shell.",
     },
     reflect = {
         family = "defensive", label = "REF", sigil = "opposed_chevrons",
-        description = "Returns a surviving impact along a stronger rebound.",
     },
     regenerate = {
         family = "defensive", label = "REG", sigil = "broken_ring_leaf",
-        description = "Repairs one integrity after surviving a hit.",
     },
     fortify = {
         family = "defensive", label = "FORT", sigil = "three_block_wall",
-        description = "Protects orthogonally adjacent bricks from one damage.",
     },
     poison = {
         family = "effect", label = "PSN", sigil = "droplet_dot",
-        description = "Poisons the striking marble for later shell wear.",
     },
     freeze = {
         family = "effect", label = "FRZ", sigil = "six_spoke_flake",
-        description = "Freezes and slows the striking marble.",
     },
     magnetic = {
         family = "effect", label = "MAG", sigil = "horseshoe",
-        description = "Pulls nearby moving marbles toward its field.",
     },
     shatter = {
         family = "effect", label = "SHT", sigil = "broken_diamond",
-        description = "Deals two extra wear to the striking shell.",
     },
     chain = {
         family = "utility", label = "CHN", sigil = "linked_ovals",
-        description = "Damages adjacent bricks when it is destroyed.",
     },
     vault = {
         family = "utility", label = "VLT", sigil = "stone_arch",
-        description = "Adds forward momentum after contact.",
     },
     splice = {
         family = "utility", label = "SPL", sigil = "branch_y",
-        description = "Splashes one damage to adjacent bricks on every hit.",
     },
     dummy = {
         family = "utility", label = "DMY", sigil = "crosshair_x",
-        description = "Makes contact without wearing the striking shell.",
     },
     aegis = {
         family = "rare", label = "AEG", sigil = "pointed_shield",
-        description = "Negates its first damaging collision.",
     },
     void = {
         family = "rare", label = "VOID", sigil = "hollow_disc",
-        description = "Breaks the current shell after it deals damage.",
     },
     mirror = {
         family = "rare", label = "MIR", sigil = "split_vertical",
-        description = "Rebounds the marble and wears its shell.",
     },
     temporal = {
         family = "rare", label = "TMP", sigil = "hourglass",
-        description = "Rewinds damage when it survives the collision.",
     },
 }
 

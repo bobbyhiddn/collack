@@ -19,6 +19,12 @@ package.path = table.concat({
 local harness = require("battle.tests.harness")
 
 harness.run({
+    require("battle.tests.test_rule_schema"),
+    require("battle.tests.test_rule_copy"),
+    require("battle.tests.test_rule_execution"),
+    require("battle.tests.test_rule_attribution"),
+    require("battle.tests.test_rule_compatibility"),
+    require("battle.tests.test_rule_migration"),
     require("battle.tests.test_vslice_contract"),
     require("battle.tests.test_draft_loop"),
     require("battle.tests.test_opponent_loop"),

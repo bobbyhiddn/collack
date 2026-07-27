@@ -3,6 +3,7 @@
 -- calculates combat outcomes.
 
 local draft_content = require("battle.content.draft")
+local brick_content = require("battle.content.bricks")
 local shell_content = require("battle.content.shells")
 local util = require("battle.run_util")
 local battle_projection = require("presentation")
@@ -107,6 +108,11 @@ local function choice_card(choice, ui, index)
         rarity = choice.rarity,
         draft_value = choice.draft_value,
         mechanics = util.deep_copy(choice.mechanics),
+        compact_copy = choice.compact_copy,
+        inspection_copy = util.deep_copy(choice.inspection_copy),
+        rule_set = util.deep_copy(choice.rule_set),
+        compatibility = util.deep_copy(choice.compatibility),
+        balance = util.deep_copy(choice.balance),
         tags = tag_projection(choice.tags),
         synergy = synergy_projection(choice.synergy),
         details = util.deep_copy(choice.details),
@@ -227,6 +233,11 @@ local function project_setup(presentation, state, ui)
             name = state.player.sling.name,
             archetype = state.player.sling.archetype,
             mechanics = util.deep_copy(state.player.sling.mechanics),
+            compact_copy = state.player.sling.compact_copy,
+            inspection_copy = util.deep_copy(state.player.sling.inspection_copy),
+            rule_set = util.deep_copy(state.player.sling.rule_set),
+            compatibility = util.deep_copy(state.player.sling.compatibility),
+            balance = util.deep_copy(state.player.sling.balance),
             tags = tag_projection(state.player.sling.tags),
         } or nil,
         selected_brick_uid = ui.selected_brick_uid,
@@ -240,13 +251,25 @@ local function project_setup(presentation, state, ui)
 
     for index, brick in ipairs(state.player.bricks) do
         local behaviour = art.behaviour[brick.behaviour] or art.behaviour.inert
+        local definition = brick_content.by_id[brick.content_id]
         local projected_brick = {
             uid = brick.uid,
             content_id = brick.content_id,
             name = brick.name,
             behaviour = brick.behaviour,
             mechanic_label = behaviour.label,
-            mechanic_description = behaviour.description,
+            mechanic_description = brick.compact_copy
+                or (definition and definition.compact_copy)
+                or "",
+            inspection_copy = util.deep_copy(
+                brick.inspection_copy or (definition and definition.inspection_copy)
+            ),
+            rule_set = util.deep_copy(brick.rule_set or (definition and definition.rule_set)),
+            compatibility = util.deep_copy(
+                brick.compatibility
+                    or (definition and definition.rule_set.compatibility)
+            ),
+            balance = util.deep_copy(brick.balance or (definition and definition.balance)),
             family = brick.family,
             hp = brick.hp,
             max_hp = brick.max_hp,
@@ -313,6 +336,11 @@ local function project_setup(presentation, state, ui)
             core = marble.core,
             shells = shell_projection(marble.shells),
             mechanics = util.deep_copy(marble.mechanics),
+            compact_copy = marble.compact_copy,
+            inspection_copy = util.deep_copy(marble.inspection_copy),
+            rule_set = util.deep_copy(marble.rule_set),
+            compatibility = util.deep_copy(marble.compatibility),
+            balance = util.deep_copy(marble.balance),
             tags = tag_projection(marble.tags),
             art_id = marble.art_id,
             selected = ui.selected_marble_uid == uid,
@@ -436,14 +464,20 @@ local function entity_inspection(frame, inspected_id)
                     or (entity.owner and tostring(entity.owner) or "Arena"),
             }
             if entity.type == "brick" then
-                local behaviour = art.behaviour[entity.behaviour] or art.behaviour.inert
+                local definition = brick_content.by_id[entity.content_id]
                 inspected.family = readable_title(entity.family)
                 inspected.mechanic = readable_title(entity.behaviour)
-                inspected.mechanic_description = behaviour.description
+                inspected.mechanic_description = definition and definition.compact_copy or ""
+                inspected.inspection_copy = definition
+                    and util.deep_copy(definition.inspection_copy)
+                    or nil
+                inspected.rule_set = definition and util.deep_copy(definition.rule_set) or nil
+                inspected.balance = definition and util.deep_copy(definition.balance) or nil
                 inspected.hp = entity.hp
                 inspected.max_hp = entity.max_hp
                 inspected.integrity = math.floor(clamp((entity.hp_ratio or 0) * 100, 0, 100) + 0.5)
             elseif entity.type == "marble" then
+                local definition = draft_content.marble_by_id[entity.content_id]
                 inspected.rarity = readable_title(entity.rarity)
                 inspected.core = entity.core
                 inspected.shell_count = entity.shell_count or #(entity.shells or {})
@@ -454,6 +488,12 @@ local function entity_inspection(frame, inspected_id)
                 for _, status in ipairs(util.sorted_keys(entity.statuses or {})) do
                     inspected.statuses[#inspected.statuses + 1] = readable_title(status)
                 end
+                inspected.mechanic_description = definition and definition.compact_copy or ""
+                inspected.inspection_copy = definition
+                    and util.deep_copy(definition.inspection_copy)
+                    or nil
+                inspected.rule_set = definition and util.deep_copy(definition.rule_set) or nil
+                inspected.balance = definition and util.deep_copy(definition.balance) or nil
             end
             return inspected
         end

@@ -108,6 +108,8 @@ REQUIRED_RUNTIME_FILES=(
     "battle/checkpoints.lua"
     "battle/run.lua"
     "battle/draft.lua"
+    "battle/rule_ast.lua"
+    "battle/content/rules.lua"
     "battle/opponent.lua"
     "battle/setup.lua"
     "battle/setup_rules.lua"
