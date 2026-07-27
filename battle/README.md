@@ -43,9 +43,13 @@ the same implementation. They do not implement a second rules path.
 
 The lower-level `battle.physics` API supplies `new`, `add_body`, `add_box`,
 `add_field`, `step`, `apply_impulse`, `apply_radial_impulse`, `snapshot`,
-`drain_events`, and `is_settled`. Its step rejects variable `dt`. Adaptive
-microsteps bound travel to a fraction of the smallest active radius after
-maximum-speed clamping, preventing fast circles from crossing thin colliders.
+`drain_events`, and `is_settled`. Its step rejects variable `dt`. Within each
+authoritative tick, exact swept time-of-impact queries advance all bodies to the
+earliest circle/wall, circle/AABB face or rounded-corner, or relative
+circle/circle contact. The solver resolves that contact and continues through
+the tick under a deterministic 128-collision bound. If unsatisfiable geometry
+exhausts the bound, it stops the remaining motion conservatively and exposes
+`collision_iteration_limit` audit/snapshot telemetry instead of tunnelling.
 
 ## Battle model
 
@@ -55,8 +59,9 @@ They have position, velocity, radius, mass, restitution, shell state, owner,
 and statuses. Formation cells become static AABBs. Arena walls, every active or
 blown marble, magnetic/status fields, and release fields occupy the same world.
 
-Stable body IDs determine contact order. Circle/wall, circle/AABB, and
-circle/circle contacts resolve penetration and impulse response. Sling
+Stable body IDs break simultaneous-contact ties. Circle/wall, circle/AABB, and
+circle/circle contacts resolve overlap recovery and time-of-impact impulse
+response. Sling
 momentum changes launch speed and mass, core trajectory changes launch angle,
 and ricochet/reflect change physical rebound. Poison, freeze, and magnetism
 advance in fixed ticks.
