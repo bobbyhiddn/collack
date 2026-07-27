@@ -89,6 +89,7 @@ end
 local function opponent_projection(opponent)
     return {
         recipe_id = opponent.recipe_id,
+        encounter_index = opponent.encounter_index,
         name = opponent.name,
         description = opponent.description,
         scout_tags = tag_projection(opponent.scout_tags),
@@ -96,6 +97,8 @@ local function opponent_projection(opponent)
         marble_count = #(opponent.marbles or {}),
         brick_count = #(opponent.bricks or {}),
         art_id = "opponent_" .. opponent.recipe_id,
+        canonical_scout = util.deep_copy(opponent.canonical_scout),
+        pool_items = util.deep_copy(opponent.pool_items),
     }
 end
 
@@ -103,6 +106,7 @@ local function choice_card(choice, ui, index)
     return {
         choice_id = choice.choice_id,
         content_id = choice.content_id,
+        category = choice.category,
         name = choice.name,
         role = choice.role,
         rarity = choice.rarity,
@@ -118,6 +122,10 @@ local function choice_card(choice, ui, index)
         details = util.deep_copy(choice.details),
         suggested_placement = choice.suggested_placement,
         art_id = choice.art_id,
+        operation = util.deep_copy(choice.operation),
+        operation_verb = choice.operation_verb,
+        operation_copy = choice.operation_copy,
+        causal_attribution = util.deep_copy(choice.causal_attribution),
         inspected = ui.inspected_choice_id == choice.choice_id,
         selected = ui.selected_choice_id == choice.choice_id,
         action_id = "offer:" .. choice.choice_id,
@@ -127,26 +135,62 @@ end
 
 local function project_draft(presentation, state, ui)
     local offer = state.draft.offer
-    presentation.title = "Choose your " ..
-        (offer.category == "brick_kit" and "brick kit" or offer.category)
-    presentation.subtitle = string.format(
-        "Offer %d of %d · %s %d",
-        state.draft.offer_index,
-        1 + 4 + 4,
-        offer.category == "brick_kit" and "kit" or offer.category,
-        offer.round
-    )
-    presentation.opponent = opponent_projection(state.opponent)
+    local short = state.mode == "comprehension_first_three_fight"
+    if short then
+        presentation.title = string.format("Refit after fight %d", state.fight.index)
+        presentation.subtitle = string.format(
+            "Choose one change, then set up for %s.",
+            offer.next_encounter.name
+        )
+        presentation.opponent = {
+            recipe_id = offer.next_encounter.recipe_id,
+            encounter_index = offer.next_encounter.index,
+            name = offer.next_encounter.name,
+            description = offer.next_encounter.description,
+            scout_tags = tag_projection(offer.scout_tags),
+            sling = offer.next_encounter.canonical_scout
+                and offer.next_encounter.canonical_scout.sling.name
+                or nil,
+            marble_count = offer.next_encounter.marble_count,
+            brick_count = offer.next_encounter.brick_count,
+            art_id = "opponent_" .. tostring(offer.next_encounter.recipe_id),
+            canonical_scout = util.deep_copy(offer.next_encounter.canonical_scout),
+        }
+    else
+        presentation.title = "Choose your " ..
+            (offer.category == "brick_kit" and "brick kit" or offer.category)
+        presentation.subtitle = string.format(
+            "Offer %d of %d · %s %d",
+            state.draft.offer_index,
+            1 + 4 + 4,
+            offer.category == "brick_kit" and "kit" or offer.category,
+            offer.round
+        )
+        presentation.opponent = opponent_projection(state.opponent)
+    end
     presentation.draft = {
         offer_id = offer.offer_id,
         category = offer.category,
+        refit = short,
         round = offer.round,
         cards = {},
         build_tags = tag_projection(offer.build_tags),
         scout_tags = tag_projection(offer.scout_tags),
         inspected = nil,
         selected_choice_id = ui.selected_choice_id,
-        progress = {
+        next_encounter = util.deep_copy(offer.next_encounter),
+        progress = short and {
+            fight = state.fight.index,
+            fights_cleared = state.fight.victories,
+            total = state.fight.victories,
+            required = state.fight.total,
+            sling = 1,
+            marbles = #state.player.marbles,
+            marble_cap = state.limits.marbles,
+            bricks = #state.player.bricks,
+            brick_cap = state.limits.bricks,
+            broken = #state.workshop.broken_bricks,
+        } or {
             sling = state.draft.picks.sling and 1 or 0,
             marbles = #state.draft.picks.marbles,
             brick_kits = #state.draft.picks.brick_kits,
@@ -211,8 +255,18 @@ local function shell_projection(shell_ids)
 end
 
 local function project_setup(presentation, state, ui)
-    presentation.title = "Arrange your collection"
-    presentation.subtitle = "Tap a brick, then a legal cell. Bag index 1 launches first."
+    local short = state.mode == "comprehension_first_three_fight"
+    presentation.title = short
+        and string.format("Fight %d of %d · %s",
+            state.fight.index, state.fight.total, state.opponent.name)
+        or "Arrange your collection"
+    presentation.subtitle = short
+        and string.format(
+            "Scout %d marbles / %d bricks. Place every active brick; bag index 1 launches first.",
+            #state.opponent.marbles,
+            #state.opponent.bricks
+        )
+        or "Tap a brick, then a legal cell. Bag index 1 launches first."
     presentation.opponent = opponent_projection(state.opponent)
     local brick_by_uid = map_bricks(state.player.bricks)
     local marble_by_uid = map_marbles(state.player.marbles)
@@ -224,6 +278,12 @@ local function project_setup(presentation, state, ui)
         end
     end
     presentation.setup = {
+        short_run = short,
+        fight_index = short and state.fight.index or nil,
+        fight_total = short and state.fight.total or nil,
+        route = short and util.deep_copy(state.fight.route) or nil,
+        limits = short and util.deep_copy(state.limits) or nil,
+        broken_bricks = short and util.deep_copy(state.workshop.broken_bricks) or nil,
         valid = state.setup.valid,
         errors = util.deep_copy(state.setup.errors),
         build_tags = counted_tag_projection(state.setup.build_tags),
@@ -502,8 +562,15 @@ local function entity_inspection(frame, inspected_id)
 end
 
 local function project_battle(presentation, state, ui, previous_frame, current_frame, alpha)
-    presentation.title = "Automatic battle"
-    presentation.subtitle = "Both bags commit together. No reflex input changes combat."
+    local short = state.mode == "comprehension_first_three_fight"
+    presentation.title = short
+        and string.format("Fight %d of %d · Automatic battle",
+            state.fight.index, state.fight.total)
+        or "Automatic battle"
+    presentation.subtitle = short
+        and (state.opponent.name
+            .. " was fully scouted. Both ordered bags now resolve canonically.")
+        or "Both bags commit together. No reflex input changes combat."
     presentation.opponent = opponent_projection(state.opponent)
     local frame = projected_frame(
         previous_frame,
@@ -511,6 +578,8 @@ local function project_battle(presentation, state, ui, previous_frame, current_f
         ui.reduced_motion and 1 or alpha
     )
     presentation.battle = {
+        fight_index = short and state.fight.index or nil,
+        fight_total = short and state.fight.total or nil,
         status = frame and (frame.finished and "finished" or "running")
             or (state.battle and state.battle.status or "handoff"),
         exchange = frame and frame.exchange or (state.battle and state.battle.exchange or 0),
@@ -590,12 +659,53 @@ local function recent_events(events, count)
     return out
 end
 
+local function fight_history_projection(history)
+    local out = {}
+    for _, fight in ipairs(history or {}) do
+        local callouts = {}
+        local ledger = fight.causal_ledger or {}
+        local first = math.max(1, #ledger - 4)
+        for index = first, #ledger do
+            callouts[#callouts + 1] = ledger[index].generated_callout
+        end
+        local casualties = {}
+        for _, casualty in ipairs(fight.casualties or {}) do
+            casualties[#casualties + 1] = {
+                uid = casualty.brick and casualty.brick.uid,
+                name = casualty.brick and casualty.brick.name,
+                kit_id = casualty.brick and casualty.brick.kit_id,
+            }
+        end
+        out[#out + 1] = {
+            fight_index = fight.fight_index,
+            encounter_id = fight.encounter_id,
+            opponent_name = fight.opponent and fight.opponent.name,
+            result = util.deep_copy(fight.result),
+            casualties = casualties,
+            attributed_trigger_count = #ledger,
+            recent_generated_callouts = callouts,
+        }
+    end
+    return out
+end
+
 local function project_result(presentation, state, ui, previous_frame, current_frame)
     presentation.title = state.result.outcome == "draw" and "Draw" or
         (state.result.winner == "player" and "Victory" or "Defeat")
     presentation.subtitle = tostring(state.result.reason):gsub("_", " ")
     presentation.opponent = opponent_projection(state.opponent)
     presentation.result = {
+        short_run = state.mode == "comprehension_first_three_fight",
+        terminal = state.result.terminal == true,
+        fights_cleared = state.result.fights_cleared,
+        fight_total = state.fight and state.fight.total,
+        fight_history = state.fight and fight_history_projection(state.fight.history) or nil,
+        reward_history = state.workshop
+            and util.deep_copy(state.workshop.reward_history)
+            or nil,
+        broken_bricks = state.workshop
+            and util.deep_copy(state.workshop.broken_bricks)
+            or nil,
         outcome = state.result.outcome,
         winner = state.result.winner,
         reason = state.result.reason,
@@ -609,7 +719,7 @@ local function project_result(presentation, state, ui, previous_frame, current_f
     add_action(presentation, action(
         "new_run",
         "new_run",
-        "Draft Again",
+        state.mode == "comprehension_first_three_fight" and "Run Again" or "Draft Again",
         true,
         { x = 16, y = 692, width = 358, height = 56 }
     ))
@@ -687,6 +797,17 @@ function M.project(run_snapshot, previous_frame, current_frame, alpha, view_stat
             phase = string.upper(state.phase),
         },
         art_direction = "warm_handcrafted_tabletop",
+        short_run = state.mode == "comprehension_first_three_fight" and {
+            fight_index = state.fight.index,
+            fight_total = state.fight.total,
+            victories = state.fight.victories,
+            route = util.deep_copy(state.fight.route),
+            marble_count = #state.player.marbles,
+            brick_count = #state.player.bricks,
+            marble_cap = state.limits.marbles,
+            brick_cap = state.limits.bricks,
+            casualties = #state.workshop.broken_bricks,
+        } or nil,
         actions = {},
         enabled_actions = {},
     }
@@ -700,6 +821,24 @@ function M.project(run_snapshot, previous_frame, current_frame, alpha, view_stat
         project_battle(presentation, state, ui, previous_frame, current_frame, alpha)
     elseif state.phase == "result" then
         project_result(presentation, state, ui, previous_frame, current_frame)
+    end
+    if presentation.short_run then
+        if state.phase == "draft" then
+            presentation.labels.phase = string.format(
+                "REFIT %d/%d",
+                state.fight.index,
+                state.fight.total
+            )
+        elseif state.phase == "result" then
+            presentation.labels.phase = "RUN COMPLETE"
+        else
+            presentation.labels.phase = string.format(
+                "FIGHT %d/%d · %s",
+                state.fight.index,
+                state.fight.total,
+                string.upper(state.phase)
+            )
+        end
     end
     return presentation
 end

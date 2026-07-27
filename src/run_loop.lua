@@ -97,7 +97,9 @@ function M.activate(loop, action_id, source)
 
     if prior_phase ~= "battle" and loop.model.run.phase == "battle" then
         start_battle(loop)
-    elseif loop.model.run.phase == "draft" then
+    elseif loop.model.run.phase == "draft"
+        or (prior_phase == "draft" and loop.model.run.phase == "setup")
+        or (prior_phase == "result" and loop.model.run.phase ~= "battle") then
         clear_battle_runtime(loop)
     end
     return { loop = loop, events = accepted.events }

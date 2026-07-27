@@ -107,6 +107,7 @@ REQUIRED_RUNTIME_FILES=(
     "battle/runtime_verification.lua"
     "battle/checkpoints.lua"
     "battle/run.lua"
+    "battle/short_run.lua"
     "battle/draft.lua"
     "battle/rule_ast.lua"
     "battle/content/rules.lua"

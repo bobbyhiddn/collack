@@ -62,260 +62,122 @@
     "phone": {
       "first": {
         "label": "phone",
-        "tick": 20,
-        "entity": "player-m02",
-        "x": 10.627,
-        "y": 101.471
+        "tick": 24,
+        "entity": "player-m01",
+        "x": 22.498,
+        "y": 97.064
       },
       "moved": {
         "label": "phone",
-        "tick": 141,
-        "entity": "player-m02",
-        "x": 3.526,
-        "y": 69.566
+        "tick": 144,
+        "entity": "player-m01",
+        "x": 32.763,
+        "y": 50.304
       }
     },
     "desktop": {
       "first": {
         "label": "desktop",
         "tick": 20,
-        "entity": "player-m02",
-        "x": 10.618,
-        "y": 101.633
+        "entity": "player-m01",
+        "x": 21.87,
+        "y": 99.924
       },
       "moved": {
         "label": "desktop",
         "tick": 146,
-        "entity": "player-m02",
-        "x": 4.806,
-        "y": 69.611
+        "entity": "player-m01",
+        "x": 32.879,
+        "y": 49.774
       }
     }
   },
   "guidance": [
     {
       "label": "phone",
-      "text": "CALLACK_GUIDANCE screen=draft rival=Glass_Cannon scout=burst,force counter_cards=1 mechanic_cards=3 offer=run-9125-001offer01"
+      "text": "CALLACK_GUIDANCE screen=setup rival=Switchback_Scout scout=rebound,burst build=absorptionx2,anglex1,depthx1,durablex4,forcex1,guardx2,mirror_lanex1,reboundx1,releasex1,tempox1 active_links=0"
     },
     {
       "label": "phone",
-      "text": "CALLACK_GUIDANCE screen=draft rival=Glass_Cannon scout=burst,force counter_cards=2 mechanic_cards=3 offer=run-9125-001offer02"
+      "text": "CALLACK_GUIDANCE screen=draft rival=Fuse_Garden scout=field,release counter_cards=0 mechanic_cards=3 offer=short-run-9125-001refit01"
     },
     {
       "label": "phone",
-      "text": "CALLACK_GUIDANCE screen=draft rival=Glass_Cannon scout=burst,force counter_cards=1 mechanic_cards=3 offer=run-9125-001offer03"
+      "text": "CALLACK_GUIDANCE screen=setup rival=Fuse_Garden scout=field,release build=absorptionx2,anglex1,burstx1,depthx1,durablex4,fieldx1,forcex1,guardx2,mirror_lanex1,reboundx1,releasex1,tempox1 active_links=0"
     },
     {
       "label": "phone",
-      "text": "CALLACK_GUIDANCE screen=draft rival=Glass_Cannon scout=burst,force counter_cards=1 mechanic_cards=3 offer=run-9125-001offer04"
+      "text": "CALLACK_GUIDANCE screen=draft rival=Brass_Bastion scout=guard,sustain counter_cards=2 mechanic_cards=3 offer=short-run-9125-001refit02"
     },
     {
       "label": "phone",
-      "text": "CALLACK_GUIDANCE screen=draft rival=Glass_Cannon scout=burst,force counter_cards=1 mechanic_cards=3 offer=run-9125-001offer05"
+      "text": "CALLACK_GUIDANCE screen=setup rival=Brass_Bastion scout=guard,sustain build=absorptionx1,anglex1,burstx1,deep_reservex1,depthx2,durablex3,fieldx1,forcex1,guardx1,mirror_lanex1,reboundx1,releasex1,sustainx1,tempox1 active_links=0"
     },
     {
       "label": "phone",
-      "text": "CALLACK_GUIDANCE screen=draft rival=Glass_Cannon scout=burst,force counter_cards=1 mechanic_cards=3 offer=run-9125-001offer06"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_GUIDANCE screen=draft rival=Glass_Cannon scout=burst,force counter_cards=1 mechanic_cards=3 offer=run-9125-001offer07"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_GUIDANCE screen=draft rival=Glass_Cannon scout=burst,force counter_cards=1 mechanic_cards=3 offer=run-9125-001offer08"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_GUIDANCE screen=draft rival=Glass_Cannon scout=burst,force counter_cards=2 mechanic_cards=3 offer=run-9125-001offer09"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_GUIDANCE screen=setup rival=Glass_Cannon scout=burst,force build=anglex4,burstx5,chainx4,controlx6,damage_linkx2,detonationx2,durablex2,fieldx4,gravity_wellx2,reboundx1,status_lockx2 active_links=0"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_GUIDANCE screen=setup rival=Glass_Cannon scout=burst,force build=anglex4,burstx5,chainx4,controlx6,damage_linkx2,detonationx2,durablex2,fieldx4,gravity_wellx2,reboundx1,status_lockx2 active_links=1"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_GUIDANCE screen=setup rival=Glass_Cannon scout=burst,force build=anglex4,burstx5,chainx4,controlx6,damage_linkx2,detonationx2,durablex2,fieldx4,gravity_wellx2,reboundx1,status_lockx2 active_links=2"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_GUIDANCE screen=setup rival=Glass_Cannon scout=burst,force build=anglex4,burstx5,chainx4,controlx6,damage_linkx2,detonationx2,durablex2,fieldx4,gravity_wellx2,reboundx1,status_lockx2 active_links=3"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_GUIDANCE screen=setup rival=Glass_Cannon scout=burst,force build=anglex4,burstx5,chainx4,controlx6,damage_linkx2,detonationx2,durablex2,fieldx4,gravity_wellx2,reboundx1,status_lockx2 active_links=4"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_GUIDANCE screen=setup rival=Glass_Cannon scout=burst,force build=anglex4,burstx5,chainx4,controlx6,damage_linkx2,detonationx2,durablex2,fieldx4,gravity_wellx2,reboundx1,status_lockx2 active_links=5"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_GUIDANCE screen=draft rival=Bastion scout=guard,sustain counter_cards=2 mechanic_cards=3 offer=run-9126-002offer01"
+      "text": "CALLACK_GUIDANCE screen=setup rival=Switchback_Scout scout=rebound,burst build=absorptionx2,anglex1,depthx1,durablex4,forcex1,guardx2,mirror_lanex1,reboundx1,releasex1,tempox1 active_links=0"
     },
     {
       "label": "desktop",
-      "text": "CALLACK_GUIDANCE screen=draft rival=Glass_Cannon scout=burst,force counter_cards=1 mechanic_cards=3 offer=run-9125-001offer01"
+      "text": "CALLACK_GUIDANCE screen=setup rival=Switchback_Scout scout=rebound,burst build=absorptionx2,anglex1,depthx1,durablex4,forcex1,guardx2,mirror_lanex1,reboundx1,releasex1,tempox1 active_links=0"
     },
     {
       "label": "desktop",
-      "text": "CALLACK_GUIDANCE screen=draft rival=Glass_Cannon scout=burst,force counter_cards=2 mechanic_cards=3 offer=run-9125-001offer02"
+      "text": "CALLACK_GUIDANCE screen=draft rival=Fuse_Garden scout=field,release counter_cards=0 mechanic_cards=3 offer=short-run-9125-001refit01"
     },
     {
       "label": "desktop",
-      "text": "CALLACK_GUIDANCE screen=draft rival=Glass_Cannon scout=burst,force counter_cards=1 mechanic_cards=3 offer=run-9125-001offer03"
+      "text": "CALLACK_GUIDANCE screen=setup rival=Fuse_Garden scout=field,release build=absorptionx2,anglex1,burstx1,depthx1,durablex4,fieldx1,forcex1,guardx2,mirror_lanex1,reboundx1,releasex1,tempox1 active_links=0"
     },
     {
       "label": "desktop",
-      "text": "CALLACK_GUIDANCE screen=draft rival=Glass_Cannon scout=burst,force counter_cards=1 mechanic_cards=3 offer=run-9125-001offer04"
+      "text": "CALLACK_GUIDANCE screen=draft rival=Brass_Bastion scout=guard,sustain counter_cards=2 mechanic_cards=3 offer=short-run-9125-001refit02"
     },
     {
       "label": "desktop",
-      "text": "CALLACK_GUIDANCE screen=draft rival=Glass_Cannon scout=burst,force counter_cards=1 mechanic_cards=3 offer=run-9125-001offer05"
+      "text": "CALLACK_GUIDANCE screen=setup rival=Brass_Bastion scout=guard,sustain build=absorptionx1,anglex1,burstx1,deep_reservex1,depthx2,durablex3,fieldx1,forcex1,guardx1,mirror_lanex1,reboundx1,releasex1,sustainx1,tempox1 active_links=0"
     },
     {
       "label": "desktop",
-      "text": "CALLACK_GUIDANCE screen=draft rival=Glass_Cannon scout=burst,force counter_cards=1 mechanic_cards=3 offer=run-9125-001offer06"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_GUIDANCE screen=draft rival=Glass_Cannon scout=burst,force counter_cards=1 mechanic_cards=3 offer=run-9125-001offer07"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_GUIDANCE screen=draft rival=Glass_Cannon scout=burst,force counter_cards=1 mechanic_cards=3 offer=run-9125-001offer08"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_GUIDANCE screen=draft rival=Glass_Cannon scout=burst,force counter_cards=2 mechanic_cards=3 offer=run-9125-001offer09"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_GUIDANCE screen=setup rival=Glass_Cannon scout=burst,force build=anglex4,burstx5,chainx4,controlx6,damage_linkx2,detonationx2,durablex2,fieldx4,gravity_wellx2,reboundx1,status_lockx2 active_links=0"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_GUIDANCE screen=setup rival=Glass_Cannon scout=burst,force build=anglex4,burstx5,chainx4,controlx6,damage_linkx2,detonationx2,durablex2,fieldx4,gravity_wellx2,reboundx1,status_lockx2 active_links=1"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_GUIDANCE screen=setup rival=Glass_Cannon scout=burst,force build=anglex4,burstx5,chainx4,controlx6,damage_linkx2,detonationx2,durablex2,fieldx4,gravity_wellx2,reboundx1,status_lockx2 active_links=2"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_GUIDANCE screen=setup rival=Glass_Cannon scout=burst,force build=anglex4,burstx5,chainx4,controlx6,damage_linkx2,detonationx2,durablex2,fieldx4,gravity_wellx2,reboundx1,status_lockx2 active_links=3"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_GUIDANCE screen=setup rival=Glass_Cannon scout=burst,force build=anglex4,burstx5,chainx4,controlx6,damage_linkx2,detonationx2,durablex2,fieldx4,gravity_wellx2,reboundx1,status_lockx2 active_links=4"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_GUIDANCE screen=setup rival=Glass_Cannon scout=burst,force build=anglex4,burstx5,chainx4,controlx6,damage_linkx2,detonationx2,durablex2,fieldx4,gravity_wellx2,reboundx1,status_lockx2 active_links=5"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_GUIDANCE screen=draft rival=Bastion scout=guard,sustain counter_cards=2 mechanic_cards=3 offer=run-9126-002offer01"
+      "text": "CALLACK_GUIDANCE screen=setup rival=Switchback_Scout scout=rebound,burst build=absorptionx2,anglex1,depthx1,durablex4,forcex1,guardx2,mirror_lanex1,reboundx1,releasex1,tempox1 active_links=0"
     }
   ],
   "inspections": [
     {
       "label": "phone",
-      "text": "CALLACK_INSPECTION type=choice source=mouse name=Ricochet_Sling mechanics=2 counters=burst links=none adds=rebound,angle"
+      "text": "CALLACK_INSPECTION type=choice source=mouse name=Cinder mechanics=2 operation=add_marble cause=post_battle_choice counters=none links=none adds=burst,field"
     },
     {
       "label": "phone",
-      "text": "CALLACK_INSPECTION type=choice source=touch name=Quartz_Round mechanics=2 counters=burst links=angle adds=durable"
+      "text": "CALLACK_INSPECTION type=entity source=touch id=brickplayer-b01 name=Basalt_Absorber owner=Collector mechanic=Absorb"
     },
     {
       "label": "phone",
-      "text": "CALLACK_INSPECTION type=choice source=touch name=Drifter mechanics=2 counters=none links=angle adds=control"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_INSPECTION type=choice source=touch name=Flint_Hook mechanics=2 counters=none links=angle adds=burst"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_INSPECTION type=choice source=touch name=Warden mechanics=2 counters=burst links=durable,control adds=none"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_INSPECTION type=choice source=touch name=Spliced_Fuse mechanics=2 counters=none links=burst adds=chain,damage_link"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_INSPECTION type=choice source=touch name=Fault_Line mechanics=2 counters=none links=burst,chain adds=detonation"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_INSPECTION type=choice source=touch name=Null_Orbit mechanics=2 counters=none links=control adds=field,gravity_well"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_INSPECTION type=choice source=touch name=Cold_Venom mechanics=2 counters=none links=control,field adds=status_lock"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_INSPECTION type=entity source=touch id=brickplayer-b01 name=Splice_Node owner=Collector mechanic=Splice"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_INSPECTION type=choice source=mouse name=Momentum_Sling mechanics=2 counters=guard links=none adds=force,durable"
+      "text": "CALLACK_INSPECTION type=choice source=mouse name=Temporal_Anchor mechanics=1 operation=add_brick cause=post_battle_choice counters=sustain links=depth adds=sustain,deep_reserve"
     },
     {
       "label": "desktop",
-      "text": "CALLACK_INSPECTION type=choice source=mouse name=Ricochet_Sling mechanics=2 counters=burst links=none adds=rebound,angle"
+      "text": "CALLACK_INSPECTION type=choice source=mouse name=Cinder mechanics=2 operation=add_marble cause=post_battle_choice counters=none links=none adds=burst,field"
     },
     {
       "label": "desktop",
-      "text": "CALLACK_INSPECTION type=choice source=mouse name=Quartz_Round mechanics=2 counters=burst links=angle adds=durable"
+      "text": "CALLACK_INSPECTION type=entity source=mouse id=brickplayer-b01 name=Basalt_Absorber owner=Collector mechanic=Absorb"
     },
     {
       "label": "desktop",
-      "text": "CALLACK_INSPECTION type=choice source=mouse name=Drifter mechanics=2 counters=none links=angle adds=control"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_INSPECTION type=choice source=mouse name=Flint_Hook mechanics=2 counters=none links=angle adds=burst"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_INSPECTION type=choice source=mouse name=Warden mechanics=2 counters=burst links=durable,control adds=none"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_INSPECTION type=choice source=mouse name=Spliced_Fuse mechanics=2 counters=none links=burst adds=chain,damage_link"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_INSPECTION type=choice source=mouse name=Fault_Line mechanics=2 counters=none links=burst,chain adds=detonation"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_INSPECTION type=choice source=mouse name=Null_Orbit mechanics=2 counters=none links=control adds=field,gravity_well"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_INSPECTION type=choice source=mouse name=Cold_Venom mechanics=2 counters=none links=control,field adds=status_lock"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_INSPECTION type=entity source=mouse id=brickplayer-b01 name=Splice_Node owner=Collector mechanic=Splice"
+      "text": "CALLACK_INSPECTION type=choice source=mouse name=Temporal_Anchor mechanics=1 operation=add_brick cause=post_battle_choice counters=sustain links=depth adds=sustain,deep_reserve"
     }
   ],
   "screenshotHashes": {
-    "phone-draft-inspection.png": "cf5b93fe563d1427234eb43da1b4ee1a761a238ab5973a145d6c7d19721be9b3",
-    "phone-setup.png": "dc118f3bf9ebecabc7ebc3bf8d5e752c2a0b03a7463391dc99283687e333310f",
-    "phone-battle-inspection.png": "04a4efb8688eb9da7f6be38932f1a407f676cf014acae997ee0c8523f38e3008",
-    "phone-battle.png": "07e479d06d48f2a3976b15233cdb22bd48a859bd0c541089a9fa0a5ead3e2571",
-    "desktop-draft-inspection.png": "4b7d802fcca1d7941e41710768af27c6729feb80c6831d2879a4bc79aff57535",
-    "desktop-setup.png": "1d73ed0a3b249debe0ee2fd8ac8eaa43ff87da0478734778e5e1dacc414751d4",
-    "desktop-battle-inspection.png": "fbe67198ba55a5c118a20e6a1b9ea28006c20099c25627ba0e3612ec81a75b80",
-    "desktop-battle.png": "db893ee92cf32c09e0bbb980051091a5f0145a0809f210a8b72118c8760b4442"
+    "phone-refit-inspection.png": "db85decbfd43b04b4ff3b32a7bd9ef36948f5ebd8d5711d2b3c7e6b4997e5108",
+    "phone-setup.png": "89a112bec350c61d1ceda5ea947b774a9cd1d797efcbea53e169d6edf2d2d29e",
+    "phone-setup-terminal.png": "37ff7f2dd847f6000af6bed87885bccddea2eb17f7719fb1562b8c903e4ec01d",
+    "phone-battle-inspection.png": "e5f2433017bf3bd083e12624d0b3984fce8137d133eaf700b32084cfada97863",
+    "phone-battle.png": "d3a21caf1f96a0f9207012bc2a40c0ed8e831af2d34e9b00a9b185d8104439cf",
+    "desktop-refit-inspection.png": "5c6a50c56df14353cf584eb745fd32548ef10ce604742b976e18c749394c4df3",
+    "desktop-setup.png": "3c57e590233e3544e186fc68ba15a8d9553a223be05decd493fb8811cac06796",
+    "desktop-setup-terminal.png": "daa8dec74cfb1ba38c4c408ab9e410e87a373502158349bdadd01ac16433c036",
+    "desktop-battle-inspection.png": "d5c1064fc78f52aff69afee4f6fdababc3310fcbb99873755681d00b39cede4a",
+    "desktop-battle.png": "697c727bdc758079f72b1f2a10f27f10869c49fc300ee9e5f00c7ed24fa80ad8"
   }
 }

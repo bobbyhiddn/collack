@@ -23,6 +23,18 @@ M.DRAFT = {
     BRICKS_PER_KIT = 2,
 }
 
+-- Deliberately smaller than the later five- or seven-fight designs.  The
+-- proof run starts below both caps so every acquisition creates a visible
+-- roster tradeoff.
+M.SHORT_RUN = {
+    FIGHTS = 3,
+    OFFER_SIZE = 3,
+    START_MARBLES = 2,
+    START_BRICKS = 3,
+    MARBLE_CAP = 4,
+    BRICK_CAP = 6,
+}
+
 M.FORMATION = {
     ROWS = 3,
     COLS = 7,

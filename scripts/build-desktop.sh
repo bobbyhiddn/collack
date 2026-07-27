@@ -34,7 +34,7 @@ ARCHIVE_LIST="$(unzip -Z -1 "$LOVE_ARCHIVE")"
 for required in \
     main.lua conf.lua presentation.lua run_controller.lua run_presentation.lua \
     run_loop.lua ui/art_tokens.lua ui/procedural_audio.lua battle/engine.lua battle/physics.lua \
-    battle/runtime_verification.lua battle/checkpoints.lua battle/run.lua battle/draft.lua \
+    battle/runtime_verification.lua battle/checkpoints.lua battle/run.lua battle/short_run.lua battle/draft.lua \
     battle/rule_ast.lua battle/content/rules.lua battle/opponent.lua \
     battle/setup.lua battle/setup_rules.lua
 do

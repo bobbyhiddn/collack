@@ -26,7 +26,7 @@ local touch_guard_until = 0
 local recent_touches = {}
 local last_pointer_press
 local last_screen
-local last_cue = "Choose a card to begin your collection."
+local last_cue = "Scout the first rival, arrange three bricks, and order two marbles."
 local screen_age = 0
 local offer_age = 0
 local last_offer_id
@@ -312,10 +312,14 @@ local function activate(action_id, source)
         and view.draft and view.draft.inspected or nil
     if inspected_choice then
         print(string.format(
-            "CALLACK_INSPECTION type=choice source=%s name=%s mechanics=%d counters=%s links=%s adds=%s",
+            "CALLACK_INSPECTION type=choice source=%s name=%s mechanics=%d operation=%s cause=%s counters=%s links=%s adds=%s",
             telemetry_value(source),
             telemetry_value(inspected_choice.name),
             #(inspected_choice.mechanics or {}),
+            telemetry_value(inspected_choice.operation
+                and inspected_choice.operation.kind),
+            telemetry_value(inspected_choice.causal_attribution
+                and inspected_choice.causal_attribution.cause),
             telemetry_tags(inspected_choice.synergy and inspected_choice.synergy.counters),
             telemetry_tags(inspected_choice.synergy and inspected_choice.synergy.matched),
             telemetry_tags(inspected_choice.synergy and inspected_choice.synergy.introduced)
@@ -651,6 +655,103 @@ local function synergy_summary(card)
     return "FLEX PICK", COLORS.muted
 end
 
+local function canonical_choice_copy(card)
+    local mechanics = card.compact_copy
+    if not mechanics or mechanics == "" then
+        mechanics = table.concat(card.mechanics or {}, " ")
+    end
+    if card.operation_copy and card.operation_copy ~= "" then
+        return card.operation_copy .. " " .. mechanics
+    end
+    return mechanics
+end
+
+local function choice_cause_summary(card)
+    local attribution = card and card.causal_attribution or {}
+    local rules = #(attribution.source_rule_ids or {})
+    local summary = synergy_summary(card)
+    summary = summary:gsub(": ", " "):gsub(" %+", "+")
+    summary = summary:gsub("^COUNTERS SCOUT ", "COUNTERS ")
+        :gsub("^LINKS BUILD ", "LINKS ")
+        :gsub("^ADDS LINE ", "ADDS ")
+    return string.format(
+        "CAUSE POST-BATTLE / %d RULES / %s",
+        rules,
+        summary
+    )
+end
+
+local function draw_wrapped_limited(text, x, y, width, max_lines, alignment)
+    local font = love.graphics.getFont()
+    local normalized = tostring(text or ""):gsub("[\r\n]+", " ")
+    local _, wrapped = font:getWrap(normalized, width)
+    local shown = {}
+    for index = 1, math.min(#wrapped, max_lines) do
+        shown[index] = wrapped[index]
+    end
+    if #wrapped > max_lines and #shown > 0 then
+        shown[#shown] = shown[#shown]:gsub("%s+$", "") .. "..."
+    end
+    local line_height = font:getHeight() * font:getLineHeight()
+    for index, line in ipairs(shown) do
+        local line_x = x
+        if alignment == "right" then
+            line_x = x + width - font:getWidth(line)
+        elseif alignment == "center" then
+            line_x = x + (width - font:getWidth(line)) / 2
+        end
+        love.graphics.print(line, line_x, y + (index - 1) * line_height)
+    end
+    return #shown * line_height
+end
+
+local function compact_scout_sling(opponent)
+    local sling = string.upper(opponent.sling or "UNKNOWN")
+    sling = sling:gsub(" SLING$", "")
+    if sling == "EFFECT AMPLIFIER" then sling = "AMPLIFIER" end
+    return sling
+end
+
+local function compact_scout_tags(opponent)
+    local tags = {}
+    for index, tag in ipairs(opponent.scout_tags or {}) do
+        if index > 2 then break end
+        tags[#tags + 1] = string.upper(tag.id or tag.label or "")
+    end
+    return table.concat(tags, "+")
+end
+
+local function scout_loadout_copy(opponent, compact)
+    if compact then
+        return string.format(
+            "%dM/%dB  %s  %s",
+            opponent.marble_count or 0,
+            opponent.brick_count or 0,
+            compact_scout_sling(opponent),
+            compact_scout_tags(opponent)
+        )
+    end
+    return string.format(
+        "%d MARBLES  /  %d BRICKS  /  %s",
+        opponent.marble_count or 0,
+        opponent.brick_count or 0,
+        string.upper(opponent.sling or "UNKNOWN SLING")
+    )
+end
+
+local function scout_counts_copy(opponent)
+    return string.format(
+        "%dM / %dB / %s",
+        opponent.marble_count or 0,
+        opponent.brick_count or 0,
+        compact_scout_sling(opponent)
+    )
+end
+
+local function scout_mechanic_copy(opponent)
+    return compact_scout_sling(opponent) .. " / " .. compact_scout_tags(opponent)
+end
+
 local function draw_scout_rows(tags, x, y, width, limit)
     love.graphics.setFont(fonts.micro)
     for index, tag in ipairs(tags or {}) do
@@ -688,9 +789,10 @@ local function draw_draft_card(card, x, y, width, height, large, index)
     local art_x = large and x + width / 2 or x + 56
     local art_y = large and y + 112 or y + height / 2
     local art_scale = large and 1.65 or 0.88
-    if view.draft.category == "sling" then
+    local category = card.category or view.draft.category
+    if category == "sling" then
         draw_sling(art_x, art_y, art_scale)
-    elseif view.draft.category == "marble" then
+    elseif category == "marble" then
         local first_shell = card.details and card.details.shells
             and card.details.shells[1] or nil
         draw_marble(art_x, art_y, large and 68 or 38, rarity,
@@ -718,14 +820,24 @@ local function draw_draft_card(card, x, y, width, height, large, index)
     love.graphics.setFont(fonts.meta)
     set_color(COLORS.ink, 0.72 * alpha)
     love.graphics.printf(
-        string.upper(card.role or view.draft.category) .. "  /  " .. string.upper(rarity or "kit"),
+        string.upper(card.operation_verb or card.role or category)
+            .. "  /  " .. string.upper(rarity or category or "kit"),
         text_x, text_y + 26, text_width, large and "center" or "left"
     )
     love.graphics.setFont(large and fonts.body or fonts.meta)
     set_color(COLORS.ink, alpha)
-    local mechanics = large and table.concat(card.mechanics or {}, " ")
-        or ((card.mechanics or {})[1] or "")
-    love.graphics.printf(mechanics, text_x, text_y + 52, text_width, "left")
+    local mechanics = card.operation_copy or ((card.mechanics or {})[1] or "")
+    if large and #(card.mechanics or {}) > 0 then
+        mechanics = mechanics .. " " .. card.mechanics[1]
+        if #card.mechanics > 1 then
+            mechanics = mechanics .. string.format(
+                " Inspect for all %d canonical rules.",
+                #card.mechanics
+            )
+        end
+    end
+    draw_wrapped_limited(mechanics, text_x, text_y + 52, text_width,
+        large and 5 or 3, "left")
     if large then
         local summary, summary_color = synergy_summary(card)
         if summary_color == COLORS.brass then summary_color = COLORS.brass_dark end
@@ -747,14 +859,27 @@ local function draw_pick_progress(x, y, width)
     panel(x, y, width, 28, "walnut", 7)
     love.graphics.setFont(fonts.micro)
     set_color(COLORS.muted)
-    love.graphics.print(string.format("PICK %d / %d", view.draft.progress.total + 1,
-        view.draft.progress.required), x + 10, y + 8)
-    set_color(COLORS.brass)
-    love.graphics.printf(string.format("S %d/1  •  M %d/4  •  K %d/4",
-        view.draft.progress.sling,
-        view.draft.progress.marbles,
-        view.draft.progress.brick_kits),
-        x + 104, y + 8, width - 114, "right")
+    if view.draft.refit then
+        love.graphics.print(string.format("FIGHT %d CLEARED", view.draft.progress.fight),
+            x + 10, y + 8)
+        set_color(COLORS.brass)
+        love.graphics.printf(string.format("M %d/%d  •  B %d/%d  •  REPAIR %d",
+            view.draft.progress.marbles,
+            view.draft.progress.marble_cap,
+            view.draft.progress.bricks,
+            view.draft.progress.brick_cap,
+            view.draft.progress.broken),
+            x + 128, y + 8, width - 138, "right")
+    else
+        love.graphics.print(string.format("PICK %d / %d", view.draft.progress.total + 1,
+            view.draft.progress.required), x + 10, y + 8)
+        set_color(COLORS.brass)
+        love.graphics.printf(string.format("S %d/1  •  M %d/4  •  K %d/4",
+            view.draft.progress.sling,
+            view.draft.progress.marbles,
+            view.draft.progress.brick_kits),
+            x + 104, y + 8, width - 114, "right")
+    end
 end
 
 local function draw_draft_phone()
@@ -768,20 +893,24 @@ local function draw_draft_phone()
     if view.draft.inspected then
         love.graphics.setFont(fonts.label)
         set_color(COLORS.brass)
-        love.graphics.print(string.upper(view.draft.inspected.name) .. "  /  FULL RULES", 28, 594)
-        love.graphics.setFont(fonts.meta)
-        set_color(COLORS.chalk)
-        love.graphics.printf(table.concat(view.draft.inspected.mechanics or {}, " "),
-            28, 618, 334, "left")
-        local summary, summary_color = synergy_summary(view.draft.inspected)
+        love.graphics.print(string.upper(view.draft.inspected.name)
+            .. "  /  CANONICAL CHOICE", 28, 594)
         love.graphics.setFont(fonts.micro)
-        set_color(summary_color)
-        love.graphics.printf(summary, 28, 674, 334, "left")
+        set_color(COLORS.chalk)
+        draw_wrapped_limited(canonical_choice_copy(view.draft.inspected),
+            28, 614, 334, 4, "left")
+        love.graphics.setFont(fonts.micro)
+        set_color(COLORS.restore)
+        draw_wrapped_limited(choice_cause_summary(view.draft.inspected),
+            28, 676, 334, 1, "left")
     else
         love.graphics.setFont(fonts.label)
         set_color(COLORS.brass)
         love.graphics.print("RIVAL SCOUT  /  " .. string.upper(view.opponent.name), 28, 594)
-        draw_scout_rows(view.draft.scout_tags, 28, 620, 334, 2)
+        love.graphics.setFont(fonts.micro)
+        set_color(COLORS.opponent)
+        love.graphics.print(scout_loadout_copy(view.opponent), 28, 614)
+        draw_scout_rows(view.draft.scout_tags, 28, 634, 334, 2)
     end
     if view.draft.inspected then
         draw_button("select:" .. view.draft.inspected.choice_id,
@@ -811,15 +940,22 @@ local function draw_draft_desktop()
     love.graphics.setFont(fonts.label)
     set_color(COLORS.opponent)
     love.graphics.print(string.upper(view.opponent.name), 44, 154)
+    love.graphics.setFont(fonts.micro)
+    set_color(COLORS.brass)
+    love.graphics.printf(scout_counts_copy(view.opponent), 44, 176, 200, "left")
     love.graphics.setFont(fonts.body)
     set_color(COLORS.muted)
-    love.graphics.printf(view.opponent.description, 44, 184, 200, "left")
-    draw_tag_chips(view.draft.scout_tags, 44, 252, 200)
-    draw_scout_rows(view.draft.scout_tags, 44, 278, 200, 2)
+    love.graphics.printf(view.opponent.description, 44, 200, 200, "left")
+    draw_tag_chips(view.draft.scout_tags, 44, 270, 200)
+    draw_scout_rows(view.draft.scout_tags, 44, 296, 200, 2)
     love.graphics.setFont(fonts.label)
     set_color(COLORS.chalk)
     love.graphics.print("YOUR COLLECTION", 44, 390)
-    local totals = {
+    local totals = view.draft.refit and {
+        { "SLING", 1, 1 },
+        { "MARBLES", view.draft.progress.marbles, view.draft.progress.marble_cap },
+        { "BRICKS", view.draft.progress.bricks, view.draft.progress.brick_cap },
+    } or {
         { "SLING", view.draft.progress.sling, 1 },
         { "MARBLES", view.draft.progress.marbles, 4 },
         { "BRICK KITS", view.draft.progress.brick_kits, 4 },
@@ -839,8 +975,12 @@ local function draw_draft_desktop()
     end
     love.graphics.setFont(fonts.micro)
     set_color(COLORS.brass)
-    love.graphics.print(string.format("PICK %d OF %d",
-        view.draft.progress.total + 1, view.draft.progress.required), 44, 624)
+    love.graphics.print(view.draft.refit
+        and string.format("REFIT AFTER FIGHT %d • %d CASUALTY",
+            view.draft.progress.fight,
+            view.draft.progress.broken)
+        or string.format("PICK %d OF %d",
+            view.draft.progress.total + 1, view.draft.progress.required), 44, 624)
     for index, card in ipairs(view.draft.cards) do
         local x, y, width, height = action_bounds(action_by_id(card.action_id))
         draw_draft_card(card, x, y, width, height, true, index)
@@ -851,10 +991,13 @@ local function draw_draft_desktop()
         love.graphics.setFont(fonts.micro)
         set_color(summary_color)
         love.graphics.printf(summary, 44, 704, 690, "left")
-        love.graphics.setFont(fonts.meta)
+        set_color(COLORS.restore)
+        draw_wrapped_limited(choice_cause_summary(view.draft.inspected),
+            318, 704, 416, 1, "right")
+        love.graphics.setFont(fonts.micro)
         set_color(COLORS.muted)
-        love.graphics.printf(table.concat(view.draft.inspected.mechanics or {}, " "),
-            44, 726, 690, "left")
+        draw_wrapped_limited(canonical_choice_copy(view.draft.inspected),
+            44, 724, 690, 3, "left")
         draw_button("select:" .. view.draft.inspected.choice_id,
             view.draft.selected_choice_id and "CHOICE SET" or "CHOOSE CARD", COLORS.brass)
     else
@@ -946,10 +1089,15 @@ local function draw_setup_phone()
     set_color(COLORS.brass)
     love.graphics.print("FORMATION", 30, 87)
     set_color(COLORS.opponent)
-    love.graphics.printf("VS " .. string.upper(view.opponent.name), 154, 81, 202, "right")
+    love.graphics.printf(string.format(
+        "%s / %dM/%dB",
+        string.upper(view.opponent.name),
+        view.opponent.marble_count or 0,
+        view.opponent.brick_count or 0
+    ), 154, 81, 202, "right")
     love.graphics.setFont(fonts.micro)
     set_color(COLORS.muted)
-    love.graphics.printf("SCOUT  " .. tag_labels(view.opponent.scout_tags, 2),
+    love.graphics.printf(scout_mechanic_copy(view.opponent),
         154, 99, 202, "right")
     panel(16, 124, 358, 220, "felt", 12)
     love.graphics.setFont(fonts.micro)
@@ -1092,6 +1240,9 @@ local function draw_setup_desktop()
     love.graphics.setFont(fonts.micro)
     set_color(COLORS.brass)
     love.graphics.print(tostring(active_setup_links()) .. " ACTIVE ADJACENCY LINKS", 352, 632)
+    set_color(COLORS.opponent)
+    love.graphics.printf(scout_loadout_copy(view.opponent),
+        650, 540, 270, "right")
     draw_scout_rows(view.opponent.scout_tags, 650, 558, 270, 2)
     love.graphics.setFont(fonts.section)
     set_color(COLORS.brass)
@@ -1484,8 +1635,14 @@ local function draw_result_phone()
     love.graphics.printf(view.subtitle, 36, 356, 318, "center")
     love.graphics.setFont(fonts.meta)
     set_color(COLORS.ink, 0.72)
-    love.graphics.printf(string.format("%d EXCHANGES  /  SEED %d",
-        view.result.exchanges, view.run_seed), 32, 414, 326, "center")
+    local result_meta = view.result.short_run
+        and string.format("%d/%d FIGHTS  /  %d FINAL EXCHANGES",
+            view.result.fights_cleared or 0,
+            view.result.fight_total or 3,
+            view.result.exchanges)
+        or string.format("%d EXCHANGES  /  SEED %d",
+            view.result.exchanges, view.run_seed)
+    love.graphics.printf(result_meta, 32, 414, 326, "center")
     panel(16, 478, 358, 190, "walnut", 12)
     love.graphics.setFont(fonts.label)
     set_color(COLORS.brass)
@@ -1499,7 +1656,8 @@ local function draw_result_phone()
         set_color(COLORS.muted)
         love.graphics.printf(ledger_text(events[index]), 28, 520 + (line - 1) * 36, 334, "left")
     end
-    draw_button("new_run", "DRAFT AGAIN", COLORS.player)
+    draw_button("new_run", view.result.short_run and "RUN AGAIN" or "DRAFT AGAIN",
+        COLORS.player)
     draw_button("review_battle", view.result.ledger_expanded and "CLOSE LEDGER" or "REVIEW BATTLE", COLORS.brass)
     draw_button("replay_battle", "REPLAY SEED", COLORS.brass)
 end
@@ -1518,8 +1676,15 @@ local function draw_result_desktop()
     love.graphics.print(view.subtitle, 680, 188)
     love.graphics.setFont(fonts.body)
     set_color(COLORS.ink, 0.72)
-    love.graphics.print(string.format("%d exchanges  /  seed %d  /  %d recorded frames",
-        view.result.exchanges, view.run_seed, view.result.recording_frames), 680, 226)
+    local result_meta = view.result.short_run
+        and string.format("%d/%d fights cleared  /  %d final exchanges  /  %d frames",
+            view.result.fights_cleared or 0,
+            view.result.fight_total or 3,
+            view.result.exchanges,
+            view.result.recording_frames)
+        or string.format("%d exchanges  /  seed %d  /  %d recorded frames",
+            view.result.exchanges, view.run_seed, view.result.recording_frames)
+    love.graphics.print(result_meta, 680, 226)
     set_color(COLORS.brass_dark)
     love.graphics.rectangle("fill", 680, 274, 540, 2)
     love.graphics.setFont(fonts.section)
@@ -1537,10 +1702,13 @@ local function draw_result_desktop()
     panel(24, 688, 1232, 88, "walnut", 14)
     love.graphics.setFont(fonts.body)
     set_color(COLORS.muted)
-    love.graphics.print("The final material state and recording are preserved.", 48, 719)
+    love.graphics.print(view.result.short_run
+        and "All fight results, casualties, rewards, and canonical recordings are preserved."
+        or "The final material state and recording are preserved.", 48, 719)
     draw_button("review_battle", view.result.ledger_expanded and "CLOSE" or "LEDGER", COLORS.brass)
     draw_button("replay_battle", "REPLAY", COLORS.brass)
-    draw_button("new_run", "DRAFT AGAIN", COLORS.player)
+    draw_button("new_run", view.result.short_run and "RUN AGAIN" or "DRAFT AGAIN",
+        COLORS.player)
 end
 
 local function draw_result()
@@ -1573,11 +1741,17 @@ local function pointer_pressed(x, y, source)
         return false
     end
     local now = love.timer.getTime()
-    if last_pointer_press
-        and action.id == last_pointer_press.action_id
-        and now - last_pointer_press.at < 0.35
-        and (x - last_pointer_press.x) ^ 2 + (y - last_pointer_press.y) ^ 2 < 256 then
-        return true
+    if last_pointer_press then
+        local elapsed = now - last_pointer_press.at
+        local same_position =
+            (x - last_pointer_press.x) ^ 2 + (y - last_pointer_press.y) ^ 2 < 256
+        local repeated_action =
+            action.id == last_pointer_press.action_id and elapsed < 0.35
+        local synthetic_cross_source =
+            source ~= last_pointer_press.source and elapsed < 1.5
+        if same_position and (repeated_action or synthetic_cross_source) then
+            return true
+        end
     end
     last_pointer_press = {
         action_id = action.id,
@@ -1792,6 +1966,7 @@ function love.load(args)
     local reduced = setting_read("reduced-motion.setting", reduced_default)
     app = run_loop.new({
         run_seed = 9125,
+        short_run = true,
         muted = muted,
         reduced_motion = reduced,
     })

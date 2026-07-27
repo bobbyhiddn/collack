@@ -368,25 +368,12 @@ function M.instantiate_kit(choice, first_brick_index, owner)
     if not item then error("unknown brick kit draft choice: " .. tostring(choice.content_id)) end
     local instances = {}
     for offset, brick_id in ipairs(item.brick_ids) do
-        local definition = bricks.by_id[brick_id]
-        instances[#instances + 1] = {
-            uid = string.format("%s-b%02d", owner or "player", first_brick_index + offset - 1),
-            content_id = definition.id,
-            kit_id = item.id,
-            name = definition.name,
-            family = definition.family or "basic",
-            behaviour = definition.behaviour,
-            hp = definition.hp,
-            max_hp = definition.hp,
-            tags = util.deep_copy(item.tags),
-            art_id = "brick_" .. definition.id,
-            mechanics = rule_ast.compact_lines(definition.rule_set, 1),
-            compact_copy = definition.compact_copy,
-            inspection_copy = util.deep_copy(definition.inspection_copy),
-            rule_set = util.deep_copy(definition.rule_set),
-            compatibility = util.deep_copy(definition.rule_set.compatibility),
-            balance = util.deep_copy(definition.balance),
-        }
+        instances[#instances + 1] = M.instantiate_brick(
+            item.id,
+            brick_id,
+            first_brick_index + offset - 1,
+            owner
+        )
     end
     return {
         content_id = item.id,
@@ -403,6 +390,45 @@ function M.instantiate_kit(choice, first_brick_index, owner)
         draft_value = item.draft_value,
         art_id = item.art_id,
     }, instances
+end
+
+-- Public individual-brick construction for sparse runs.  Bricks retain their
+-- approved kit provenance, so legacy brick definitions cannot enter the run
+-- merely because old recordings still need them to load.
+function M.instantiate_brick(kit_id, brick_id, index, owner)
+    local item = catalog_item("brick_kit", kit_id)
+    if not item then error("unknown brick kit: " .. tostring(kit_id)) end
+    local member = false
+    for _, candidate in ipairs(item.brick_ids) do
+        if candidate == brick_id then member = true break end
+    end
+    if not member then
+        error(string.format(
+            "brick %s is not part of comprehension-pool kit %s",
+            tostring(brick_id),
+            tostring(kit_id)
+        ))
+    end
+    local definition = bricks.by_id[brick_id]
+    if not definition then error("unknown brick: " .. tostring(brick_id)) end
+    return {
+        uid = string.format("%s-b%02d", owner or "player", index),
+        content_id = definition.id,
+        kit_id = item.id,
+        name = definition.name,
+        family = definition.family or "basic",
+        behaviour = definition.behaviour,
+        hp = definition.hp,
+        max_hp = definition.hp,
+        tags = util.deep_copy(item.tags),
+        art_id = "brick_" .. definition.id,
+        mechanics = rule_ast.compact_lines(definition.rule_set, 1),
+        compact_copy = definition.compact_copy,
+        inspection_copy = util.deep_copy(definition.inspection_copy),
+        rule_set = util.deep_copy(definition.rule_set),
+        compatibility = util.deep_copy(definition.rule_set.compatibility),
+        balance = util.deep_copy(definition.balance),
+    }
 end
 
 function M.catalog_summary()

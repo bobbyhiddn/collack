@@ -11,6 +11,7 @@ local contract = require("battle.vslice_contract")
 local draft = require("battle.draft")
 local opponent = require("battle.opponent")
 local setup_rules = require("battle.setup_rules")
+local short_run = require("battle.short_run")
 local util = require("battle.run_util")
 
 local M = {}
@@ -76,6 +77,9 @@ end
 
 function M.new(options)
     options = options or {}
+    if options.short_run == true or options.mode == short_run.MODE then
+        return short_run.new(options)
+    end
     local run_seed = util.normalize_seed(options.run_seed, contract.SEED_MODULUS)
     local run_index = math.max(1, math.floor(tonumber(options.run_index) or 1))
     local domain_seeds = {
@@ -427,6 +431,9 @@ local function new_run_command(state)
 end
 
 function M.dispatch(state, command)
+    if type(state) == "table" and state.mode == short_run.MODE then
+        return short_run.dispatch(state, command)
+    end
     if type(state) ~= "table" or type(state.phase) ~= "string" then
         return nil, error_result(state, command, "state_invalid", "RunState is required.")
     end
@@ -534,6 +541,9 @@ local function validate_completion(state, completion)
 end
 
 function M.complete_battle(state, completion)
+    if type(state) == "table" and state.mode == short_run.MODE then
+        return short_run.complete_battle(state, completion)
+    end
     local valid, completion_error = validate_completion(state, completion)
     if not valid then return nil, completion_error end
     local next_state = util.deep_copy(state)
@@ -572,11 +582,17 @@ function M.complete_battle(state, completion)
 end
 
 function M.battle_handoff(state)
+    if type(state) == "table" and state.mode == short_run.MODE then
+        return short_run.battle_handoff(state)
+    end
     if not state.battle or not state.battle.handoff then return nil end
     return util.deep_copy(state.battle.handoff)
 end
 
 function M.record(state)
+    if type(state) == "table" and state.mode == short_run.MODE then
+        return short_run.record(state)
+    end
     if state.phase ~= contract.PHASE.RESULT or not state.result
         or not state.battle or not state.battle.recording then
         return nil, error_result(
@@ -615,6 +631,9 @@ local function replay_error(code, message, details)
 end
 
 function M.replay(record)
+    if type(record) == "table" and record.mode == short_run.MODE then
+        return short_run.replay(record)
+    end
     if type(record) ~= "table" or record.schema_version ~= 1 then
         return nil, replay_error("record_invalid", "A version 1 RunRecord is required.")
     end
@@ -669,7 +688,10 @@ function M.replay(record)
     return state
 end
 
-function M.state_machine()
+function M.state_machine(mode)
+    if mode == short_run.MODE or mode == "short_run" then
+        return short_run.state_machine()
+    end
     return {
         { phase = "draft", command = "choose_offer", next = "setup", count = 9 },
         {
@@ -679,6 +701,32 @@ function M.state_machine()
         },
         { phase = "battle", commands = {}, completion = "engine", next = "result" },
         { phase = "result", command = "new_run", next = "new RunState(draft)" },
+    }
+end
+
+function M.save(state)
+    if type(state) == "table" and state.mode == short_run.MODE then
+        return short_run.save(state)
+    end
+    return nil, {
+        schema_version = 1,
+        error = true,
+        code = "save_mode_unsupported",
+        message = "Boundary saves are implemented for the three-fight run.",
+    }
+end
+
+function M.load(save)
+    if type(save) == "table"
+        and type(save.state) == "table"
+        and save.state.mode == short_run.MODE then
+        return short_run.load(save)
+    end
+    return nil, {
+        schema_version = 1,
+        error = true,
+        code = "save_invalid",
+        message = "A versioned three-fight run save is required.",
     }
 end
 
