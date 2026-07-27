@@ -103,7 +103,7 @@ jobs:
           npm ci
           npx playwright install --with-deps chromium
 
-      - name: Verify packaged browser at mobile viewport
+      - name: Verify packaged browser at phone and desktop viewports
         if: matrix.target == 'web'
         env:
           PLAYWRIGHT_BROWSERS_PATH: .playwright-browsers
@@ -120,6 +120,7 @@ jobs:
           path: |
             dist/web
             dist/desktop
+            dist/verification
             dist/collack-spike.love
           if-no-files-found: ignore
           retention-days: 14

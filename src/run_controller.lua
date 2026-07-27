@@ -10,7 +10,8 @@ local M = {}
 M.SCHEMA_VERSION = 1
 M.DEFAULT_SEED = 9125
 
-local function fresh_ui()
+local function fresh_ui(settings)
+    settings = settings or {}
     return {
         inspected_choice_id = nil,
         selected_choice_id = nil,
@@ -20,8 +21,9 @@ local function fresh_ui()
         replay = nil,
         paused = false,
         speed = 1,
-        muted = false,
-        reduced_motion = false,
+        muted = settings.muted == true,
+        reduced_motion = settings.reduced_motion == true,
+        ledger_expanded = false,
         last_error = nil,
     }
 end
@@ -32,7 +34,7 @@ function M.new(options)
     return {
         schema_version = M.SCHEMA_VERSION,
         run = run.new(options),
-        ui = fresh_ui(),
+        ui = fresh_ui(options),
     }
 end
 
@@ -346,9 +348,32 @@ local function new_run(model, action)
     local next_model = {
         schema_version = M.SCHEMA_VERSION,
         run = result.state,
-        ui = fresh_ui(),
+        ui = fresh_ui({
+            muted = model.ui.muted,
+            reduced_motion = model.ui.reduced_motion,
+        }),
     }
     return accepted(next_model, result.events)
+end
+
+local function review_ledger(model, action)
+    if model.run.phase ~= "result" then
+        return nil, view_error(
+            model,
+            action,
+            "ledger_out_of_phase",
+            "The battle ledger is available after the result."
+        )
+    end
+    local next_model = util.deep_copy(model)
+    next_model.ui.ledger_expanded = not next_model.ui.ledger_expanded
+    return accepted(next_model, {
+        {
+            schema_version = 1,
+            type = "ledger_toggled",
+            expanded = next_model.ui.ledger_expanded,
+        },
+    })
 end
 
 function M.dispatch(model, action)
@@ -373,6 +398,7 @@ function M.dispatch(model, action)
     if kind == "replay_step" then return replay_step(model, action) end
     if kind == "replay_seek" then return replay_seek(model, action) end
     if kind == "replay_close" then return replay_close(model, action) end
+    if kind == "review_ledger" then return review_ledger(model, action) end
     if kind == "new_run" then return new_run(model, action) end
     if kind == "battle_complete" then
         return nil, view_error(
@@ -448,6 +474,7 @@ function M.activate(model, action_id, source)
         replay_battle = "replay_battle",
         replay_next = "replay_step",
         replay_close = "replay_close",
+        review_battle = "review_ledger",
         new_run = "new_run",
         battle_pause = "toggle_pause",
         battle_speed = "cycle_speed",

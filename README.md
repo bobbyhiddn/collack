@@ -37,13 +37,16 @@ npm run verify:web
 
 The web result is written to `dist/web/` with content-addressed JavaScript,
 data, and WebAssembly filenames. Serve that directory with any static HTTP
-server. The browser verifier starts and stops its own local server, boots the
-packaged canvas at 390x844, completes the nine-pick draft and eight-brick setup
-through touch, waits for the canonical autobattle, then exercises replay, New
-Run, and mouse parity. Touch or click the visible controls; Tab and Enter
-navigate the same semantic actions. During battle, Space pauses and Right Arrow
-advances one exact fixed step. On the result screen, `R` opens replay and `N`
-starts the next seeded run.
+server. The browser verifier starts and stops its own local server, completes
+the full flow at both 390×844 and 1280×800, validates moving canonical physics,
+and writes review captures to `dist/verification/`.
+
+Touch or click the visible controls; drag a selected brick or marble onto a
+legal destination, or use the equivalent tap sequence. Tab and Enter navigate
+the same semantic actions. During battle, Space pauses and Right Arrow advances
+one exact fixed step. `M` toggles generated audio and `V` toggles reduced
+motion. On the result screen, `R` opens replay and `N` starts the next seeded
+run. Mute and reduced-motion preferences persist across runs.
 
 ## Repository map
 

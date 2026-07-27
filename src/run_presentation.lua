@@ -198,6 +198,11 @@ local function project_setup(presentation, state, ui)
         errors = util.deep_copy(state.setup.errors),
         build_tags = counted_tag_projection(state.setup.build_tags),
         adjacencies = util.deep_copy(state.setup.adjacencies),
+        sling = state.player.sling and {
+            id = state.player.sling.id,
+            name = state.player.sling.name,
+            archetype = state.player.sling.archetype,
+        } or nil,
         selected_brick_uid = ui.selected_brick_uid,
         selected_marble_uid = ui.selected_marble_uid,
         grid = {},
@@ -358,7 +363,11 @@ local function project_battle(presentation, state, ui, previous_frame, current_f
     presentation.title = "Automatic battle"
     presentation.subtitle = "Both bags commit together. No reflex input changes combat."
     presentation.opponent = opponent_projection(state.opponent)
-    local frame = projected_frame(previous_frame, current_frame, alpha)
+    local frame = projected_frame(
+        previous_frame,
+        current_frame,
+        ui.reduced_motion and 1 or alpha
+    )
     presentation.battle = {
         status = frame and (frame.finished and "finished" or "running")
             or (state.battle and state.battle.status or "handoff"),
@@ -429,7 +438,16 @@ local function project_battle(presentation, state, ui, previous_frame, current_f
     ))
 end
 
-local function project_result(presentation, state)
+local function recent_events(events, count)
+    local out = {}
+    local first = math.max(1, #(events or {}) - count + 1)
+    for index = first, #(events or {}) do
+        out[#out + 1] = util.deep_copy(events[index])
+    end
+    return out
+end
+
+local function project_result(presentation, state, ui, previous_frame, current_frame)
     presentation.title = state.result.outcome == "draw" and "Draw" or
         (state.result.winner == "player" and "Victory" or "Defeat")
     presentation.subtitle = tostring(state.result.reason):gsub("_", " ")
@@ -441,19 +459,29 @@ local function project_result(presentation, state)
         exchanges = state.result.exchanges,
         player_tags = util.deep_copy(state.setup.build_tags),
         recording_frames = #(state.battle.recording.frames or {}),
+        final_frame = projected_frame(previous_frame, current_frame, 1),
+        ledger = recent_events(state.battle.recording.events, ui.ledger_expanded and 9 or 3),
+        ledger_expanded = ui.ledger_expanded == true,
     }
+    add_action(presentation, action(
+        "new_run",
+        "new_run",
+        "Draft Again",
+        true,
+        { x = 16, y = 692, width = 358, height = 56 }
+    ))
+    add_action(presentation, action(
+        "review_battle",
+        "review_ledger",
+        ui.ledger_expanded and "Close Ledger" or "Review Battle",
+        true,
+        { x = 16, y = 760, width = 174, height = 56 }
+    ))
     add_action(presentation, action(
         "replay_battle",
         "replay_battle",
         "Replay Battle",
         #(state.battle.recording.frames or {}) > 0,
-        { x = 16, y = 760, width = 174, height = 56 }
-    ))
-    add_action(presentation, action(
-        "new_run",
-        "new_run",
-        "New Run",
-        true,
         { x = 200, y = 760, width = 174, height = 56 }
     ))
 end
@@ -528,7 +556,7 @@ function M.project(run_snapshot, previous_frame, current_frame, alpha, view_stat
     elseif state.phase == "battle" then
         project_battle(presentation, state, ui, previous_frame, current_frame, alpha)
     elseif state.phase == "result" then
-        project_result(presentation, state)
+        project_result(presentation, state, ui, previous_frame, current_frame)
     end
     return presentation
 end

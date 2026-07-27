@@ -101,6 +101,7 @@ REQUIRED_RUNTIME_FILES=(
     "run_presentation.lua"
     "run_loop.lua"
     "ui/art_tokens.lua"
+    "ui/procedural_audio.lua"
     "battle/engine.lua"
     "battle/physics.lua"
     "battle/checkpoints.lua"
