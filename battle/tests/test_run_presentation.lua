@@ -10,6 +10,7 @@ package.path = table.concat({
 
 local harness = require("battle.tests.harness")
 local controller = require("run_controller")
+local engine = require("battle.engine")
 local presentation = require("run_presentation")
 local legacy_boundary = require("presentation")
 local util = require("battle.run_util")
@@ -66,6 +67,10 @@ function M.run(t)
         "all screens carry the accepted tabletop direction")
     t:eq(#projected.draft.cards, 3, "draft projects three individual cards")
     t:eq(#projected.opponent.scout_tags, 2, "first screen projects honest CPU scouting")
+    for _, tag in ipairs(projected.opponent.scout_tags) do
+        t:eq(type(tag.description), "string", tag.id .. " scout tag explains the rival mechanic")
+        t:ok(#tag.description > 12, tag.id .. " scout guidance is meaningful copy")
+    end
     t:eq(projected.draft.progress.required, 9, "draft progress exposes nine decisions")
     t:ok(serializable(projected), "draft projection is serializer-safe")
 
@@ -74,13 +79,29 @@ function M.run(t)
         t:eq(type(card.role), "string", card.choice_id .. " has a physical role")
         t:eq(#card.mechanics > 0, true, card.choice_id .. " has mechanics copy")
         t:eq(#card.tags > 0, true, card.choice_id .. " has readable synergy metadata")
+        local synergy_tags = #card.synergy.matched
+            + #card.synergy.introduced
+            + #card.synergy.counters
+        t:ok(synergy_tags > 0, card.choice_id .. " explains how it changes or links the build")
+        for _, group in ipairs({
+            card.synergy.matched,
+            card.synergy.introduced,
+            card.synergy.counters,
+        }) do
+            for _, tag in ipairs(group) do
+                t:ok(#tag.description > 12,
+                    card.choice_id .. " synergy tag carries readable mechanic guidance")
+            end
+        end
         t:eq(type(card.art_id), "string", card.choice_id .. " has an art lookup ID")
         t:ok(action_by_id(projected, card.action_id) ~= nil,
             card.choice_id .. " has an inspect action")
     end
     for _, item in ipairs(projected.actions) do
-        t:ok(item.bounds.width >= 44, item.id .. " target is at least 44 pixels wide")
-        t:ok(item.bounds.height >= 44, item.id .. " target is at least 44 pixels high")
+        t:ok(item.bounds.width >= projected.minimum_target,
+            item.id .. " target meets the 48-pixel interaction minimum")
+        t:ok(item.bounds.height >= projected.minimum_target,
+            item.id .. " target meets the 48-pixel interaction minimum")
         t:eq(projected.enabled_actions[item.id], item.enabled,
             item.id .. " enabled state is indexed for input adapters")
     end
@@ -110,6 +131,19 @@ function M.run(t)
     t:eq(#projected.setup.bricks, 8, "setup projects eight separately selectable bricks")
     t:eq(#projected.setup.bag, 4, "setup projects explicit four-marble order")
     t:eq(#projected.setup.insertion_slots, 5, "bag projects before-each and tail slots")
+    local slot_actions = {}
+    for _, slot in ipairs(projected.setup.insertion_slots) do
+        slot_actions[#slot_actions + 1] = action_by_id(projected, slot.action_id)
+    end
+    table.sort(slot_actions, function(left, right)
+        return left.bounds.x < right.bounds.x
+    end)
+    for index = 2, #slot_actions do
+        local previous_slot = slot_actions[index - 1]
+        local current_slot = slot_actions[index]
+        t:ok(previous_slot.bounds.x + previous_slot.bounds.width <= current_slot.bounds.x,
+            "phone bag move targets do not overlap")
+    end
     t:eq(#projected.setup.grid, 3, "formation projects three rows")
     for row = 1, 3 do
         t:eq(#projected.setup.grid[row], 7, "formation row " .. row .. " projects seven cells")
@@ -118,6 +152,14 @@ function M.run(t)
     t:eq(action_by_id(projected, "lock_setup").enabled, false,
         "persistent lock is visibly disabled with reasons")
     t:eq(#projected.setup.errors > 0, true, "setup projection carries readable lock reasons")
+
+    local first_brick = model.run.player.bricks[1]
+    model = activate(model, "brick:" .. first_brick.uid)
+    projected = controller.project(model)
+    t:eq(projected.setup.selected_detail.name, first_brick.name,
+        "selecting a setup brick exposes its readable inspection payload")
+    t:ok(#projected.setup.selected_detail.mechanic_description > 20,
+        "setup brick inspection explains the mechanic")
 
     for index, brick in ipairs(model.run.player.bricks) do
         model = activate(model, "brick:" .. brick.uid)
@@ -131,6 +173,14 @@ function M.run(t)
         "valid formation enables persistent lock")
     t:eq(#projected.setup.build_tags > 0, true, "setup projects aggregate synergy counts")
     t:eq(#projected.setup.adjacencies > 0, true, "setup projects adjacency previews")
+    local readable_link = false
+    for _, adjacency in ipairs(projected.setup.adjacencies) do
+        if adjacency.active_synergy and #adjacency.tags > 0 then
+            readable_link = #adjacency.tags[1].description > 12
+            break
+        end
+    end
+    t:ok(readable_link, "active setup links expose the shared synergy and its meaning")
 
     model = activate(model, "lock_setup")
     local completion = fixtures.completion()
@@ -155,6 +205,52 @@ function M.run(t)
         "battle projects mute control")
     t:ok(action_by_id(projected, "battle_motion") ~= nil,
         "battle projects reduced-motion control")
+
+    local handoff = model.run.battle.handoff
+    local world = engine.new({
+        battle_seed = handoff.battle_seed,
+        rules_version = handoff.rules_version,
+        player = handoff.player,
+        opponent = handoff.opponent,
+    })
+    local battle_frame = engine.snapshot(world)
+    projected = controller.project(model, battle_frame, battle_frame, 1)
+    local inspect_action
+    for _, entity in ipairs(projected.battle.frame.entities) do
+        if entity.type == "brick" and entity.alive then
+            inspect_action = action_by_id(projected, "entity:" .. tostring(entity.id))
+            if inspect_action then break end
+        end
+    end
+    t:ok(inspect_action ~= nil, "a visible canonical brick has a pointer inspection target")
+    model = activate(model, inspect_action.id)
+    projected = controller.project(model, battle_frame, battle_frame, 1)
+    t:ok(projected.battle.inspected ~= nil, "entity activation opens a visible inspector payload")
+    t:eq(projected.battle.inspected.entity_id,
+        inspect_action.id:match("^entity:(.+)$"), "inspector tracks the activated entity")
+    t:ok(#projected.battle.inspected.name > 2, "inspector names the physical entity")
+    t:ok(#projected.battle.inspected.mechanic_description > 20,
+        "brick inspector explains its canonical mechanic")
+    model = activate(model, inspect_action.id)
+    projected = controller.project(model, battle_frame, battle_frame, 1)
+    t:eq(projected.battle.inspected, nil, "activating the inspected entity closes the inspector")
+
+    local marble_action
+    for _, entity in ipairs(projected.battle.frame.entities) do
+        if entity.type == "marble" then
+            marble_action = action_by_id(projected, "entity:" .. tostring(entity.id))
+            if marble_action then break end
+        end
+    end
+    t:ok(marble_action ~= nil, "a canonical marble has a pointer inspection target")
+    model = activate(model, marble_action.id)
+    projected = controller.project(model, battle_frame, battle_frame, 1)
+    t:eq(projected.battle.inspected.type, "marble",
+        "marble activation opens the marble inspector")
+    t:ok(projected.battle.inspected.shell_count > 0,
+        "marble inspector exposes remaining material layers")
+    t:eq(type(projected.battle.inspected.core), "string",
+        "marble inspector names its release core")
 
     model = assert(controller.complete_battle(model, completion)).model
     projected = controller.project(model)

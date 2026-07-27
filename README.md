@@ -43,10 +43,12 @@ and writes review captures to `dist/verification/`.
 
 Touch or click the visible controls; drag a selected brick or marble onto a
 legal destination, or use the equivalent tap sequence. Tab and Enter navigate
-the same semantic actions. During battle, Space pauses and Right Arrow advances
-one exact fixed step. `M` toggles generated audio and `V` toggles reduced
-motion. On the result screen, `R` opens replay and `N` starts the next seeded
-run. Mute and reduced-motion preferences persist across runs.
+the same semantic actions. During battle, tap or click any marble or brick to
+inspect its owner, mechanic, and material state; activate it again to close the
+inspector. Space pauses and Right Arrow advances one exact fixed step. `M`
+toggles generated audio and `V` toggles reduced motion. On the result screen,
+`R` opens replay and `N` starts the next seeded run. Mute and reduced-motion
+preferences persist across runs.
 
 ## Repository map
 

@@ -235,9 +235,18 @@ local function inspect_entity(model, action)
         return nil, view_error(model, action, "entity_inspect_out_of_phase", "Battle entities are not active.")
     end
     local next_model = util.deep_copy(model)
-    next_model.ui.inspected_entity_id = action.entity_id
+    local closing = tostring(next_model.ui.inspected_entity_id) == tostring(action.entity_id)
+    if closing then
+        next_model.ui.inspected_entity_id = nil
+    else
+        next_model.ui.inspected_entity_id = action.entity_id
+    end
     return accepted(next_model, {
-        { schema_version = 1, type = "entity_inspected", entity_id = action.entity_id },
+        {
+            schema_version = 1,
+            type = closing and "entity_inspection_closed" or "entity_inspected",
+            entity_id = action.entity_id,
+        },
     })
 end
 
