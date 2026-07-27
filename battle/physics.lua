@@ -1,9 +1,11 @@
--- battle/physics.lua -- deterministic fixed-timestep 2D circle physics.
+-- battle/physics.lua -- deterministic fixed-timestep continuous 2D circle physics.
 --
 -- This module deliberately has no LÖVE dependency.  It is the canonical motion
 -- implementation for both headless battle tests and the client.  Bodies and
--- colliders are processed in stable id order and every public snapshot is a
--- value-only copy.
+-- colliders are processed in stable id order.  Each fixed tick advances to the
+-- earliest swept time of impact, resolves it, and repeats under a hard
+-- iteration bound; collision safety never depends on sampled overlap
+-- microsteps.  Every public snapshot is a value-only copy.
 
 local M = {}
 local World = {}
@@ -14,6 +16,11 @@ M.SCHEMA_VERSION = 1
 
 local abs, ceil, floor, max, min, sqrt =
     math.abs, math.ceil, math.floor, math.max, math.min, math.sqrt
+
+local TIME_EPSILON = 1e-12
+local GEOMETRY_EPSILON = 1e-12
+local VELOCITY_EPSILON = 1e-14
+local POSITION_SLOP = 1e-9
 
 local function clamp(value, lo, hi)
     if value < lo then return lo end
@@ -92,8 +99,11 @@ function M.new(opts)
         width = width,
         height = height,
         max_speed = opts.max_speed or 240,
+        -- Retained as value-compatible legacy configuration/snapshot state.
+        -- Continuous collision detection always uses one authoritative tick.
         max_substeps = opts.max_substeps or 64,
         substep_fraction = opts.substep_fraction or 0.35,
+        max_collision_iterations = max(1, floor(opts.max_collision_iterations or 128)),
         linear_damping = opts.linear_damping or 0.996,
         sleep_speed = opts.sleep_speed or 1.25,
         sleep_ticks = opts.sleep_ticks or 36,
@@ -109,6 +119,8 @@ function M.new(opts)
         events = {},
         event_seq = 0,
         last_substeps = 1,
+        last_collision_iterations = 0,
+        collision_iteration_limit_hit = false,
         can_collide = opts.can_collide,
     }, World)
 end
@@ -329,8 +341,17 @@ local function record_contact(world, contacts, kind, left, right, fields)
     local key = kind .. ":" .. contact_key(left, right)
     local prior = contacts[key]
     local impulse = fields.impulse or 0
+    local sort_toi = fields.sort_toi or fields.toi or 0
+    fields.sort_toi = nil
     if not prior or impulse > prior.impulse then
-        contacts[key] = { kind = kind, left = left, right = right, fields = fields, impulse = impulse }
+        contacts[key] = {
+            kind = kind,
+            left = left,
+            right = right,
+            fields = fields,
+            impulse = impulse,
+            sort_toi = sort_toi,
+        }
     end
 end
 
@@ -344,47 +365,67 @@ local function clamp_speed(world, body)
     end
 end
 
-local function resolve_wall(world, body, contacts)
-    local radius = body.radius
-    if body.x < radius then
-        body.x = radius
-        local incoming = -body.vx
-        if body.vx < 0 then body.vx = -body.vx * body.restitution end
-        record_contact(world, contacts, "wall", body.id, "left", {
-            body = body.id, wall = "left", nx = 1, ny = 0,
-            impulse = max(0, incoming * body.mass * (1 + body.restitution)),
-        })
-    elseif body.x > world.width - radius then
-        body.x = world.width - radius
-        local incoming = body.vx
-        if body.vx > 0 then body.vx = -body.vx * body.restitution end
-        record_contact(world, contacts, "wall", body.id, "right", {
-            body = body.id, wall = "right", nx = -1, ny = 0,
-            impulse = max(0, incoming * body.mass * (1 + body.restitution)),
-        })
+local function choose_earlier(best, candidate, remaining)
+    if not candidate then return best end
+    if candidate.time < -TIME_EPSILON or candidate.time > remaining + TIME_EPSILON then
+        return best
     end
-
-    if body.y < radius then
-        body.y = radius
-        local incoming = -body.vy
-        if body.vy < 0 then body.vy = -body.vy * body.restitution end
-        record_contact(world, contacts, "wall", body.id, "top", {
-            body = body.id, wall = "top", nx = 0, ny = 1,
-            impulse = max(0, incoming * body.mass * (1 + body.restitution)),
-        })
-    elseif body.y > world.height - radius then
-        body.y = world.height - radius
-        local incoming = body.vy
-        if body.vy > 0 then body.vy = -body.vy * body.restitution end
-        record_contact(world, contacts, "wall", body.id, "bottom", {
-            body = body.id, wall = "bottom", nx = 0, ny = -1,
-            impulse = max(0, incoming * body.mass * (1 + body.restitution)),
-        })
+    candidate.time = clamp(candidate.time, 0, remaining)
+    if not best
+        or candidate.time < best.time - TIME_EPSILON
+        or (abs(candidate.time - best.time) <= TIME_EPSILON and candidate.key < best.key)
+    then
+        return candidate
     end
+    return best
 end
 
-local function resolve_box(world, body, box, contacts)
-    if not box.alive or not collision_allowed(world, body, box) then return end
+local function body_moves(body)
+    return body.alive and body.dynamic and not body.asleep
+end
+
+local function swept_wall(world, body, remaining)
+    if not body_moves(body) then return nil end
+    local best
+    local radius = body.radius
+
+    local function add(time, wall, nx, ny, penetration)
+        best = choose_earlier(best, {
+            time = time,
+            key = "1:wall:" .. tostring(body.id) .. ":" .. wall,
+            kind = "wall",
+            body = body,
+            wall = wall,
+            nx = nx,
+            ny = ny,
+            penetration = penetration,
+        }, remaining)
+    end
+
+    if body.x < radius then
+        add(0, "left", 1, 0, radius - body.x)
+    elseif body.vx < -VELOCITY_EPSILON then
+        add((radius - body.x) / body.vx, "left", 1, 0)
+    end
+    if body.x > world.width - radius then
+        add(0, "right", -1, 0, body.x - (world.width - radius))
+    elseif body.vx > VELOCITY_EPSILON then
+        add((world.width - radius - body.x) / body.vx, "right", -1, 0)
+    end
+    if body.y < radius then
+        add(0, "top", 0, 1, radius - body.y)
+    elseif body.vy < -VELOCITY_EPSILON then
+        add((radius - body.y) / body.vy, "top", 0, 1)
+    end
+    if body.y > world.height - radius then
+        add(0, "bottom", 0, -1, body.y - (world.height - radius))
+    elseif body.vy > VELOCITY_EPSILON then
+        add((world.height - radius - body.y) / body.vy, "bottom", 0, -1)
+    end
+    return best
+end
+
+local function box_overlap(body, box)
     local half_w, half_h = box.width / 2, box.height / 2
     local left, right = box.x - half_w, box.x + half_w
     local top, bottom = box.y - half_h, box.y + half_h
@@ -392,10 +433,10 @@ local function resolve_box(world, body, box, contacts)
     local nearest_y = clamp(body.y, top, bottom)
     local dx, dy = body.x - nearest_x, body.y - nearest_y
     local distance2 = dx * dx + dy * dy
-    if distance2 >= body.radius * body.radius then return end
+    if distance2 >= body.radius * body.radius then return nil end
 
     local nx, ny, distance
-    if distance2 > 1e-18 then
+    if distance2 > 0 then
         distance = sqrt(distance2)
         nx, ny = dx / distance, dy / distance
     else
@@ -412,67 +453,299 @@ local function resolve_box(world, body, box, contacts)
         end)
         distance, nx, ny = -distances[1][1], distances[1][2], distances[1][3]
     end
+    return nx, ny, body.radius - distance
+end
 
-    local penetration = body.radius - distance
-    if not box.sensor and not body.sensor then
-        body.x = body.x + nx * penetration
-        body.y = body.y + ny * penetration
-        local normal_velocity = body.vx * nx + body.vy * ny
-        local restitution = min(body.restitution, box.restitution)
-        local impulse = 0
-        if normal_velocity < 0 then
-            impulse = -(1 + restitution) * normal_velocity * body.mass
-            body.vx = body.vx + nx * impulse * body.inv_mass
-            body.vy = body.vy + ny * impulse * body.inv_mass
+local function swept_box(world, body, box, remaining, ignored_sensors)
+    if not body_moves(body)
+        or not box.alive
+        or not collision_allowed(world, body, box)
+    then
+        return nil
+    end
+
+    local sensor_key = "box:" .. contact_key(body.id, box.id)
+    if (body.sensor or box.sensor) and ignored_sensors[sensor_key] then return nil end
+
+    local key = "2:box:" .. contact_key(body.id, box.id)
+    local nx, ny, penetration = box_overlap(body, box)
+    if nx then
+        return {
+            time = 0, key = key, kind = "box", body = body, box = box,
+            nx = nx, ny = ny, penetration = penetration, sensor_key = sensor_key,
+        }
+    end
+
+    local half_w, half_h = box.width / 2, box.height / 2
+    local left, right = box.x - half_w, box.x + half_w
+    local top, bottom = box.y - half_h, box.y + half_h
+    local radius = body.radius
+    local best
+
+    local function add(time, normal_x, normal_y, feature)
+        best = choose_earlier(best, {
+            time = time,
+            key = key .. ":" .. feature,
+            kind = "box",
+            body = body,
+            box = box,
+            nx = normal_x,
+            ny = normal_y,
+            sensor_key = sensor_key,
+        }, remaining)
+    end
+
+    if body.vx > VELOCITY_EPSILON then
+        local time = (left - radius - body.x) / body.vx
+        local y = body.y + body.vy * time
+        if y >= top - GEOMETRY_EPSILON and y <= bottom + GEOMETRY_EPSILON then
+            add(time, -1, 0, "left")
         end
-        record_contact(world, contacts, "box", body.id, box.id, {
-            body = body.id, box = box.id, nx = quantize(nx), ny = quantize(ny),
-            impulse = quantize(impulse), speed = quantize(abs(normal_velocity)),
-        })
-    else
-        record_contact(world, contacts, "sensor", body.id, box.id, {
-            body = body.id, box = box.id, nx = quantize(nx), ny = quantize(ny), impulse = 0,
-        })
+    elseif body.vx < -VELOCITY_EPSILON then
+        local time = (right + radius - body.x) / body.vx
+        local y = body.y + body.vy * time
+        if y >= top - GEOMETRY_EPSILON and y <= bottom + GEOMETRY_EPSILON then
+            add(time, 1, 0, "right")
+        end
+    end
+    if body.vy > VELOCITY_EPSILON then
+        local time = (top - radius - body.y) / body.vy
+        local x = body.x + body.vx * time
+        if x >= left - GEOMETRY_EPSILON and x <= right + GEOMETRY_EPSILON then
+            add(time, 0, -1, "top")
+        end
+    elseif body.vy < -VELOCITY_EPSILON then
+        local time = (bottom + radius - body.y) / body.vy
+        local x = body.x + body.vx * time
+        if x >= left - GEOMETRY_EPSILON and x <= right + GEOMETRY_EPSILON then
+            add(time, 0, 1, "bottom")
+        end
+    end
+
+    local speed2 = body.vx * body.vx + body.vy * body.vy
+    if speed2 > VELOCITY_EPSILON * VELOCITY_EPSILON then
+        local corners = {
+            { left, top, -1, -1, "top_left" },
+            { right, top, 1, -1, "top_right" },
+            { left, bottom, -1, 1, "bottom_left" },
+            { right, bottom, 1, 1, "bottom_right" },
+        }
+        for _, corner in ipairs(corners) do
+            local px, py = body.x - corner[1], body.y - corner[2]
+            local projection = px * body.vx + py * body.vy
+            local c = px * px + py * py - radius * radius
+            local discriminant = projection * projection - speed2 * c
+            local discriminant_epsilon = GEOMETRY_EPSILON
+                * max(abs(projection * projection), abs(speed2 * c), 1e-24)
+            if projection < -VELOCITY_EPSILON
+                and discriminant >= -discriminant_epsilon
+            then
+                local time = (-projection - sqrt(max(0, discriminant))) / speed2
+                if time >= -TIME_EPSILON and time <= remaining + TIME_EPSILON then
+                    local qx = px + body.vx * time
+                    local qy = py + body.vy * time
+                    local in_x, in_y
+                    if corner[3] < 0 then in_x = qx <= GEOMETRY_EPSILON
+                    else in_x = qx >= -GEOMETRY_EPSILON end
+                    if corner[4] < 0 then in_y = qy <= GEOMETRY_EPSILON
+                    else in_y = qy >= -GEOMETRY_EPSILON end
+                    if in_x and in_y then
+                        local corner_nx, corner_ny = normalise(qx, qy, corner[3], corner[4])
+                        if body.vx * corner_nx + body.vy * corner_ny < -VELOCITY_EPSILON then
+                            add(time, corner_nx, corner_ny, corner[5])
+                        end
+                    end
+                end
+            end
+        end
+    end
+    return best
+end
+
+local function swept_pair(world, left, right, remaining, ignored_sensors)
+    if not left.alive or not right.alive or not collision_allowed(world, left, right) then
+        return nil
+    end
+    local inv_left = left.dynamic and left.inv_mass or 0
+    local inv_right = right.dynamic and right.inv_mass or 0
+    if inv_left + inv_right <= 0 then return nil end
+
+    local sensor_key = "body:" .. contact_key(left.id, right.id)
+    if (left.sensor or right.sensor) and ignored_sensors[sensor_key] then return nil end
+
+    local left_vx, left_vy = 0, 0
+    local right_vx, right_vy = 0, 0
+    if body_moves(left) then left_vx, left_vy = left.vx, left.vy end
+    if body_moves(right) then right_vx, right_vy = right.vx, right.vy end
+    local dx, dy = right.x - left.x, right.y - left.y
+    local rvx, rvy = right_vx - left_vx, right_vy - left_vy
+    local radius = left.radius + right.radius
+    local c = dx * dx + dy * dy - radius * radius
+    local contact_epsilon = GEOMETRY_EPSILON * max(radius * radius, 1e-12)
+    local fallback = tostring(left.id) < tostring(right.id) and 1 or -1
+    local nx, ny, distance = normalise(dx, dy, fallback, 0)
+    local key = "3:body:" .. contact_key(left.id, right.id)
+
+    if c < 0 then
+        return {
+            time = 0, key = key, kind = "body", left = left, right = right,
+            nx = nx, ny = ny, penetration = radius - distance, sensor_key = sensor_key,
+        }
+    end
+    local normal_velocity = rvx * nx + rvy * ny
+    if c <= contact_epsilon then
+        if normal_velocity < -VELOCITY_EPSILON then
+            return {
+                time = 0, key = key, kind = "body", left = left, right = right,
+                nx = nx, ny = ny, sensor_key = sensor_key,
+            }
+        end
+        return nil
+    end
+
+    local speed2 = rvx * rvx + rvy * rvy
+    local projection = dx * rvx + dy * rvy
+    if speed2 <= VELOCITY_EPSILON * VELOCITY_EPSILON
+        or projection >= -VELOCITY_EPSILON
+    then
+        return nil
+    end
+    local discriminant = projection * projection - speed2 * c
+    local discriminant_epsilon = GEOMETRY_EPSILON
+        * max(abs(projection * projection), abs(speed2 * c), 1e-24)
+    if discriminant < -discriminant_epsilon then return nil end
+    local time = (-projection - sqrt(max(0, discriminant))) / speed2
+    if time < -TIME_EPSILON or time > remaining + TIME_EPSILON then return nil end
+    local hit_dx, hit_dy = dx + rvx * time, dy + rvy * time
+    nx, ny = normalise(hit_dx, hit_dy, fallback, 0)
+    if rvx * nx + rvy * ny >= -VELOCITY_EPSILON then return nil end
+    return {
+        time = clamp(time, 0, remaining), key = key, kind = "body",
+        left = left, right = right, nx = nx, ny = ny, sensor_key = sensor_key,
+    }
+end
+
+local function earliest_collision(world, remaining, ignored_sensors)
+    local best
+    for _, body in ipairs(world.bodies) do
+        if body.alive then
+            best = choose_earlier(best, swept_wall(world, body, remaining), remaining)
+            for _, box in ipairs(world.boxes) do
+                best = choose_earlier(
+                    best,
+                    swept_box(world, body, box, remaining, ignored_sensors),
+                    remaining
+                )
+            end
+        end
+    end
+    for left_index = 1, #world.bodies - 1 do
+        local left = world.bodies[left_index]
+        if left.alive then
+            for right_index = left_index + 1, #world.bodies do
+                best = choose_earlier(
+                    best,
+                    swept_pair(world, left, world.bodies[right_index], remaining, ignored_sensors),
+                    remaining
+                )
+            end
+        end
+    end
+    return best
+end
+
+local function advance_bodies(world, amount)
+    if amount <= 0 then return end
+    for _, body in ipairs(world.bodies) do
+        if body_moves(body) then
+            body.x = body.x + body.vx * amount
+            body.y = body.y + body.vy * amount
+        end
     end
 end
 
-local function resolve_pair(world, left, right, contacts)
-    if not left.alive or not right.alive or not collision_allowed(world, left, right) then return end
-    local dx, dy = right.x - left.x, right.y - left.y
-    local radius = left.radius + right.radius
-    local distance2 = dx * dx + dy * dy
-    if distance2 >= radius * radius then return end
+local function resolve_collision(world, hit, contacts, ignored_sensors, toi, iteration)
+    if hit.kind == "wall" then
+        local body = hit.body
+        if hit.wall == "left" then body.x = body.radius
+        elseif hit.wall == "right" then body.x = world.width - body.radius
+        elseif hit.wall == "top" then body.y = body.radius
+        else body.y = world.height - body.radius end
 
-    local fallback = tostring(left.id) < tostring(right.id) and 1 or -1
-    local nx, ny, distance = normalise(dx, dy, fallback, 0)
+        local normal_velocity = body.vx * hit.nx + body.vy * hit.ny
+        local impulse = 0
+        if normal_velocity < 0 then
+            impulse = -(1 + body.restitution) * normal_velocity * body.mass
+            body.vx = body.vx + hit.nx * impulse * body.inv_mass
+            body.vy = body.vy + hit.ny * impulse * body.inv_mass
+        end
+        record_contact(world, contacts, "wall", body.id, hit.wall, {
+            body = body.id, wall = hit.wall,
+            nx = hit.nx, ny = hit.ny,
+            impulse = quantize(impulse), speed = quantize(abs(normal_velocity)),
+            toi = quantize(toi), sort_toi = toi, iteration = iteration,
+        })
+        return
+    end
+
+    if hit.kind == "box" then
+        local body, box = hit.body, hit.box
+        local sensor = body.sensor or box.sensor
+        if sensor then ignored_sensors[hit.sensor_key] = true end
+        if not sensor then
+            local correction = (hit.penetration or 0) + POSITION_SLOP
+            body.x = body.x + hit.nx * correction
+            body.y = body.y + hit.ny * correction
+        end
+        local normal_velocity = body.vx * hit.nx + body.vy * hit.ny
+        local impulse = 0
+        if normal_velocity < 0 and not sensor then
+            local restitution = min(body.restitution, box.restitution)
+            impulse = -(1 + restitution) * normal_velocity * body.mass
+            body.vx = body.vx + hit.nx * impulse * body.inv_mass
+            body.vy = body.vy + hit.ny * impulse * body.inv_mass
+        end
+        record_contact(world, contacts, sensor and "sensor" or "box", body.id, box.id, {
+            body = body.id, box = box.id,
+            nx = quantize(hit.nx), ny = quantize(hit.ny),
+            impulse = quantize(impulse), speed = quantize(abs(normal_velocity)),
+            toi = quantize(toi), sort_toi = toi, iteration = iteration,
+        })
+        return
+    end
+
+    local left, right = hit.left, hit.right
+    local sensor = left.sensor or right.sensor
+    if sensor then ignored_sensors[hit.sensor_key] = true end
     local inv_left = left.dynamic and left.inv_mass or 0
     local inv_right = right.dynamic and right.inv_mass or 0
     local inv_sum = inv_left + inv_right
-    if inv_sum <= 0 then return end
-    local penetration = radius - distance
-    if not left.sensor and not right.sensor then
-        left.x = left.x - nx * penetration * inv_left / inv_sum
-        left.y = left.y - ny * penetration * inv_left / inv_sum
-        right.x = right.x + nx * penetration * inv_right / inv_sum
-        right.y = right.y + ny * penetration * inv_right / inv_sum
+    if not sensor then
+        local correction = (hit.penetration or 0) + POSITION_SLOP
+        left.x = left.x - hit.nx * correction * inv_left / inv_sum
+        left.y = left.y - hit.ny * correction * inv_left / inv_sum
+        right.x = right.x + hit.nx * correction * inv_right / inv_sum
+        right.y = right.y + hit.ny * correction * inv_right / inv_sum
     end
 
     local rvx, rvy = right.vx - left.vx, right.vy - left.vy
-    local normal_velocity = rvx * nx + rvy * ny
+    local normal_velocity = rvx * hit.nx + rvy * hit.ny
     local impulse = 0
-    if normal_velocity < 0 and not left.sensor and not right.sensor then
+    if normal_velocity < 0 and not sensor then
         local restitution = min(left.restitution, right.restitution)
         impulse = -(1 + restitution) * normal_velocity / inv_sum
-        left.vx = left.vx - nx * impulse * inv_left
-        left.vy = left.vy - ny * impulse * inv_left
-        right.vx = right.vx + nx * impulse * inv_right
-        right.vy = right.vy + ny * impulse * inv_right
+        left.vx = left.vx - hit.nx * impulse * inv_left
+        left.vy = left.vy - hit.ny * impulse * inv_left
+        right.vx = right.vx + hit.nx * impulse * inv_right
+        right.vy = right.vy + hit.ny * impulse * inv_right
         left.asleep, right.asleep = false, false
         left.sleep_counter, right.sleep_counter = 0, 0
     end
     record_contact(world, contacts, "body", left.id, right.id, {
-        a = left.id, b = right.id, nx = quantize(nx), ny = quantize(ny),
+        a = left.id, b = right.id,
+        nx = quantize(hit.nx), ny = quantize(hit.ny),
         impulse = quantize(impulse), speed = quantize(abs(normal_velocity)),
+        toi = quantize(toi), sort_toi = toi, iteration = iteration,
     })
 end
 
@@ -517,7 +790,12 @@ local EVENT_NAMES = {
 local function flush_contacts(world, contacts)
     local keys = {}
     for key in pairs(contacts) do keys[#keys + 1] = key end
-    table.sort(keys)
+    table.sort(keys, function(left_key, right_key)
+        local left_toi = contacts[left_key].sort_toi or 0
+        local right_toi = contacts[right_key].sort_toi or 0
+        if left_toi ~= right_toi then return left_toi < right_toi end
+        return left_key < right_key
+    end)
     for _, key in ipairs(keys) do
         local contact = contacts[key]
         emit(world, EVENT_NAMES[contact.kind], contact.fields)
@@ -552,41 +830,49 @@ function World:step(dt)
     self.tick = self.tick + 1
     self.time = self.tick * self.fixed_dt
 
-    local min_radius, fastest = nil, 0
     for _, body in ipairs(self.bodies) do
         if body.alive and body.dynamic and not body.asleep then
             body.previous_x, body.previous_y = body.x, body.y
             clamp_speed(self, body)
-            local speed = sqrt(body.vx * body.vx + body.vy * body.vy)
-            if speed > fastest then fastest = speed end
-            if not min_radius or body.radius < min_radius then min_radius = body.radius end
         end
     end
-    local safe_distance = max(0.05, (min_radius or 1) * self.substep_fraction)
-    local substeps = clamp(ceil(fastest * dt / safe_distance), 1, self.max_substeps)
-    self.last_substeps = substeps
-    local sub_dt = dt / substeps
-    local contacts = {}
 
-    for _ = 1, substeps do
-        apply_fields(self, sub_dt, contacts)
-        for _, body in ipairs(self.bodies) do
-            if body.alive and body.dynamic and not body.asleep then
-                body.x = body.x + body.vx * sub_dt
-                body.y = body.y + body.vy * sub_dt
-                resolve_wall(self, body, contacts)
-                for _, box in ipairs(self.boxes) do resolve_box(self, body, box, contacts) end
-            end
+    -- Fields are a deterministic semi-implicit velocity update for this fixed
+    -- tick.  Motion after that update is continuous and piecewise linear.
+    local contacts = {}
+    apply_fields(self, dt, contacts)
+
+    local remaining = dt
+    local elapsed = 0
+    local iterations = 0
+    local ignored_sensors = {}
+    self.last_substeps = 1
+    self.collision_iteration_limit_hit = false
+
+    while remaining > TIME_EPSILON do
+        if iterations >= self.max_collision_iterations then
+            self.collision_iteration_limit_hit = true
+            emit(self, "collision_iteration_limit", {
+                iterations = iterations,
+                remaining = quantize(remaining),
+            })
+            break
         end
-        for left_index = 1, #self.bodies - 1 do
-            local left = self.bodies[left_index]
-            if left.alive then
-                for right_index = left_index + 1, #self.bodies do
-                    resolve_pair(self, left, self.bodies[right_index], contacts)
-                end
-            end
+
+        local hit = earliest_collision(self, remaining, ignored_sensors)
+        if not hit then
+            advance_bodies(self, remaining)
+            elapsed = elapsed + remaining
+            remaining = 0
+        else
+            advance_bodies(self, hit.time)
+            elapsed = elapsed + hit.time
+            remaining = max(0, remaining - hit.time)
+            iterations = iterations + 1
+            resolve_collision(self, hit, contacts, ignored_sensors, elapsed, iterations)
         end
     end
+    self.last_collision_iterations = iterations
 
     local damping = self.linear_damping
     for _, body in ipairs(self.bodies) do
@@ -631,6 +917,8 @@ function World:snapshot()
         width = self.width,
         height = self.height,
         substeps = self.last_substeps,
+        collision_iterations = self.last_collision_iterations,
+        collision_iteration_limit_hit = self.collision_iteration_limit_hit,
         bodies = {},
         boxes = {},
         fields = {},

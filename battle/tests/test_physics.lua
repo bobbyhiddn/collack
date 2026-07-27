@@ -33,21 +33,93 @@ function M.run(t)
     end
 
     do
-        local world = physics.new({ width = 100, height = 30, max_speed = 240, linear_damping = 1 })
-        world:add_box({ id = "barrier", x = 50, y = 15, width = 1, height = 28, restitution = 1 })
-        local ball = world:add_body({
-            id = "fast", x = 10, y = 15, vx = 240, vy = 0,
-            radius = 1.5, mass = 1, restitution = 1,
+        local world = physics.new({ width = 100, height = 20, max_speed = 240, linear_damping = 1 })
+        world:add_box({
+            id = "barrier", x = 50, y = 10,
+            width = 0.001, height = 18, restitution = 1,
         })
-        local hit
-        for _ = 1, 30 do
-            local events = world:step(physics.FIXED_DT)
-            hit = hit or event_of(events, "box_collision")
-        end
-        t:ok(hit, "fast impact emitted")
-        t:ok(ball.x < 50, "fast circle reflected instead of tunnelling")
+        local ball = world:add_body({
+            id = "fast", x = 49.02, y = 10, vx = 240, vy = 0,
+            radius = 0.001, mass = 1, restitution = 1,
+        })
+        world:drain_events()
+        local hit = event_of(world:step(physics.FIXED_DT), "box_collision")
+        t:ok(hit, "a swept impact is emitted for a sub-millimetre barrier")
+        near(t, hit.toi, 0.004077, 0.000001, "impact carries canonical within-tick TOI")
+        t:ok(ball.x < 49.02, "remaining tick motion continues after the rebound")
         t:ok(ball.vx < 0, "x velocity reflected")
-        t:ok(world.last_substeps >= 4, "adaptive anti-tunnelling substeps engaged")
+        t:eq(world.last_substeps, 1, "collision safety does not depend on microsteps")
+        t:eq(world.last_collision_iterations, 1, "one swept collision resolves in one iteration")
+        t:ok(not world.collision_iteration_limit_hit, "ordinary sweep stays below the hard bound")
+    end
+
+    do
+        local world = physics.new({ width = 100, height = 20, max_speed = 240, linear_damping = 1 })
+        local ball = world:add_body({
+            id = "wall-fast", x = 0.5, y = 10, vx = -240, vy = 0,
+            radius = 0.001, mass = 1, restitution = 1,
+        })
+        world:drain_events()
+        local hit = event_of(world:step(physics.FIXED_DT), "wall_collision")
+        t:ok(hit, "fast wall impact emitted")
+        near(t, hit.toi, 0.002079, 0.000001, "wall impact reports swept TOI")
+        near(t, ball.x, 1.502, 0.000001, "wall rebound consumes the remaining tick time")
+        near(t, ball.vx, 240, 0.000001, "wall normal velocity reflects")
+    end
+
+    do
+        local world = physics.new({ width = 100, height = 20, max_speed = 240, linear_damping = 1 })
+        local left = world:add_body({
+            id = "tiny-a", x = 49.02, y = 10, vx = 240, vy = 0,
+            radius = 0.001, mass = 1, restitution = 1,
+        })
+        local right = world:add_body({
+            id = "tiny-b", x = 50.98, y = 10, vx = -240, vy = 0,
+            radius = 0.001, mass = 1, restitution = 1,
+        })
+        world:drain_events()
+        local hit = event_of(world:step(physics.FIXED_DT), "body_collision")
+        t:ok(hit, "opposing fast circles collide before swapping sides")
+        near(t, hit.toi, 0.004079, 0.000001, "circle pair reports relative-motion TOI")
+        near(t, left.vx, -240, 0.000001, "left circle receives reflected velocity")
+        near(t, right.vx, 240, 0.000001, "right circle receives reflected velocity")
+        t:ok(left.x < 49.02 and right.x > 50.98,
+            "both circles consume their post-impact tick motion")
+    end
+
+    do
+        local world = physics.new({ width = 100, height = 100, max_speed = 1000, linear_damping = 1 })
+        world:add_box({
+            id = "corner", x = 50, y = 50,
+            width = 10, height = 10, restitution = 1,
+        })
+        local ball = world:add_body({
+            id = "diagonal", x = 40, y = 40, vx = 600, vy = 600,
+            radius = 1, mass = 1, restitution = 1,
+        })
+        world:drain_events()
+        local hit = event_of(world:step(physics.FIXED_DT), "box_collision")
+        t:ok(hit, "rounded AABB corner sweep emits a contact")
+        near(t, hit.nx, -0.707107, 0.000001, "corner contact has radial x normal")
+        near(t, hit.ny, -0.707107, 0.000001, "corner contact has radial y normal")
+        t:ok(ball.vx < 0 and ball.vy < 0, "corner normal produces a genuine rebound")
+    end
+
+    do
+        local world = physics.new({ width = 100, height = 20, max_speed = 240, linear_damping = 1 })
+        world:add_box({ id = "z-early", x = 10.6, y = 5, width = 0.01, height = 2 })
+        world:add_box({ id = "a-late", x = 21.8, y = 15, width = 0.01, height = 2 })
+        world:add_body({ id = "z-shot", x = 10, y = 5, vx = 240, radius = 0.1 })
+        world:add_body({ id = "a-shot", x = 20, y = 15, vx = 240, radius = 0.1 })
+        world:drain_events()
+        local events = world:step(physics.FIXED_DT)
+        local hits = {}
+        for _, event in ipairs(events) do
+            if event.type == "box_collision" then hits[#hits + 1] = event end
+        end
+        t:eq(#hits, 2, "independent within-tick impacts are both emitted")
+        t:eq(hits[1].box, "z-early", "earlier TOI precedes lexical collider order")
+        t:ok(hits[1].toi < hits[2].toi, "collision audit remains ordered by physical TOI")
     end
 
     do
@@ -135,23 +207,62 @@ function M.run(t)
     end
 
     do
+        local world = physics.new({
+            width = 2, height = 10, linear_damping = 1,
+            max_collision_iterations = 4,
+        })
+        local ball = world:add_body({
+            id = "impossible", x = 1, y = 5, vx = 1, vy = 0,
+            radius = 2, mass = 1,
+        })
+        world:drain_events()
+        local events = world:step(physics.FIXED_DT)
+        t:eq(world.last_collision_iterations, 4,
+            "pathological contact stops at the configured iteration bound")
+        t:ok(world.collision_iteration_limit_hit,
+            "pathological contact exposes canonical limit telemetry")
+        t:ok(event_of(events, "collision_iteration_limit"),
+            "iteration exhaustion is audited")
+        t:ok(ball.x == ball.x and ball.y == ball.y and ball.vx == ball.vx and ball.vy == ball.vy,
+            "unsatisfiable geometry remains finite")
+        local snapshot = world:snapshot()
+        t:eq(snapshot.collision_iterations, 4, "snapshot reports bounded work")
+        t:ok(snapshot.collision_iteration_limit_hit, "snapshot reports conservative stop")
+    end
+
+    do
         local function run()
             local world = physics.new({ width = 60, height = 60 })
             world:add_box({ id = "wall", x = 30, y = 30, width = 3, height = 35 })
             world:add_body({ id = "one", x = 8, y = 22, vx = 90, vy = 7, radius = 1.5, mass = 1.3 })
             world:add_body({ id = "two", x = 49, y = 28, vx = -45, vy = -3, radius = 2, mass = 2 })
             world:drain_events()
-            advance(world, 120)
+            local events = advance(world, 120)
             local snapshot = world:snapshot()
-            local parts = { snapshot.tick, snapshot.substeps }
+            local parts = {
+                snapshot.tick, snapshot.substeps, snapshot.collision_iterations,
+                tostring(snapshot.collision_iteration_limit_hit),
+            }
             for _, body in ipairs(snapshot.bodies) do
                 parts[#parts + 1] = table.concat({
                     body.id, body.x, body.y, body.vx, body.vy, tostring(body.asleep),
                 }, ":")
             end
+            for _, event in ipairs(events) do
+                if event.type == "box_collision"
+                    or event.type == "body_collision"
+                    or event.type == "wall_collision"
+                then
+                    parts[#parts + 1] = table.concat({
+                        event.type, tostring(event.body or event.a),
+                        tostring(event.box or event.b or event.wall),
+                        tostring(event.toi), tostring(event.iteration),
+                    }, ":")
+                end
+            end
             return table.concat(parts, "|")
         end
-        t:eq(run(), run(), "replay is deterministic")
+        t:eq(run(), run(), "swept replay, TOIs, and bounded iteration telemetry are deterministic")
     end
 end
 

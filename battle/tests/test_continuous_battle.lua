@@ -173,9 +173,12 @@ function M.run(t)
         local target = battle.sides.B.formation.grid[1][2]
         battle.world:set_position(fragile.body_id, target.x, target.y + 4.2)
         battle.world:set_velocity(fragile.body_id, 0, -220)
-        battle.world:set_position(ally.body_id, target.x - 7, target.y)
-        battle.world:set_position(enemy.body_id, target.x + 7, target.y)
+        battle.world:set_position(ally.body_id, target.x - 7, target.y + 7)
+        battle.world:set_position(enemy.body_id, target.x + 7, target.y + 7)
         battle.world:set_velocity(enemy.body_id, 0, 0)
+        local ally_body = battle.world:get_body(ally.body_id)
+        local enemy_body = battle.world:get_body(enemy.body_id)
+        local ally_before_x, enemy_before_x = ally_body.x, enemy_body.x
         for _ = 1, 12 do
             if fragile.state == "destroyed" then break end
             engine.step(battle, engine.FIXED_DT)
@@ -185,6 +188,10 @@ function M.run(t)
         local blowback = has_event(battle, "blowback")
         t:ok(blowback and #blowback.affected >= 2,
             "one radial release affects a clustered set in the physical world")
+        local affected = {}
+        for _, id in ipairs(blowback and blowback.affected or {}) do affected[id] = true end
+        t:ok(affected[ally.body_id], "canonical release result names the allied body")
+        t:ok(affected[enemy.body_id], "canonical release result names the enemy body")
         local allied, enemy_hit = false, false
         for _, event in ipairs(events_of(battle, "blowback_impulse")) do
             if event.allied then allied = true else enemy_hit = true end
@@ -192,7 +199,14 @@ function M.run(t)
         t:ok(allied, "release applies allied blowback")
         t:ok(enemy_hit, "release applies enemy blowback")
         t:eq(ally.state, "blown", "a queued ally wakes into the active physical exchange")
-        t:ok(battle.world.last_substeps >= 4, "fast collision engages anti-tunnelling microsteps")
+        t:ok(ally_body.vx < 0, "allied body receives outward canonical velocity")
+        t:ok(enemy_body.vx > 0, "enemy body receives outward canonical velocity")
+        t:eq(battle.world.last_substeps, 1, "fast release collision uses one fixed-tick sweep")
+        t:ok(battle.world.last_collision_iterations >= 1,
+            "fast release collision reports bounded swept work")
+        engine.step(battle, engine.FIXED_DT)
+        t:ok(ally_body.x < ally_before_x, "allied marble is physically displaced")
+        t:ok(enemy_body.x > enemy_before_x, "enemy marble is physically displaced")
     end
 
     do
