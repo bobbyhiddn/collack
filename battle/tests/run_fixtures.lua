@@ -19,9 +19,19 @@ function M.draft_all(state, choice_index)
 end
 
 function M.place_all(state)
-    for index, brick in ipairs(state.player.bricks) do
-        local row = math.floor((index - 1) / 7) + 1
-        local col = ((index - 1) % 7) + 1
+    local standard_index, rear_index = 0, 0
+    for _, brick in ipairs(state.player.bricks) do
+        local rear_row = brick.rule_set.formation
+            and brick.rule_set.formation.rear_row
+        local row, col
+        if rear_row then
+            rear_index = rear_index + 1
+            row, col = 3, rear_index
+        else
+            standard_index = standard_index + 1
+            row = math.floor((standard_index - 1) / 7) + 1
+            col = ((standard_index - 1) % 7) + 1
+        end
         local result, command_error = run.dispatch(state, {
             kind = "place_brick",
             brick_uid = brick.uid,

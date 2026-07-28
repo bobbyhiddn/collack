@@ -117,37 +117,77 @@ local function curated_choices(state, category)
     local candidates, offer_seed = shuffled_available(state, category)
     local current = M.current_tag_set(state)
     local scouts = util.set(state.opponent and state.opponent.scout_tags or {})
-    local used, chosen = {}, {}
+    local used, chosen, journal = {}, {}, {}
 
-    if next(current) ~= nil then
-        local shared = pick_where(candidates, used, function(candidate)
-            return intersects(candidate.tags, current)
-        end)
-        if shared then chosen[#chosen + 1] = shared end
-
-        local new_direction = pick_where(candidates, used, function(candidate)
-            return not intersects(candidate.tags, current)
-        end)
-        if not new_direction then
-            new_direction = pick_where(candidates, used, function(candidate)
-                return introduces(candidate.tags, current)
+    if category == "sling" then
+        if next(current) ~= nil then
+            local shared = pick_where(candidates, used, function(candidate)
+                return intersects(candidate.tags, current)
             end)
+            if shared then chosen[#chosen + 1] = shared end
+
+            local new_direction = pick_where(candidates, used, function(candidate)
+                return not intersects(candidate.tags, current)
+            end)
+            if not new_direction then
+                new_direction = pick_where(candidates, used, function(candidate)
+                    return introduces(candidate.tags, current)
+                end)
+            end
+            if new_direction then chosen[#chosen + 1] = new_direction end
         end
-        if new_direction then chosen[#chosen + 1] = new_direction end
+        local counter = pick_where(candidates, used, function(candidate)
+            return intersects(candidate.counter_tags, scouts)
+        end)
+        if counter then chosen[#chosen + 1] = counter end
+        while #chosen < contract.DRAFT.OFFER_SIZE do
+            local fallback = pick_where(candidates, used, function() return true end)
+            if not fallback then error("draft pool cannot fill a three-choice offer") end
+            chosen[#chosen + 1] = fallback
+        end
+        return chosen, offer_seed, journal
     end
 
-    local counter = pick_where(candidates, used, function(candidate)
+    local predicates = {}
+    if next(current) ~= nil then
+        predicates[#predicates + 1] = function(candidate)
+            return intersects(candidate.tags, current)
+        end
+        predicates[#predicates + 1] = function(candidate)
+            return not intersects(candidate.tags, current)
+                or introduces(candidate.tags, current)
+        end
+    end
+    predicates[#predicates + 1] = function(candidate)
         return intersects(candidate.counter_tags, scouts)
-    end)
-    if counter then chosen[#chosen + 1] = counter end
-
-    while #chosen < contract.DRAFT.OFFER_SIZE do
-        local fallback = pick_where(candidates, used, function() return true end)
-        if not fallback then error("draft pool cannot fill a three-choice offer") end
-        chosen[#chosen + 1] = fallback
     end
-
-    return chosen, offer_seed
+    local rng = RNG.new(offer_seed)
+    while #chosen < contract.DRAFT.OFFER_SIZE do
+        local predicate = predicates[#chosen + 1] or function() return true end
+        local eligible = {}
+        for _, candidate in ipairs(candidates) do
+            if not used[candidate.id] and predicate(candidate) then
+                eligible[#eligible + 1] = candidate
+            end
+        end
+        if #eligible == 0 then
+            for _, candidate in ipairs(candidates) do
+                if not used[candidate.id] then eligible[#eligible + 1] = candidate end
+            end
+        end
+        if #eligible == 0 then error("draft pool cannot fill a three-choice offer") end
+        local selected, sample = rule_ast.sample_rarity(
+            eligible,
+            "full_loadout_initial",
+            rng:int(1, 100),
+            rng:int(1, 2147483646)
+        )
+        used[selected.id] = true
+        chosen[#chosen + 1] = selected
+        sample.slot = #chosen
+        journal[#journal + 1] = sample
+    end
+    return chosen, offer_seed, journal
 end
 
 local function tag_metadata(tags)
@@ -228,6 +268,8 @@ local function kit_details(item)
             family = brick.family or "basic",
             behaviour = brick.behaviour,
             hp = brick.hp,
+            rarity = brick.rarity,
+            telegraph = util.deep_copy(brick.telegraph),
         }
     end
     return {
@@ -268,7 +310,10 @@ local function choice_from_item(item, category, current, scouts)
         inspection_copy = util.deep_copy(authority.inspection_copy),
         rule_set = util.deep_copy(item.rule_set),
         compatibility = util.deep_copy(item.compatibility),
-        balance = util.deep_copy(authority.balance),
+        balance = util.deep_copy(category == "brick_kit" and item.balance or authority.balance),
+        telegraph = util.deep_copy(category == "brick_kit"
+            and item.telegraph or authority.telegraph),
+        availability = util.deep_copy(item.rule_set.availability),
         tags = util.deep_copy(item.tags),
         tag_metadata = tag_metadata(item.tags),
         synergy = {
@@ -286,7 +331,7 @@ function M.make_offer(state)
     local category, round = M.stage_for(state.draft.picks)
     if category == "complete" then return nil end
 
-    local candidates, offer_seed = curated_choices(state, category)
+    local candidates, offer_seed, sampling_journal = curated_choices(state, category)
     local current = M.current_tag_set(state)
     local scouts = util.set(state.opponent.scout_tags)
     local choices = {}
@@ -304,6 +349,8 @@ function M.make_offer(state)
         choices = choices,
         build_tags = M.current_tags(state),
         scout_tags = util.deep_copy(state.opponent.scout_tags),
+        economy_rule_set_id = rule_ast.ECONOMY.id,
+        sampling_journal = util.deep_copy(sampling_journal),
     }
     local valid, message = contract.validate_offer(offer)
     if not valid then error("generated invalid offer: " .. tostring(message)) end
@@ -356,15 +403,8 @@ local function plain_value(value, seen)
     return true
 end
 
-local RARITY_BY_SHELL_COUNT = {
-    "common",
-    "uncommon",
-    "rare",
-    "epic",
-    "legendary",
-}
 local RARITY_RANK = {}
-for rank, rarity in ipairs(RARITY_BY_SHELL_COUNT) do
+for rank, rarity in ipairs(rule_ast.ECONOMY.rarity_order) do
     RARITY_RANK[rarity] = rank
 end
 
@@ -407,9 +447,11 @@ local function marble_selectors(item)
     end
     if not core_id then error("canonical marble RuleSet has no core identity") end
     if #shell_ids < 1 then error("canonical marble RuleSet has no shell identity") end
-    local rarity = RARITY_BY_SHELL_COUNT[#shell_ids]
-    if not rarity then
-        error("canonical marble RuleSet exceeds legendary shell cardinality")
+    local rarity = item.rule_set.rarity
+    local tier = rule_ast.ECONOMY.tiers[rarity]
+    if not tier then error("canonical marble RuleSet has invalid rarity") end
+    if #shell_ids > tier.shell_cap then
+        error("canonical marble RuleSet exceeds its rarity shell cap")
     end
     if item.core ~= core_id then
         error("catalog core projection diverges from canonical RuleSet identity")
@@ -418,7 +460,7 @@ local function marble_selectors(item)
         error("catalog ordered shell projection diverges from canonical RuleSet identity")
     end
     if item.rarity ~= rarity then
-        error("catalog rarity projection diverges from canonical RuleSet cardinality")
+        error("catalog rarity projection diverges from canonical RuleSet rarity")
     end
     return {
         core = core_id,
@@ -463,6 +505,8 @@ local function materialize_marble(item, uid)
         rule_set = util.deep_copy(item.rule_set),
         compatibility = util.deep_copy(item.rule_set.compatibility),
         balance = util.deep_copy(authority.balance),
+        telegraph = util.deep_copy(authority.telegraph),
+        availability = util.deep_copy(item.rule_set.availability),
         tags = util.deep_copy(item.rule_set.synergy_tags),
         art_id = item.art_id,
     }
@@ -527,6 +571,7 @@ function M.instantiate_kit(choice, first_brick_index, owner)
         content_id = item.id,
         name = item.name,
         role = item.role,
+        rarity = item.rarity,
         tags = util.deep_copy(item.tags),
         mechanics = util.deep_copy(item.mechanics),
         compact_copy = item.compact_copy,
@@ -534,6 +579,8 @@ function M.instantiate_kit(choice, first_brick_index, owner)
         rule_set = util.deep_copy(item.rule_set),
         compatibility = util.deep_copy(item.compatibility),
         balance = util.deep_copy(item.balance),
+        telegraph = util.deep_copy(item.telegraph),
+        availability = util.deep_copy(item.availability),
         suggested_placement = item.suggested_placement,
         draft_value = item.rule_set.rarity_budget,
         art_id = item.art_id,
@@ -559,6 +606,7 @@ function M.instantiate_brick(kit_id, brick_id, index, owner)
     end
     if not bricks.has(brick_id) then error("unknown brick: " .. tostring(brick_id)) end
     local profile = bricks.runtime(brick_id)
+    local authority = rule_ast.player_authority(profile.rule_set)
     return {
         uid = string.format("%s-b%02d", owner or "player", index),
         content_id = profile.id,
@@ -568,14 +616,18 @@ function M.instantiate_brick(kit_id, brick_id, index, owner)
         behaviour = profile.behaviour,
         hp = profile.hp,
         max_hp = profile.hp,
-        tags = util.deep_copy(item.tags),
+        rarity = profile.rarity,
+        restitution = profile.restitution,
+        tags = util.deep_copy(profile.rule_set.synergy_tags),
         art_id = "brick_" .. profile.id,
-        mechanics = rule_ast.compact_lines(profile.rule_set, 1),
-        compact_copy = profile.compact_copy,
-        inspection_copy = util.deep_copy(profile.inspection_copy),
+        mechanics = util.deep_copy(authority.compact_lines),
+        compact_copy = authority.compact_copy,
+        inspection_copy = util.deep_copy(authority.inspection_copy),
         rule_set = util.deep_copy(profile.rule_set),
         compatibility = util.deep_copy(profile.rule_set.compatibility),
         balance = util.deep_copy(profile.balance),
+        telegraph = util.deep_copy(authority.telegraph),
+        availability = util.deep_copy(profile.availability),
     }
 end
 

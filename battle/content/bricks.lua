@@ -37,6 +37,11 @@ local function compile(spec, rule_set)
         family = spec.family,
         behaviour = ast.rule_value(rule_set, "brick." .. spec.id .. ".behaviour"),
         hp = ast.rule_value(rule_set, "brick." .. spec.id .. ".hp"),
+        restitution = ast.rule_value(rule_set, "brick." .. spec.id .. ".restitution"),
+        rarity = rule_set.rarity,
+        availability = ast.copy(rule_set.availability),
+        abilities = ast.copy(rule_set.abilities),
+        telegraph = ast.copy(authority.telegraph),
         rule_set = ast.copy(rule_set),
         compact_copy = authority.compact_copy,
         inspection_copy = ast.copy(authority.inspection_copy),
@@ -50,7 +55,7 @@ local function runtime(id, rule_set, shadow)
     rule_set = rule_set or rulebook.bricks[id]
     ast.assert_runtime_source("brick", id, rule_set, shadow)
     local canonical = compile(spec, rule_set)
-    for _, field in ipairs({ "behaviour", "hp" }) do
+    for _, field in ipairs({ "behaviour", "hp", "restitution", "rarity" }) do
         if shadow and shadow[field] ~= nil and shadow[field] ~= canonical[field] then
             error(string.format(
                 "brick %s compiled %s diverges from canonical RuleSet",
@@ -81,7 +86,6 @@ end
 for _, spec in ipairs(SPECS) do
     local rule_set = rulebook.bricks[spec.id]
     local brick = compile(spec, rule_set)
-    brick.compact_copy = ast.compact(rule_set, 1)
     BRICKS[#BRICKS + 1] = brick
     by_id[brick.id] = brick
 end

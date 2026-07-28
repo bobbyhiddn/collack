@@ -239,16 +239,16 @@ function M.run(t)
         { { canonical_brick.uid } },
         { canonical_brick }
     )
-    t:eq(canonical_brick.hp, 3,
+    t:eq(canonical_brick.hp, 4,
         "drafted brick HP ignores the mutable compiled cache")
-    t:eq(canonical_formation.grid[1][1].hp, 3,
+    t:eq(canonical_formation.grid[1][1].hp, 4,
         "live formation HP derives from the entity RuleSet")
     t:raises(function()
         bricks.runtime("basalt_absorber", canonical_brick.rule_set, brick_cache)
     end, "diverges from canonical RuleSet",
     "claimed divergent brick cache fails closed")
     brick_cache.hp, brick_cache.rule_set = old_hp, old_brick_rules
-    for _, field in ipairs({ "behaviour", "hp", "max_hp" }) do
+    for _, field in ipairs({ "behaviour", "hp", "max_hp", "restitution", "rarity" }) do
         local shadow = util.deep_copy(bricks.by_id.basalt_absorber)
         shadow[field] = 999
         t:raises(function()
@@ -279,7 +279,8 @@ function M.run(t)
     t:eq(effects.brick_profile(
         canonical_brick.behaviour,
         canonical_brick.rule_set
-    ).damage_reduction, 1, "brick effect profiles are fresh RuleSet projections")
+    ).damage_reduction, nil,
+    "common Basalt profiles remain passive-free fresh RuleSet projections")
 
     local setup_state = fixtures.place_unplaced(short.new({
         run_seed = 9125,
@@ -331,8 +332,11 @@ function M.run(t)
                 kit.id .. "/" .. brick_id .. " has exact rule membership")
             t:eq(#authority.rule_ids, #authority.rules,
                 kit.id .. "/" .. brick_id .. " has no helper inflation")
-            t:eq(#authority.rule_ids, #authority.balance.lines,
-                kit.id .. "/" .. brick_id .. " accounts exact membership")
+            t:eq(
+                #authority.balance.lines,
+                #authority.rule_ids + #entity.rule_set.abilities,
+                kit.id .. "/" .. brick_id .. " accounts exact membership and MCU"
+            )
             for _, rule_id in ipairs(authority.rule_ids) do
                 t:eq(authority_ids[rule_id], 1,
                     kit.id .. "/" .. brick_id .. " maps each rule once")
@@ -364,49 +368,52 @@ function M.run(t)
     end
     t:eq(variants, 16, "exact membership covers all sixteen kit/brick variants")
 
-    -- The original seed-7 counterexample now applies and attributes the same
-    -- Temporal Anchor entity, with no Vault Arch rules.
+    -- Fight-one rarity law excludes legendary rewards while the selected
+    -- individual brick still has exact entity-only attribution.
     local reward_state = fixtures.complete(short.new({
         run_seed = 7,
         short_run = true,
     }))
-    local temporal
+    local reward_brick
     for _, choice in ipairs(reward_state.draft.offer.choices) do
-        if choice.operation.kind == "add_brick"
-            and choice.operation.content_id == "temporal_anchor" then
-            temporal = choice
-            break
-        end
+        t:neq(choice.operation.content_id, "temporal_anchor",
+            "win-one reward cannot contain a legendary brick")
+        if choice.operation.kind == "add_brick" then reward_brick = choice end
     end
-    t:ok(temporal ~= nil, "seed 7 offers the Temporal Anchor add-brick operation")
-    if temporal then
+    t:ok(reward_brick ~= nil, "seed 7 offers one legal individual add-brick operation")
+    if reward_brick then
+        local reward_id = reward_brick.operation.content_id
         local expected = ast.player_rule_ids(
-            bricks.canonical_rule_set("temporal_anchor")
+            bricks.canonical_rule_set(reward_id)
         )
         t:ok(util.deep_equal(
-            temporal.causal_attribution.source_rule_ids,
+            reward_brick.causal_attribution.source_rule_ids,
             expected
-        ), "Temporal Anchor reward attribution is exact")
-        t:eq(#temporal.causal_attribution.applied_content_ids, 1,
-            "Temporal Anchor reward records one applied entity")
-        t:eq(temporal.causal_attribution.applied_content_ids[1],
-            "temporal_anchor",
-            "Temporal Anchor attribution names only the applied brick")
-        t:eq(ids_as_set(temporal.causal_attribution.source_rule_ids)
-            ["brick.vault_arch.hp"], nil,
-            "Temporal Anchor excludes the absent Vault Arch")
+        ), "individual reward attribution is exact")
+        t:eq(#reward_brick.causal_attribution.applied_content_ids, 1,
+            "individual reward records one applied entity")
+        t:eq(reward_brick.causal_attribution.applied_content_ids[1],
+            reward_id,
+            "individual attribution names only the applied brick")
+        local kit = catalog.brick_kit_by_id[reward_brick.operation.kit_id]
+        local companion = kit.brick_ids[1] == reward_id
+            and kit.brick_ids[2] or kit.brick_ids[1]
+        local companion_rule = "brick." .. companion .. ".hp"
+        t:eq(ids_as_set(reward_brick.causal_attribution.source_rule_ids)
+            [companion_rule], nil,
+            "individual reward excludes absent companion rules")
 
         local inflated = util.deep_copy(reward_state)
         local inflated_choice = draft.find_choice(
             inflated.draft.offer,
-            temporal.choice_id
+            reward_brick.choice_id
         )
         inflated_choice.causal_attribution.source_rule_ids[#inflated_choice
-            .causal_attribution.source_rule_ids + 1] = "brick.vault_arch.hp"
+            .causal_attribution.source_rule_ids + 1] = companion_rule
         local inflated_result, inflated_error = run.dispatch(inflated, {
             kind = "choose_offer",
             offer_id = inflated.draft.offer.offer_id,
-            choice_id = temporal.choice_id,
+            choice_id = reward_brick.choice_id,
         })
         t:eq(inflated_result, nil,
             "hidden companion attribution cannot cross the apply boundary")
@@ -416,7 +423,7 @@ function M.run(t)
         local duplicated = util.deep_copy(reward_state)
         local duplicated_choice = draft.find_choice(
             duplicated.draft.offer,
-            temporal.choice_id
+            reward_brick.choice_id
         )
         duplicated_choice.causal_attribution.source_rule_ids[#duplicated_choice
             .causal_attribution.source_rule_ids + 1] = duplicated_choice
@@ -424,7 +431,7 @@ function M.run(t)
         local duplicate_result, duplicate_error = run.dispatch(duplicated, {
             kind = "choose_offer",
             offer_id = duplicated.draft.offer.offer_id,
-            choice_id = temporal.choice_id,
+            choice_id = reward_brick.choice_id,
         })
         t:eq(duplicate_result, nil,
             "duplicate reward attribution cannot cross the apply boundary")
@@ -434,13 +441,13 @@ function M.run(t)
         local retargeted = util.deep_copy(reward_state)
         local retargeted_choice = draft.find_choice(
             retargeted.draft.offer,
-            temporal.choice_id
+            reward_brick.choice_id
         )
-        retargeted_choice.operation.content_id = "vault_arch"
+        retargeted_choice.operation.content_id = companion
         local retargeted_result, retargeted_error = run.dispatch(retargeted, {
             kind = "choose_offer",
             offer_id = retargeted.draft.offer.offer_id,
-            choice_id = temporal.choice_id,
+            choice_id = reward_brick.choice_id,
         })
         t:eq(retargeted_result, nil,
             "operation retargeting cannot preserve stale attribution")
@@ -451,19 +458,19 @@ function M.run(t)
         local chosen, choose_error = run.dispatch(reward_state, {
             kind = "choose_offer",
             offer_id = reward_state.draft.offer.offer_id,
-            choice_id = temporal.choice_id,
+            choice_id = reward_brick.choice_id,
         })
         t:ok(chosen ~= nil, choose_error and choose_error.message
-            or "Temporal Anchor reward applies")
+            or "individual brick reward applies")
         if chosen then
             t:eq(#chosen.state.player.bricks, before_count + 1,
                 "add-brick operation applies exactly one brick")
             local applied = chosen.state.player.bricks[#chosen.state.player.bricks]
-            t:eq(applied.content_id, "temporal_anchor",
-                "the attributed Temporal Anchor is the applied entity")
+            t:eq(applied.content_id, reward_id,
+                "the attributed brick is the applied entity")
             t:ok(util.deep_equal(
                 ast.player_rule_ids(applied.rule_set),
-                temporal.causal_attribution.source_rule_ids
+                reward_brick.causal_attribution.source_rule_ids
             ), "applied entity rules equal reward attribution")
         end
     end

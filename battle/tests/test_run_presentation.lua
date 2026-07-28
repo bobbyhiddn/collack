@@ -173,10 +173,20 @@ function M.run(t)
     t:ok(#projected.setup.selected_detail.inspection_copy > 2,
         "setup brick exposes expanded canonical rules")
 
-    for index, brick in ipairs(model.run.player.bricks) do
+    local standard_index, rear_index = 0, 0
+    for _, brick in ipairs(model.run.player.bricks) do
         model = activate(model, "brick:" .. brick.uid)
-        local row = math.floor((index - 1) / 7) + 1
-        local col = ((index - 1) % 7) + 1
+        local rear_row = brick.rule_set.formation
+            and brick.rule_set.formation.rear_row
+        local row, col
+        if rear_row then
+            rear_index = rear_index + 1
+            row, col = 3, rear_index
+        else
+            standard_index = standard_index + 1
+            row = math.floor((standard_index - 1) / 7) + 1
+            col = ((standard_index - 1) % 7) + 1
+        end
         model = activate(model, string.format("cell:%d:%d", row, col))
     end
     projected = controller.project(model)

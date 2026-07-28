@@ -4,6 +4,8 @@
 -- required by the LÖVE client without a JSON parser or an asset loader. All
 -- colours are authored here; no external visual or audio asset is implied.
 
+local rule_ast = require("battle.rule_ast")
+
 local function rgb(hex)
     assert(type(hex) == "string" and hex:match("^#%x%x%x%x%x%x$"),
         "art token colours must use #RRGGBB")
@@ -140,35 +142,33 @@ M.type_scale = {
     line_height = 1.22,
 }
 
-M.rarity = {
-    common = {
-        rank = 1, colour = "rarity_common", shell_cap = 1,
-        beads = 1, rim_width = 1, shoulder_notches = 0,
-    },
-    uncommon = {
-        rank = 2, colour = "rarity_uncommon", shell_cap = 2,
-        beads = 2, rim_width = 2, shoulder_notches = 1,
-    },
-    rare = {
-        rank = 3, colour = "rarity_rare", shell_cap = 3,
-        beads = 3, rim_width = 2, shoulder_notches = 2,
-    },
-    epic = {
-        rank = 4, colour = "rarity_epic", shell_cap = 4,
-        beads = 4, rim_width = 3, shoulder_notches = 3,
-    },
-    legendary = {
-        rank = 5, colour = "rarity_legendary", shell_cap = 5,
-        beads = 5, rim_width = 3, shoulder_notches = 4,
-    },
+M.rarity = {}
+local rarity_visual = {
+    common = { colour = "rarity_common", rim_width = 1, shoulder_notches = 0 },
+    uncommon = { colour = "rarity_uncommon", rim_width = 2, shoulder_notches = 1 },
+    rare = { colour = "rarity_rare", rim_width = 2, shoulder_notches = 2 },
+    epic = { colour = "rarity_epic", rim_width = 3, shoulder_notches = 3 },
+    legendary = { colour = "rarity_legendary", rim_width = 3, shoulder_notches = 4 },
 }
+for _, rarity in ipairs(rule_ast.ECONOMY.rarity_order) do
+    local tier = rule_ast.ECONOMY.tiers[rarity]
+    local visual = rarity_visual[rarity]
+    M.rarity[rarity] = {
+        rank = tier.rank,
+        colour = visual.colour,
+        shell_cap = tier.shell_cap,
+        beads = tier.rank,
+        rim_width = visual.rim_width,
+        shoulder_notches = visual.shoulder_notches,
+    }
+end
 
 M.behaviour = {
     inert = {
         family = "basic", label = "BASE", sigil = "centre_dot",
     },
     absorb = {
-        family = "defensive", label = "ABS", sigil = "inward_brackets",
+        family = "defensive", label = "BODY", sigil = "inward_brackets",
     },
     reflect = {
         family = "defensive", label = "REF", sigil = "opposed_chevrons",
@@ -192,13 +192,13 @@ M.behaviour = {
         family = "effect", label = "SHT", sigil = "broken_diamond",
     },
     chain = {
-        family = "utility", label = "CHN", sigil = "linked_ovals",
+        family = "utility", label = "CHAIN", sigil = "linked_ovals",
     },
     vault = {
         family = "utility", label = "VLT", sigil = "stone_arch",
     },
     splice = {
-        family = "utility", label = "SPL", sigil = "branch_y",
+        family = "utility", label = "GUARD", sigil = "branch_y",
     },
     dummy = {
         family = "utility", label = "DMY", sigil = "crosshair_x",

@@ -4,13 +4,13 @@ local ast = require("battle.rule_ast")
 local rulebook = require("battle.content.rules")
 
 local SPECS = {
-    { id = "dull_quartz", name = "Dull Quartz", min_rarity = "common" },
-    { id = "cant_pebble", name = "Cant Pebble", min_rarity = "common" },
-    { id = "skew_flint", name = "Skew Flint", min_rarity = "common" },
-    { id = "shrapnel_geode", name = "Shrapnel Geode", min_rarity = "uncommon" },
-    { id = "concussion_pearl", name = "Concussion Pearl", min_rarity = "rare" },
-    { id = "lodestone_heart", name = "Lodestone Heart", min_rarity = "epic" },
-    { id = "cinder_nucleus", name = "Cinder Nucleus", min_rarity = "legendary" },
+    { id = "dull_quartz", name = "Dull Quartz" },
+    { id = "cant_pebble", name = "Cant Pebble" },
+    { id = "skew_flint", name = "Skew Flint" },
+    { id = "shrapnel_geode", name = "Shrapnel Geode" },
+    { id = "concussion_pearl", name = "Concussion Pearl" },
+    { id = "lodestone_heart", name = "Lodestone Heart" },
+    { id = "cinder_nucleus", name = "Cinder Nucleus" },
 }
 
 local CORES = {}
@@ -21,10 +21,17 @@ for _, spec in ipairs(SPECS) do spec_by_id[spec.id] = spec end
 local function compile(spec, rule_set)
     local release = ast.rule_value(rule_set, "core." .. spec.id .. ".release")
     if release == "baseline" then release = nil end
+    local min_rarity = rule_set.min_rarity
+    for _, component in ipairs(rule_set.components or {}) do
+        if component.kind == "core" and component.id == "core." .. spec.id then
+            min_rarity = component.min_rarity
+            break
+        end
+    end
     return {
         id = spec.id,
         name = spec.name,
-        min_rarity = spec.min_rarity,
+        min_rarity = min_rarity,
         trajectory = ast.rule_value(rule_set, "core." .. spec.id .. ".trajectory"),
         release = release,
         rule_set = ast.copy(rule_set),

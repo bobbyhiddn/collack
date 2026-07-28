@@ -20,6 +20,7 @@ local harness = require("battle.tests.harness")
 
 harness.run({
     require("battle.tests.test_rule_schema"),
+    require("battle.tests.test_allied_cost_rarity"),
     require("battle.tests.test_rule_copy"),
     require("battle.tests.test_rule_execution"),
     require("battle.tests.test_rule_attribution"),

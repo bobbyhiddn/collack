@@ -7,7 +7,68 @@
 
 local M = {}
 
-M.SCHEMA_VERSION = 1
+M.SCHEMA_VERSION = 2
+
+M.RARITY_ORDER = {
+    "common",
+    "uncommon",
+    "rare",
+    "epic",
+    "legendary",
+}
+
+-- This value-only table is the sole economy authority. Draft, reward, setup,
+-- presentation, and validation all project it instead of repeating tier
+-- numbers in private lookup tables.
+M.ECONOMY = {
+    schema_version = 1,
+    kind = "economy_rule_set",
+    id = "economy.rarity.v1",
+    rarity_order = M.RARITY_ORDER,
+    tiers = {
+        common = {
+            rank = 1, shell_cap = 1,
+            bonus_release_groups = 0, bonus_release_mcu = 0,
+            brick_passive_groups = 0, brick_passive_mcu = 0,
+            brick_copy_cap = 4, marble_copy_cap = 3,
+        },
+        uncommon = {
+            rank = 2, shell_cap = 2,
+            bonus_release_groups = 1, bonus_release_mcu = 2,
+            brick_passive_groups = 1, brick_passive_mcu = 2,
+            brick_copy_cap = 3, marble_copy_cap = 2,
+        },
+        rare = {
+            rank = 3, shell_cap = 3,
+            bonus_release_groups = 1, bonus_release_mcu = 4,
+            brick_passive_groups = 1, brick_passive_mcu = 4,
+            brick_copy_cap = 2, marble_copy_cap = 2,
+        },
+        epic = {
+            rank = 4, shell_cap = 4,
+            bonus_release_groups = 2, bonus_release_mcu = 6,
+            brick_passive_groups = 2, brick_passive_mcu = 6,
+            brick_copy_cap = 1, marble_copy_cap = 1,
+        },
+        legendary = {
+            rank = 5, shell_cap = 5,
+            bonus_release_groups = 2, bonus_release_mcu = 8,
+            brick_passive_groups = 2, brick_passive_mcu = 8,
+            brick_copy_cap = 1, marble_copy_cap = 1,
+        },
+    },
+    acquisition = {
+        full_loadout_initial = {
+            common = 50, uncommon = 28, rare = 14, epic = 6, legendary = 2,
+        },
+        short_run_win_1 = {
+            common = 50, uncommon = 32, rare = 18, epic = 0, legendary = 0,
+        },
+        short_run_win_2_plus = {
+            common = 35, uncommon = 30, rare = 20, epic = 12, legendary = 3,
+        },
+    },
+}
 
 local registry = {}
 
@@ -22,6 +83,14 @@ local ITEM_FIELDS = {
     compatibility = true,
     synergy_tags = true,
     rarity_budget = true,
+    content_kind = true,
+    component_kind = true,
+    rarity = true,
+    min_rarity = true,
+    availability = true,
+    abilities = true,
+    components = true,
+    formation = true,
 }
 
 local RULE_FIELDS = {
@@ -35,17 +104,62 @@ local RULE_FIELDS = {
     cadence = true,
     cost = true,
     visibility = true,
+    scaling = true,
+    lethal = true,
 }
 
 local TRIGGER_FIELDS = { event = true, phase = true }
 local CONDITION_FIELDS = { predicate = true, value = true }
-local TARGET_FIELDS = { selector = true, relation = true }
+local TARGET_FIELDS = {
+    selector = true,
+    relation = true,
+    topology = true,
+    count = true,
+    exclude_self = true,
+    require_alive = true,
+    required_tags = true,
+    excluded_tags = true,
+    order = true,
+    radius = true,
+}
 local OPERATION_FIELDS = { verb = true, stat = true, mode = true }
 local QUANTITY_FIELDS = { value = true, unit = true }
 local CADENCE_FIELDS = { unit = true, interval = true, charges = true, limit = true }
 local COST_FIELDS = { kind = true, stat = true, magnitude = true, unit = true }
 local DRAWBACK_FIELDS = { kind = true, stat = true, magnitude = true, unit = true }
 local COMPATIBILITY_FIELDS = { requires = true, excludes = true, max_copies = true }
+local AVAILABILITY_FIELDS = {
+    player_draft = true,
+    player_reward = true,
+    cpu_recipe = true,
+    legacy_only = true,
+}
+local ABILITY_FIELDS = {
+    id = true,
+    kind = true,
+    rule_ids = true,
+    cost_rule_id = true,
+    payoff_rule_ids = true,
+    recursion = true,
+}
+local RECURSION_FIELDS = { accepts_causes = true, max_generation = true }
+local SCALING_FIELDS = {
+    basis = true,
+    numerator = true,
+    denominator = true,
+    cap = true,
+    rounding = true,
+}
+local COMPONENT_FIELDS = { id = true, kind = true, min_rarity = true, order = true }
+local FORMATION_FIELDS = { rear_row = true }
+local ALLOWED_CAUSES = {
+    ability_cost = true,
+    ability_payoff = true,
+    chain = true,
+    hostile_collision = true,
+    poison = true,
+    shrapnel = true,
+}
 
 local ALLOWED_VISIBILITY = {
     compact = true,
@@ -70,6 +184,7 @@ local ALLOWED_TRIGGERS = {
     status_tick = true,
     survives_collision = true,
     wall_or_brick_contact = true,
+    ability_cost_paid = true,
 }
 
 local ALLOWED_PHASES = { before = true, during = true, after = true }
@@ -90,12 +205,15 @@ local ALLOWED_TARGETS = {
     current_shell = true,
     launch = true,
     nearby_marbles = true,
+    nearest_enemy_brick_cluster = true,
+    chain_enemy_marbles = true,
     orthogonal_neighbours = true,
     release_area = true,
     self = true,
     striking_marble = true,
     struck_brick = true,
     target_column = true,
+    setup_linked_allied_brick = true,
 }
 
 local ALLOWED_VERBS = {
@@ -172,6 +290,9 @@ local ALLOWED_STATS = {
     status = true,
     trajectory = true,
     velocity_multiplier = true,
+    guard = true,
+    chain_shell_wear = true,
+    restitution = true,
 }
 
 local STAT_VERBS = {
@@ -218,6 +339,9 @@ local STAT_VERBS = {
     status = { apply_status = true, set = true },
     trajectory = { aim = true },
     velocity_multiplier = { slow = true },
+    guard = { protect = true },
+    chain_shell_wear = { wear = true },
+    restitution = { set = true },
 }
 
 local STRING_STATS = {
@@ -307,6 +431,9 @@ local BALANCE_WEIGHT = {
     splash_behind = 4.0,
     pierces_absorb = 4.0,
     trajectory = 1.0,
+    guard = 4.0,
+    chain_shell_wear = 1.5,
+    restitution = 8.0,
 }
 
 local TARGET_MULTIPLIER = {
@@ -318,8 +445,11 @@ local TARGET_MULTIPLIER = {
     all_owned_marbles = 2.0,
     orthogonal_neighbours = 1.8,
     nearby_marbles = 2.0,
+    nearest_enemy_brick_cluster = 1.8,
+    chain_enemy_marbles = 2.0,
     release_area = 2.0,
     target_column = 1.4,
+    setup_linked_allied_brick = 1.0,
 }
 
 local TRIGGER_COPY = {
@@ -335,6 +465,7 @@ local TRIGGER_COPY = {
     core_release = "When the core releases",
     status_tick = "While the status lasts",
     passive = "While active",
+    ability_cost_paid = "After its linked cost is paid",
 }
 
 local CONDITION_COPY = {
@@ -357,8 +488,11 @@ local TARGET_COPY = {
     all_owned_marbles = "every marble in the bag",
     orthogonal_neighbours = "orthogonally adjacent bricks",
     nearby_marbles = "nearby allied and enemy marbles",
+    nearest_enemy_brick_cluster = "the nearest enemy brick and its orthogonal allies",
+    chain_enemy_marbles = "the causal and two nearest enemy marbles",
     release_area = "the core release",
     target_column = "the target column",
+    setup_linked_allied_brick = "the setup-linked allied brick",
 }
 
 local UNIT_COPY = {
@@ -541,6 +675,40 @@ local function validate_rule(rule, path, errors, ids)
         if rule.target.selector ~= nil and not ALLOWED_TARGETS[rule.target.selector] then
             errors[#errors + 1] = path .. ".target.selector is outside the canonical vocabulary"
         end
+        if rule.target.relation ~= nil
+            and rule.target.relation ~= "allied"
+            and rule.target.relation ~= "enemy"
+            and rule.target.relation ~= "self"
+            and rule.target.relation ~= "symmetric" then
+            errors[#errors + 1] = path .. ".target.relation is outside the canonical vocabulary"
+        end
+        if rule.target.count ~= nil
+            and (type(rule.target.count) ~= "number"
+                or rule.target.count < 1
+                or rule.target.count % 1 ~= 0) then
+            errors[#errors + 1] = path .. ".target.count must be a positive integer"
+        end
+        if rule.target.radius ~= nil
+            and (type(rule.target.radius) ~= "number" or rule.target.radius < 0) then
+            errors[#errors + 1] = path .. ".target.radius must be non-negative"
+        end
+        if rule.target.topology ~= nil and not nonempty(rule.target.topology) then
+            errors[#errors + 1] = path .. ".target.topology must be a non-empty string"
+        end
+        if rule.target.order ~= nil and not nonempty(rule.target.order) then
+            errors[#errors + 1] = path .. ".target.order must be a non-empty string"
+        end
+        for _, field in ipairs({ "exclude_self", "require_alive" }) do
+            if rule.target[field] ~= nil and type(rule.target[field]) ~= "boolean" then
+                errors[#errors + 1] = path .. ".target." .. field .. " must be boolean"
+            end
+        end
+        if rule.target.required_tags ~= nil then
+            check_string_list(rule.target.required_tags, path .. ".target.required_tags", errors)
+        end
+        if rule.target.excluded_tags ~= nil then
+            check_string_list(rule.target.excluded_tags, path .. ".target.excluded_tags", errors)
+        end
     end
     if check_fields(rule.operation, OPERATION_FIELDS, path .. ".operation", errors) then
         check_string(rule.operation.verb, path .. ".operation.verb", errors)
@@ -562,8 +730,6 @@ local function validate_rule(rule, path, errors, ids)
     end
     if rule.magnitude == nil and rule.duration == nil then
         errors[#errors + 1] = path .. " needs magnitude or duration"
-    elseif rule.magnitude ~= nil and rule.duration ~= nil then
-        errors[#errors + 1] = path .. " cannot declare both magnitude and duration"
     end
     if rule.magnitude ~= nil then check_quantity(rule.magnitude, path .. ".magnitude", errors) end
     if rule.duration ~= nil then check_quantity(rule.duration, path .. ".duration", errors) end
@@ -590,11 +756,14 @@ local function validate_rule(rule, path, errors, ids)
         check_string(rule.cadence.unit, path .. ".cadence.unit", errors)
         if rule.cadence.unit ~= nil
             and not ALLOWED_TRIGGERS[rule.cadence.unit]
-            and rule.cadence.unit ~= "ticks" then
+            and rule.cadence.unit ~= "ticks"
+            and rule.cadence.unit ~= "exchange" then
             errors[#errors + 1] = path .. ".cadence.unit is outside the canonical vocabulary"
         end
-        if type(rule.cadence.interval) ~= "number" or rule.cadence.interval < 1 then
-            errors[#errors + 1] = path .. ".cadence.interval must be >= 1"
+        if type(rule.cadence.interval) ~= "number"
+            or rule.cadence.interval < 1
+            or rule.cadence.interval % 1 ~= 0 then
+            errors[#errors + 1] = path .. ".cadence.interval must be a positive integer"
         end
         if rule.cadence.charges ~= nil
             and (type(rule.cadence.charges) ~= "number"
@@ -630,6 +799,33 @@ local function validate_rule(rule, path, errors, ids)
             end
         end
     end
+    if rule.scaling ~= nil
+        and check_fields(rule.scaling, SCALING_FIELDS, path .. ".scaling", errors) then
+        if rule.scaling.basis ~= "cost_damage_applied" then
+            errors[#errors + 1] = path .. ".scaling.basis must be cost_damage_applied"
+        end
+        if type(rule.scaling.numerator) ~= "number"
+            or rule.scaling.numerator < 0
+            or rule.scaling.numerator % 1 ~= 0 then
+            errors[#errors + 1] = path .. ".scaling.numerator must be a non-negative integer"
+        end
+        if type(rule.scaling.denominator) ~= "number"
+            or rule.scaling.denominator < 1
+            or rule.scaling.denominator % 1 ~= 0 then
+            errors[#errors + 1] = path .. ".scaling.denominator must be a positive integer"
+        end
+        if type(rule.scaling.cap) ~= "number"
+            or rule.scaling.cap < 0
+            or rule.scaling.cap % 1 ~= 0 then
+            errors[#errors + 1] = path .. ".scaling.cap must be a non-negative integer"
+        end
+        if rule.scaling.rounding ~= "floor" then
+            errors[#errors + 1] = path .. ".scaling.rounding must be floor"
+        end
+    end
+    if rule.lethal ~= nil and type(rule.lethal) ~= "boolean" then
+        errors[#errors + 1] = path .. ".lethal must be boolean"
+    end
     if not ALLOWED_VISIBILITY[rule.visibility] then
         errors[#errors + 1] = path .. ".visibility must be compact or expanded"
     end
@@ -646,6 +842,336 @@ end
 local function drawback_credit(drawback)
     if not drawback or drawback.kind == "none" then return 0 end
     return math.abs(tonumber(drawback.magnitude) or 1)
+end
+
+local RARITY_RANK = {}
+for rank, rarity in ipairs(M.RARITY_ORDER) do RARITY_RANK[rarity] = rank end
+
+function M.rarity_rank(rarity)
+    return RARITY_RANK[rarity]
+end
+
+function M.tier(rarity)
+    local tier = M.ECONOMY.tiers[rarity]
+    return tier and deep_copy(tier) or nil
+end
+
+local MULTI_TARGET = {
+    all_owned_marbles = true,
+    chain_enemy_marbles = true,
+    nearby_marbles = true,
+    nearest_enemy_brick_cluster = true,
+    orthogonal_neighbours = true,
+    release_area = true,
+    target_column = true,
+}
+
+local TRACKED_STATS = {
+    duration_ticks = true,
+    field_duration = true,
+    guard = true,
+    negate_once = true,
+    rewind = true,
+    status = true,
+}
+
+local RULE_CHANGING_VERBS = {
+    ["break"] = true,
+    negate = true,
+    redirect = true,
+    rewind = true,
+    target = true,
+}
+
+-- An authored cost annotation never grants friendly-harm authority. The only
+-- canonical allied harmful operation is the exact cost rule owned by an
+-- allied_brick_cost group; every generic target/verb combination fails schema
+-- validation before it can reach setup or runtime.
+local ALLIED_HARM_VERBS = {
+    ["break"] = true,
+    apply_status = true,
+    deal = true,
+    pull = true,
+    push = true,
+    redirect = true,
+    scorch = true,
+    slow = true,
+    splash = true,
+    wear = true,
+}
+
+local ROUTING_STATS = {
+    behaviour = true,
+    collision = true,
+    field_radius = true,
+    field_strength = true,
+    duration_ticks = true,
+    field_duration = true,
+    release = true,
+    trajectory = true,
+}
+
+local function ability_rule_ids(group)
+    if group.kind == "allied_brick_cost" then
+        local out = { group.cost_rule_id }
+        for _, rule_id in ipairs(group.payoff_rule_ids or {}) do out[#out + 1] = rule_id end
+        return out
+    end
+    return group.rule_ids or {}
+end
+
+local function ability_mcu(group, by_id)
+    local rules = {}
+    for _, rule_id in ipairs(ability_rule_ids(group)) do
+        if by_id[rule_id] then rules[#rules + 1] = by_id[rule_id] end
+    end
+    local effect_operations = 0
+    local effect_kinds = {}
+    local multi, tracked, rule_change = false, false, false
+    for _, rule in ipairs(rules) do
+        local stat = rule.operation and rule.operation.stat
+        local is_linked_cost = group.kind == "allied_brick_cost"
+            and rule.id == group.cost_rule_id
+        if not ROUTING_STATS[stat] and not is_linked_cost then
+            local operation_kind = rule.operation and rule.operation.verb or stat
+            if operation_kind == "slow" then operation_kind = "slow" end
+            if not effect_kinds[operation_kind] then
+                effect_kinds[operation_kind] = true
+                effect_operations = effect_operations + 1
+            end
+        end
+        local target = rule.target or {}
+        if MULTI_TARGET[target.selector] or (target.count or 1) > 1 then multi = true end
+        if stat == "field_radius" then multi = true end
+        if TRACKED_STATS[stat] or rule.duration ~= nil
+            or (rule.cadence and (rule.cadence.charges or rule.cadence.interval > 1)) then
+            tracked = true
+        end
+        if RULE_CHANGING_VERBS[rule.operation and rule.operation.verb] then
+            rule_change = true
+        end
+    end
+    local mcu = 1 + math.max(0, effect_operations - 1)
+    if multi then mcu = mcu + 1 end
+    if tracked then mcu = mcu + 1 end
+    if rule_change then mcu = mcu + 1 end
+    if group.recursion and (group.recursion.max_generation or 0) > 0 then mcu = mcu + 1 end
+    if group.kind == "allied_brick_cost" then mcu = mcu + 1 end
+    return mcu
+end
+
+function M.ability_summary(item)
+    local by_id = {}
+    for _, rule in ipairs((item and item.rules) or {}) do
+        if nonempty(rule.id) then by_id[rule.id] = rule end
+    end
+    local groups, mcu = {}, 0
+    for _, group in ipairs((item and item.abilities) or {}) do
+        local cost = ability_mcu(group, by_id)
+        groups[#groups + 1] = {
+            id = group.id,
+            kind = group.kind,
+            mcu = cost,
+            rule_ids = deep_copy(ability_rule_ids(group)),
+        }
+        mcu = mcu + cost
+    end
+    return { groups = groups, count = #groups, mcu = mcu }
+end
+
+function M.linked_cost_groups(item)
+    local out = {}
+    for _, group in ipairs((item and item.abilities) or {}) do
+        if group.kind == "allied_brick_cost" then out[#out + 1] = deep_copy(group) end
+    end
+    return out
+end
+
+local function validate_availability(item, errors)
+    local path = "rule_set.availability"
+    if not check_fields(item.availability, AVAILABILITY_FIELDS, path, errors) then return end
+    for field in pairs(AVAILABILITY_FIELDS) do
+        if type(item.availability[field]) ~= "boolean" then
+            errors[#errors + 1] = path .. "." .. field .. " must be boolean"
+        end
+    end
+    if item.availability.legacy_only
+        and (item.availability.player_draft or item.availability.player_reward) then
+        errors[#errors + 1] = path .. " legacy-only content cannot be player-acquired"
+    end
+end
+
+local function validate_components(item, errors)
+    local length = sequence_length(item.components)
+    if length == nil then
+        errors[#errors + 1] = "rule_set.components must be an array"
+        return
+    end
+    for index, component in ipairs(item.components) do
+        local path = string.format("rule_set.components[%d]", index)
+        if check_fields(component, COMPONENT_FIELDS, path, errors) then
+            check_string(component.id, path .. ".id", errors)
+            check_string(component.kind, path .. ".kind", errors)
+            if component.min_rarity ~= nil and not RARITY_RANK[component.min_rarity] then
+                errors[#errors + 1] = path .. ".min_rarity is invalid"
+            end
+            if component.order ~= index then
+                errors[#errors + 1] = path .. ".order must match canonical composition order"
+            end
+        end
+    end
+end
+
+local function validate_abilities(item, errors)
+    local length = sequence_length(item.abilities)
+    if length == nil then
+        errors[#errors + 1] = "rule_set.abilities must be an array"
+        return
+    end
+    local rules, assigned, group_ids, linked_cost_rules = {}, {}, {}, {}
+    for _, rule in ipairs(item.rules or {}) do
+        if nonempty(rule.id) then rules[rule.id] = rule end
+    end
+    for index, group in ipairs(item.abilities or {}) do
+        local path = string.format("rule_set.abilities[%d]", index)
+        if check_fields(group, ABILITY_FIELDS, path, errors) then
+            check_string(group.id, path .. ".id", errors)
+            if nonempty(group.id) then
+                if group_ids[group.id] then errors[#errors + 1] = path .. ".id is duplicated" end
+                group_ids[group.id] = true
+            end
+            if group.kind ~= "passive" and group.kind ~= "core_release"
+                and group.kind ~= "allied_brick_cost" then
+                errors[#errors + 1] = path .. ".kind is invalid"
+            end
+            if group.recursion ~= nil
+                and check_fields(group.recursion, RECURSION_FIELDS,
+                    path .. ".recursion", errors) then
+                check_string_list(group.recursion.accepts_causes,
+                    path .. ".recursion.accepts_causes", errors)
+                for _, cause in ipairs(group.recursion.accepts_causes or {}) do
+                    if not ALLOWED_CAUSES[cause] then
+                        errors[#errors + 1] =
+                            path .. ".recursion accepts unknown cause " .. tostring(cause)
+                    end
+                end
+                if type(group.recursion.max_generation) ~= "number"
+                    or group.recursion.max_generation < 0
+                    or group.recursion.max_generation > 3
+                    or group.recursion.max_generation % 1 ~= 0 then
+                    errors[#errors + 1] =
+                        path .. ".recursion.max_generation must be an integer from 0 through 3"
+                end
+            end
+            local ids
+            if group.kind == "allied_brick_cost" then
+                if nonempty(group.cost_rule_id) then
+                    linked_cost_rules[group.cost_rule_id] = true
+                end
+                check_string(group.cost_rule_id, path .. ".cost_rule_id", errors)
+                check_string_list(group.payoff_rule_ids, path .. ".payoff_rule_ids", errors)
+                if sequence_length(group.payoff_rule_ids) == 0 then
+                    errors[#errors + 1] = path .. ".payoff_rule_ids must not be empty"
+                end
+                ids = ability_rule_ids(group)
+                if group.recursion == nil then
+                    errors[#errors + 1] = path .. ".recursion is required"
+                end
+                local cost_rule = rules[group.cost_rule_id]
+                if cost_rule then
+                    local target = cost_rule.target or {}
+                    local cadence = cost_rule.cadence or {}
+                    local magnitude = cost_rule.magnitude or {}
+                    if item.rarity and RARITY_RANK[item.rarity] < RARITY_RANK.rare then
+                        errors[#errors + 1] = path .. " is invalid below rare"
+                    end
+                    if target.selector ~= "setup_linked_allied_brick"
+                        or target.relation ~= "allied"
+                        or target.topology ~= "orthogonal"
+                        or target.count ~= 1
+                        or target.exclude_self ~= true
+                        or target.require_alive ~= true
+                        or target.order ~= "local_row_col_uid"
+                        or sequence_length(target.required_tags) == nil
+                        or sequence_length(target.excluded_tags) == nil then
+                        errors[#errors + 1] = path .. " cost selector is not a narrow setup link"
+                    end
+                    if cost_rule.operation.verb ~= "deal"
+                        or cost_rule.operation.stat ~= "damage"
+                        or cost_rule.operation.mode ~= "set"
+                        or magnitude.unit ~= "damage"
+                        or type(magnitude.value) ~= "number"
+                        or magnitude.value <= 0
+                        or magnitude.value % 1 ~= 0 then
+                        errors[#errors + 1] = path .. " cost rule must deal exact positive integer damage"
+                    end
+                    if cadence.charges == nil or cadence.charges < 1 or cadence.charges > 3 then
+                        errors[#errors + 1] = path .. " cost cadence needs one through three charges"
+                    end
+                    if type(cost_rule.lethal) ~= "boolean" then
+                        errors[#errors + 1] = path .. " cost rule must declare lethal"
+                    end
+                end
+                for _, payoff_id in ipairs(group.payoff_rule_ids or {}) do
+                    local payoff = rules[payoff_id]
+                    if payoff and (payoff.trigger.event ~= "ability_cost_paid"
+                        or payoff.condition.value ~= group.id
+                        or payoff.scaling == nil) then
+                        errors[#errors + 1] =
+                            path .. " payoff must bind its scaling to this ability_cost_paid event"
+                    end
+                    if payoff and payoff.scaling and payoff.magnitude
+                        and payoff.magnitude.value ~= payoff.scaling.cap then
+                        errors[#errors + 1] =
+                            path .. " payoff magnitude must equal its canonical scaling cap"
+                    end
+                end
+            else
+                check_string_list(group.rule_ids, path .. ".rule_ids", errors)
+                if sequence_length(group.rule_ids) == 0 then
+                    errors[#errors + 1] = path .. ".rule_ids must not be empty"
+                end
+                ids = group.rule_ids or {}
+            end
+            for _, rule_id in ipairs(ids or {}) do
+                if not rules[rule_id] then
+                    errors[#errors + 1] = path .. " references missing rule " .. tostring(rule_id)
+                elseif assigned[rule_id] then
+                    errors[#errors + 1] = path .. " double-groups rule " .. tostring(rule_id)
+                else
+                    assigned[rule_id] = group.id
+                end
+            end
+        end
+    end
+
+    for _, rule in ipairs(item.rules or {}) do
+        if rule.target
+            and rule.target.relation == "allied"
+            and rule.operation
+            and ALLIED_HARM_VERBS[rule.operation.verb]
+            and not linked_cost_rules[rule.id] then
+            errors[#errors + 1] =
+                "generic allied harm is forbidden outside an allied_brick_cost rule: "
+                .. tostring(rule.id)
+        end
+    end
+
+    if item.content_kind == "brick" then
+        for _, rule in ipairs(item.rules or {}) do
+            if rule.trigger.event ~= "build" and not assigned[rule.id] then
+                errors[#errors + 1] = "rule_set has ungrouped brick rule " .. rule.id
+            end
+        end
+    elseif item.content_kind == "marble" then
+        for _, rule in ipairs(item.rules or {}) do
+            if rule.trigger.event == "core_release"
+                and not rule.id:match("^release%.baseline%.")
+                and not assigned[rule.id] then
+                errors[#errors + 1] = "rule_set has ungrouped bonus release rule " .. rule.id
+            end
+        end
+    end
 end
 
 function M.balance(item)
@@ -676,7 +1202,24 @@ function M.balance(item)
             points = math.floor(points * 1000 + 0.5) / 1000,
         }
     end
+    local ability_summary = M.ability_summary(item)
+    for _, group in ipairs(ability_summary.groups) do
+        local points = group.mcu * 2
+        gross = gross + points
+        lines[#lines + 1] = {
+            rule_id = "ability:" .. group.id,
+            stat = "mechanical_complexity",
+            operation = group.kind,
+            mode = "set",
+            target = "ability_group",
+            value = group.mcu,
+            unit = "count",
+            cadence = {},
+            points = points,
+        }
+    end
     local credit = drawback_credit(item.drawback)
+    if credit > 25 then credit = 25 end
     local spent = math.max(0, gross - credit)
     return {
         schema_version = M.SCHEMA_VERSION,
@@ -700,6 +1243,27 @@ function M.validate(item)
     check_string(item.id, "rule_set.id", errors)
     check_string(item.name, "rule_set.name", errors)
     check_string(item.role, "rule_set.role", errors)
+    check_string(item.content_kind, "rule_set.content_kind", errors)
+    if item.content_kind ~= "component"
+        and item.content_kind ~= "sling"
+        and item.content_kind ~= "marble"
+        and item.content_kind ~= "brick"
+        and item.content_kind ~= "brick_kit" then
+        errors[#errors + 1] = "rule_set.content_kind is invalid"
+    end
+    if item.content_kind == "component" then
+        check_string(item.component_kind, "rule_set.component_kind", errors)
+    elseif item.component_kind ~= nil then
+        errors[#errors + 1] = "rule_set.component_kind is only valid for components"
+    end
+    if item.rarity ~= nil and not RARITY_RANK[item.rarity] then
+        errors[#errors + 1] = "rule_set.rarity is invalid"
+    end
+    if item.min_rarity ~= nil and not RARITY_RANK[item.min_rarity] then
+        errors[#errors + 1] = "rule_set.min_rarity is invalid"
+    end
+    validate_availability(item, errors)
+    validate_components(item, errors)
 
     local count = sequence_length(item.rules)
     if count == nil or count < 1 then
@@ -738,6 +1302,13 @@ function M.validate(item)
             errors[#errors + 1] = "rule_set.compatibility.max_copies must be a positive integer"
         end
     end
+    validate_abilities(item, errors)
+    if item.formation ~= nil
+        and check_fields(item.formation, FORMATION_FIELDS, "rule_set.formation", errors)
+        and item.formation.rear_row ~= nil
+        and type(item.formation.rear_row) ~= "boolean" then
+        errors[#errors + 1] = "rule_set.formation.rear_row must be boolean"
+    end
     check_string_list(item.synergy_tags, "rule_set.synergy_tags", errors)
     local tag_count = sequence_length(item.synergy_tags)
     if tag_count ~= nil and tag_count < 1 then
@@ -747,9 +1318,89 @@ function M.validate(item)
         errors[#errors + 1] = "rule_set.rarity_budget must be a non-negative number"
     end
 
+    if item.content_kind == "marble" or item.content_kind == "brick" then
+        if item.rarity_budget ~= 100 then
+            errors[#errors + 1] = "complete marble and brick rarity_budget must equal 100"
+        end
+        if not item.rarity then
+            errors[#errors + 1] = "complete marble and brick content must declare rarity"
+        end
+        local tier = item.rarity and M.ECONOMY.tiers[item.rarity]
+        if tier then
+            local summary = M.ability_summary(item)
+            local group_cap = item.content_kind == "brick"
+                and tier.brick_passive_groups or tier.bonus_release_groups
+            local mcu_cap = item.content_kind == "brick"
+                and tier.brick_passive_mcu or tier.bonus_release_mcu
+            if summary.count > group_cap then
+                errors[#errors + 1] = "rule_set exceeds " .. item.rarity .. " ability-group ceiling"
+            end
+            if summary.mcu > mcu_cap then
+                errors[#errors + 1] = "rule_set exceeds " .. item.rarity .. " MCU ceiling"
+            end
+            local copy_cap = item.content_kind == "brick"
+                and tier.brick_copy_cap or tier.marble_copy_cap
+            if item.compatibility and item.compatibility.max_copies > copy_cap then
+                errors[#errors + 1] = "rule_set exceeds " .. item.rarity .. " copy ceiling"
+            end
+            if item.content_kind == "brick" and item.rarity == "common"
+                and summary.count ~= 0 then
+                errors[#errors + 1] = "common brick must have zero passives"
+            end
+            if item.content_kind == "marble" then
+                local shell_count, core_count, core_min = 0, 0, "common"
+                for _, component in ipairs(item.components or {}) do
+                    if component.kind == "shell" then shell_count = shell_count + 1 end
+                    if component.kind == "core" then
+                        core_count = core_count + 1
+                        core_min = component.min_rarity or "common"
+                    end
+                end
+                if core_count ~= 1 then
+                    errors[#errors + 1] = "marble must contain exactly one core"
+                end
+                if shell_count < 1 then
+                    errors[#errors + 1] = "marble must contain at least one shell"
+                elseif shell_count > tier.shell_cap then
+                    errors[#errors + 1] = "marble exceeds " .. item.rarity .. " shell cap"
+                end
+                if RARITY_RANK[core_min] and RARITY_RANK[core_min] > RARITY_RANK[item.rarity] then
+                    errors[#errors + 1] = "marble core is below its canonical minimum rarity"
+                end
+                if item.rarity == "common" and summary.count > 0 then
+                    errors[#errors + 1] = "common marble cannot have a bonus core release"
+                end
+                local baseline = {}
+                for _, rule in ipairs(item.rules or {}) do baseline[rule.id] = true end
+                for _, rule_id in ipairs({
+                    "release.baseline.radius",
+                    "release.baseline.field_duration",
+                    "release.baseline.field_strength",
+                }) do
+                    if not baseline[rule_id] then
+                        errors[#errors + 1] =
+                            "marble is missing mandatory baseline core release rule " .. rule_id
+                    end
+                end
+            end
+        end
+    end
+
+    if item.drawback and drawback_credit(item.drawback) > 25 then
+        errors[#errors + 1] = "rule_set drawback/formation/copy credit exceeds 25"
+    end
+    for _, rule in ipairs(item.rules or {}) do
+        local stat = rule.operation and rule.operation.stat
+        if rule.trigger and rule.trigger.event ~= "build"
+            and not ROUTING_STATS[stat]
+            and (BALANCE_WEIGHT[stat] or 1) <= 0 then
+            errors[#errors + 1] = "executable effect has zero balance weight: " .. tostring(rule.id)
+        end
+    end
+
     if #errors == 0 then
         local accounting = M.balance(item)
-        if accounting.spent > item.rarity_budget then
+        if item.content_kind ~= "brick_kit" and accounting.spent > item.rarity_budget then
             errors[#errors + 1] = string.format(
                 "rule_set exceeds rarity budget: %.3f > %.3f",
                 accounting.spent,
@@ -767,6 +1418,33 @@ function M.assert_valid(item)
 end
 
 function M.compose(spec, sources)
+    local availability = deep_copy(spec.availability or {
+        player_draft = false,
+        player_reward = false,
+        cpu_recipe = false,
+        legacy_only = false,
+    })
+    local components = deep_copy(spec.components or {})
+    if spec.components == nil then
+        for _, source in ipairs(sources or {}) do
+            if source.content_kind == "component" then
+                components[#components + 1] = {
+                    id = source.id,
+                    kind = source.component_kind,
+                    min_rarity = source.min_rarity,
+                    order = #components + 1,
+                }
+            elseif spec.content_kind == "brick_kit"
+                and source.content_kind == "brick" then
+                components[#components + 1] = {
+                    id = source.id,
+                    kind = "brick",
+                    min_rarity = source.rarity,
+                    order = #components + 1,
+                }
+            end
+        end
+    end
     local item = {
         schema_version = M.SCHEMA_VERSION,
         kind = "rule_set",
@@ -782,6 +1460,14 @@ function M.compose(spec, sources)
         }),
         synergy_tags = deep_copy(spec.synergy_tags or {}),
         rarity_budget = assert(spec.rarity_budget, "composed rule set needs rarity_budget"),
+        content_kind = assert(spec.content_kind, "composed rule set needs content_kind"),
+        component_kind = spec.component_kind,
+        rarity = spec.rarity,
+        min_rarity = spec.min_rarity,
+        availability = availability,
+        abilities = deep_copy(spec.abilities or {}),
+        components = components,
+        formation = deep_copy(spec.formation),
     }
     local by_id = {}
     for _, source in ipairs(sources or {}) do
@@ -814,6 +1500,8 @@ local function project_rules(item, include)
         _rule_source = item.name,
         _rule_ids = {},
         _cadence = {},
+        _duration = {},
+        _abilities = deep_copy(item.abilities),
     }
     for _, rule in ipairs(item.rules) do
         if include == nil or include(rule) then
@@ -829,6 +1517,7 @@ local function project_rules(item, include)
                 profile._rule_ids[stat][#profile._rule_ids[stat] + 1] = rule.id
             end
             profile._cadence[stat] = deep_copy(rule.cadence)
+            if rule.duration then profile._duration[stat] = deep_copy(rule.duration) end
         end
     end
     return profile
@@ -946,6 +1635,58 @@ function M.validate_collection(items)
     return #errors == 0, errors
 end
 
+function M.sample_rarity(candidates, acquisition_id, tier_ticket, item_ticket)
+    local weights = M.ECONOMY.acquisition[acquisition_id]
+    if not weights then error("unknown acquisition point: " .. tostring(acquisition_id), 2) end
+    tier_ticket = math.floor(tonumber(tier_ticket) or 0)
+    if tier_ticket < 1 or tier_ticket > 100 then
+        error("tier ticket must be an integer from 1 through 100", 2)
+    end
+    local represented, by_tier, eligible_ids = {}, {}, {}
+    for _, candidate in ipairs(candidates or {}) do
+        if not RARITY_RANK[candidate.rarity] then
+            error("rarity candidate is missing canonical rarity: " .. tostring(candidate.id), 2)
+        end
+        by_tier[candidate.rarity] = by_tier[candidate.rarity] or {}
+        by_tier[candidate.rarity][#by_tier[candidate.rarity] + 1] = candidate
+        eligible_ids[#eligible_ids + 1] = candidate.id
+    end
+    table.sort(eligible_ids)
+    local total = 0
+    for _, rarity in ipairs(M.RARITY_ORDER) do
+        if by_tier[rarity] and (weights[rarity] or 0) > 0 then
+            represented[rarity] = weights[rarity]
+            total = total + weights[rarity]
+            table.sort(by_tier[rarity], function(left, right) return left.id < right.id end)
+        end
+    end
+    if total == 0 then error("rarity sampler has no represented eligible tier", 2) end
+    local point = (tier_ticket - 0.5) * total / 100
+    local cumulative, selected_tier = 0
+    for _, rarity in ipairs(M.RARITY_ORDER) do
+        cumulative = cumulative + (represented[rarity] or 0)
+        if point < cumulative then selected_tier = rarity break end
+    end
+    selected_tier = selected_tier or M.RARITY_ORDER[#M.RARITY_ORDER]
+    local tier_items = by_tier[selected_tier]
+    local selector = math.floor(tonumber(item_ticket) or tier_ticket)
+    local selected = tier_items[((selector - 1) % #tier_items) + 1]
+    local normalized = {}
+    for _, rarity in ipairs(M.RARITY_ORDER) do
+        normalized[rarity] = represented[rarity]
+            and represented[rarity] * 100 / total or 0
+    end
+    return selected, {
+        economy_rule_set_id = M.ECONOMY.id,
+        acquisition = acquisition_id,
+        eligible_ids = eligible_ids,
+        normalized_tier_weights = normalized,
+        tier_ticket = tier_ticket,
+        selected_tier = selected_tier,
+        selected_id = selected.id,
+    }
+end
+
 local function quantity_copy(quantity)
     if not quantity then return "" end
     local value = quantity.value
@@ -1054,10 +1795,10 @@ function M.rule_sentence(rule)
     return sentence:sub(1, 1):upper() .. sentence:sub(2)
 end
 
-local function unique_lines(item, include)
+local function unique_lines(item, include, excluded)
     local lines, counts, order = {}, {}, {}
     for _, rule in ipairs(M.player_rules(item)) do
-        if include[rule.visibility] then
+        if include[rule.visibility] and not (excluded and excluded[rule.id]) then
             local line = M.rule_sentence(rule)
             if not counts[line] then order[#order + 1] = line end
             counts[line] = (counts[line] or 0) + 1
@@ -1068,6 +1809,35 @@ local function unique_lines(item, include)
         lines[#lines + 1] = count > 1 and (line .. " ×" .. count) or line
     end
     return lines
+end
+
+local function linked_cost_copy(item, group)
+    local cost = M.rule(item, group.cost_rule_id)
+    local payoff = M.rule(item, group.payoff_rule_ids[1])
+    if not cost or not payoff then return nil end
+    local cadence = cost.cadence
+    local timing
+    if cadence.unit == "exchange" and cadence.interval == 1 then
+        timing = "once per exchange"
+    elseif cadence.interval > 1 then
+        timing = string.format("every %d %s", cadence.interval, cadence.unit)
+    else
+        timing = "once per " .. cadence.unit
+    end
+    if cadence.charges then
+        timing = string.format(
+            "%s, %d charge%s",
+            timing,
+            cadence.charges,
+            cadence.charges == 1 and "" or "s"
+        )
+    end
+    return string.format(
+        "COST %d linked allied integrity (%s) → %s.",
+        cost.magnitude.value,
+        timing,
+        operation_copy(payoff)
+    )
 end
 
 local function drawback_copy(drawback)
@@ -1088,7 +1858,21 @@ end
 
 function M.compact_lines(item, max_lines)
     M.assert_valid(item)
-    local lines = unique_lines(item, { compact = true })
+    local lines, excluded = {}, {}
+    for _, group in ipairs(M.linked_cost_groups(item)) do
+        local line = linked_cost_copy(item, group)
+        if line then lines[#lines + 1] = line end
+        for _, rule_id in ipairs(ability_rule_ids(group)) do excluded[rule_id] = true end
+    end
+    for _, line in ipairs(unique_lines(item, { compact = true }, excluded)) do
+        lines[#lines + 1] = line
+    end
+    if item.content_kind == "brick" and item.rarity == "common" then
+        table.insert(lines, 1, "NO PASSIVE.")
+        if #lines == 1 then
+            lines[#lines + 1] = "Role: " .. item.role .. "."
+        end
+    end
     max_lines = max_lines or 2
     local out = {}
     for index = 1, math.min(max_lines, #lines) do out[#out + 1] = lines[index] end
@@ -1103,8 +1887,43 @@ end
 function M.expanded_lines(item)
     M.assert_valid(item)
     local lines = { "Role: " .. item.role .. "." }
+    local summary = M.ability_summary(item)
+    if item.rarity then
+        local tier = M.ECONOMY.tiers[item.rarity]
+        local ceiling = item.content_kind == "brick"
+            and tier.brick_passive_groups or tier.bonus_release_groups
+        lines[#lines + 1] = string.format(
+            "Rarity: %s. Abilities: %d/%d. Complexity: %d MCU.",
+            item.rarity,
+            summary.count,
+            ceiling,
+            summary.mcu
+        )
+        lines[#lines + 1] = string.format(
+            "Copy cap: %d. Balance envelope: 100.",
+            item.compatibility.max_copies
+        )
+    end
     local rules = unique_lines(item, { compact = true, expanded = true })
     for _, line in ipairs(rules) do lines[#lines + 1] = line end
+    for _, group in ipairs(M.linked_cost_groups(item)) do
+        local cost = M.rule(item, group.cost_rule_id)
+        local payoff = M.rule(item, group.payoff_rule_ids[1])
+        lines[#lines + 1] = string.format(
+            "Linked cost %s selects one live orthogonal ally by local row, column, and UID; %s.",
+            group.id,
+            cost.lethal and "lethal payment is allowed" or "payment must leave it alive"
+        )
+        lines[#lines + 1] = string.format(
+            "Payoff %s scales floor(%d × cost / %d), capped at %d; causes: %s; generation %d.",
+            payoff.id,
+            payoff.scaling.numerator,
+            payoff.scaling.denominator,
+            payoff.scaling.cap,
+            table.concat(group.recursion.accepts_causes, ", "),
+            group.recursion.max_generation
+        )
+    end
     lines[#lines + 1] = drawback_copy(item.drawback)
     if #item.compatibility.requires > 0 then
         lines[#lines + 1] = "Requires: " .. table.concat(item.compatibility.requires, ", ") .. "."
@@ -1131,6 +1950,8 @@ end
 -- identity, language, or accounting.
 function M.player_authority(item)
     M.assert_valid(item)
+    local summary = M.ability_summary(item)
+    local tier = item.rarity and M.ECONOMY.tiers[item.rarity] or nil
     return {
         schema_version = M.SCHEMA_VERSION,
         rule_set_id = item.id,
@@ -1142,6 +1963,24 @@ function M.player_authority(item)
         compact_lines = M.compact_lines(item),
         inspection_copy = M.expanded_lines(item),
         balance = M.balance(item),
+        content_kind = item.content_kind,
+        rarity = item.rarity,
+        availability = deep_copy(item.availability),
+        abilities = deep_copy(item.abilities),
+        ability_summary = summary,
+        telegraph = tier and {
+            rarity = item.rarity,
+            beads = tier.rank,
+            shell_cap = tier.shell_cap,
+            passive_count = summary.count,
+            passive_ceiling = item.content_kind == "brick"
+                and tier.brick_passive_groups or tier.bonus_release_groups,
+            mcu = summary.mcu,
+            mcu_ceiling = item.content_kind == "brick"
+                and tier.brick_passive_mcu or tier.bonus_release_mcu,
+            copy_cap = item.compatibility.max_copies,
+            balance_budget = 100,
+        } or nil,
     }
 end
 
@@ -1202,6 +2041,12 @@ end
 
 function M.register(item)
     M.assert_valid(item)
+    local ability_by_rule = {}
+    for _, group in ipairs(item.abilities or {}) do
+        for _, rule_id in ipairs(ability_rule_ids(group)) do
+            ability_by_rule[rule_id] = group.id
+        end
+    end
     for _, rule in ipairs(item.rules) do
         local existing = registry[rule.id]
         if existing then
@@ -1215,6 +2060,13 @@ function M.register(item)
             if not known then
                 existing.rule_set_ids[#existing.rule_set_ids + 1] = item.id
             end
+            if ability_by_rule[rule.id] then
+                if existing.ability_id
+                    and existing.ability_id ~= ability_by_rule[rule.id] then
+                    error("rule id belongs to conflicting ability groups: " .. rule.id)
+                end
+                existing.ability_id = ability_by_rule[rule.id]
+            end
         else
             registry[rule.id] = {
                 rule_set_id = item.id,
@@ -1222,6 +2074,7 @@ function M.register(item)
                 source_name = item.name,
                 role = item.role,
                 rule = deep_copy(rule),
+                ability_id = ability_by_rule[rule.id],
             }
         end
     end
@@ -1256,28 +2109,48 @@ local function rule_id_for(source, stat)
     return nil
 end
 
+local function attribute_entry(fields, rule_id, entry, source, overrides)
+    local rule = entry and entry.rule
+    if not rule or not is_player_rule(rule) then return fields end
+    fields.rule_id = fields.rule_id or rule_id
+    fields.rule_source = fields.rule_source
+        or (overrides and overrides.source_name)
+        or entry.source_name
+        or (source and source._rule_source)
+    fields.rule_role = fields.rule_role or entry.role
+    fields.rule_operation = fields.rule_operation or rule.operation.verb
+    fields.rule_target = fields.rule_target or rule.target.selector
+    fields.source_rule_set_id = fields.source_rule_set_id
+        or (source and source._rule_set_id)
+        or entry.rule_set_id
+    fields.ability_id = fields.ability_id or entry.ability_id
+    fields.operation = fields.operation or rule.operation.verb
+    fields.target_selector = fields.target_selector or rule.target.selector
+    if rule and rule.magnitude then
+        fields.rule_magnitude = fields.rule_magnitude or rule.magnitude.value
+        fields.rule_unit = fields.rule_unit or rule.magnitude.unit
+    elseif rule and rule.duration then
+        fields.rule_magnitude = fields.rule_magnitude or rule.duration.value
+        fields.rule_unit = fields.rule_unit or rule.duration.unit
+    end
+    return fields
+end
+
 function M.attribute(fields, source, stat, overrides)
     fields = fields or {}
     local rule_id = rule_id_for(source, stat)
     if not rule_id then return fields end
-    local entry = registry[rule_id]
-    local rule = entry and entry.rule
-    if rule and not is_player_rule(rule) then return fields end
-    fields.rule_id = rule_id
-    fields.rule_source = (overrides and overrides.source_name)
-        or (entry and entry.source_name)
-        or source._rule_source
-    fields.rule_role = entry and entry.role or nil
-    fields.rule_operation = rule and rule.operation.verb or nil
-    fields.rule_target = rule and rule.target.selector or nil
-    if rule and rule.magnitude then
-        fields.rule_magnitude = rule.magnitude.value
-        fields.rule_unit = rule.magnitude.unit
-    elseif rule and rule.duration then
-        fields.rule_magnitude = rule.duration.value
-        fields.rule_unit = rule.duration.unit
-    end
-    return fields
+    return attribute_entry(fields, rule_id, registry[rule_id], source, overrides)
+end
+
+-- Events created by a central mutation boundary often arrive with a canonical
+-- rule ID instead of a projected profile. Enrich them from the same registry;
+-- callers may supply entity-specific source identity without it being
+-- overwritten by the component RuleSet that first registered the node.
+function M.attribute_rule_id(fields, rule_id, overrides)
+    fields = fields or {}
+    if type(rule_id) ~= "string" then return fields end
+    return attribute_entry(fields, rule_id, registry[rule_id], nil, overrides)
 end
 
 local CALLOUT_VERB = {

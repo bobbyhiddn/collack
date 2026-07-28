@@ -37,6 +37,99 @@ local function same_rule_set(left, right)
     return rule_ast.same(left, right)
 end
 
+local function tags_match(rule_set, target)
+    local tags = util.set(rule_set.synergy_tags or {})
+    for _, required in ipairs(target.required_tags or {}) do
+        if not tags[required] then return false end
+    end
+    for _, excluded in ipairs(target.excluded_tags or {}) do
+        if tags[excluded] then return false end
+    end
+    return true
+end
+
+function M.resolve_ability_links(loadout)
+    local by_uid, cells = {}, {}
+    for _, brick in ipairs((loadout and loadout.bricks) or {}) do
+        by_uid[brick.uid] = brick
+    end
+    for row = 1, contract.FORMATION.ROWS do
+        for col = 1, contract.FORMATION.COLS do
+            local uid = loadout.formation
+                and loadout.formation[row]
+                and loadout.formation[row][col]
+            if uid and uid ~= "." then cells[uid] = { row = row, col = col } end
+        end
+    end
+    local sources = {}
+    for uid, cell in pairs(cells) do
+        if by_uid[uid] then
+            sources[#sources + 1] = { uid = uid, cell = cell, brick = by_uid[uid] }
+        end
+    end
+    table.sort(sources, function(left, right)
+        if left.cell.row ~= right.cell.row then return left.cell.row < right.cell.row end
+        if left.cell.col ~= right.cell.col then return left.cell.col < right.cell.col end
+        return tostring(left.uid) < tostring(right.uid)
+    end)
+    local links, errors = {}, {}
+    local deltas = { { -1, 0 }, { 1, 0 }, { 0, -1 }, { 0, 1 } }
+    for _, source in ipairs(sources) do
+        local valid = pcall(rule_ast.assert_valid, source.brick.rule_set)
+        if valid then
+            for _, ability in ipairs(rule_ast.linked_cost_groups(source.brick.rule_set)) do
+                local cost_rule = rule_ast.rule(source.brick.rule_set, ability.cost_rule_id)
+                local amount = cost_rule.magnitude.value
+                local candidates = {}
+                for _, delta in ipairs(deltas) do
+                    local row = source.cell.row + delta[1]
+                    local col = source.cell.col + delta[2]
+                    local uid = loadout.formation
+                        and loadout.formation[row]
+                        and loadout.formation[row][col]
+                    local brick = uid and uid ~= "." and by_uid[uid] or nil
+                    if brick and uid ~= source.uid and (brick.hp or brick.max_hp or 0) >= amount
+                        and (cost_rule.lethal
+                            or (brick.hp or brick.max_hp or 0) - amount > 0)
+                        and tags_match(brick.rule_set, cost_rule.target) then
+                        candidates[#candidates + 1] = {
+                            uid = uid, row = row, col = col, brick = brick,
+                        }
+                    end
+                end
+                table.sort(candidates, function(left, right)
+                    if left.row ~= right.row then return left.row < right.row end
+                    if left.col ~= right.col then return left.col < right.col end
+                    return tostring(left.uid) < tostring(right.uid)
+                end)
+                local target = candidates[1]
+                if not target then
+                    errors[#errors + 1] = error_item(
+                        "ability_link_missing",
+                        source.brick.name .. " needs one eligible orthogonally adjacent ally.",
+                        "formation"
+                    )
+                else
+                    links[#links + 1] = {
+                        ability_id = ability.id,
+                        source_uid = source.uid,
+                        target_uid = target.uid,
+                        source_rule_set_id = source.brick.rule_set.id,
+                        cost_rule_id = ability.cost_rule_id,
+                        payoff_rule_ids = util.deep_copy(ability.payoff_rule_ids),
+                        source_cell = util.deep_copy(source.cell),
+                        target_cell = { row = target.row, col = target.col },
+                        cost_amount = amount,
+                        lethal = cost_rule.lethal,
+                        cadence = util.deep_copy(cost_rule.cadence),
+                    }
+                end
+            end
+        end
+    end
+    return links, errors
+end
+
 function M.validate(loadout, options)
     options = options or {}
     local errors = {}
@@ -118,6 +211,14 @@ function M.validate(loadout, options)
                     "marbles"
                 )
             end
+            if not rules.availability.player_draft
+                and not rules.availability.player_reward then
+                errors[#errors + 1] = error_item(
+                    "marble_unavailable",
+                    "That marble is not legal for a player loadout.",
+                    "marbles"
+                )
+            end
         else
             errors[#errors + 1] = error_item(
                 "marble_rules_missing",
@@ -179,6 +280,14 @@ function M.validate(loadout, options)
                     )
                 end
             end
+            if not rules.availability.player_draft
+                and not rules.availability.player_reward then
+                errors[#errors + 1] = error_item(
+                    "brick_unavailable",
+                    "That brick is not legal for a player loadout.",
+                    "bricks"
+                )
+            end
         else
             errors[#errors + 1] = error_item(
                 "brick_rules_missing",
@@ -221,7 +330,32 @@ function M.validate(loadout, options)
                     "formation"
                 )
             end
+            if uid and uid ~= "." then
+                for _, brick in ipairs(loadout.bricks or {}) do
+                    if brick.uid == uid and brick.rule_set
+                        and brick.rule_set.formation
+                        and brick.rule_set.formation.rear_row
+                        and row ~= contract.FORMATION.ROWS then
+                        errors[#errors + 1] = error_item(
+                            "formation_rear_row_required",
+                            brick.name .. " must be placed in the rear row.",
+                            "formation"
+                        )
+                    end
+                end
+            end
         end
+    end
+
+    local links, link_errors = M.resolve_ability_links(loadout)
+    for _, item in ipairs(link_errors) do errors[#errors + 1] = item end
+    if loadout.ability_links ~= nil
+        and not util.deep_equal(loadout.ability_links, links) then
+        errors[#errors + 1] = error_item(
+            "ability_links_stale",
+            "Linked allied-cost handoff does not match the canonical formation.",
+            "ability_links"
+        )
     end
 
     return #errors == 0, errors
@@ -401,6 +535,7 @@ function M.player_spec(loadout, name)
     for _, marble in ipairs(loadout.marbles or {}) do
         marbles[#marbles + 1] = draft.canonical_marble(marble)
     end
+    local ability_links = M.resolve_ability_links(loadout)
     return {
         schema_version = 1,
         id = "player",
@@ -412,6 +547,7 @@ function M.player_spec(loadout, name)
         formation = util.deep_copy(loadout.formation),
         bag_order = util.deep_copy(loadout.bag_order),
         build_tags = M.build_tags(loadout),
+        ability_links = util.deep_copy(ability_links),
     }
 end
 

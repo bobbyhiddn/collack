@@ -6,6 +6,7 @@ local contract = require("battle.vslice_contract")
 local draft = require("battle.draft")
 local draft_content = require("battle.content.draft")
 local brick_content = require("battle.content.bricks")
+local rule_ast = require("battle.rule_ast")
 local util = require("battle.run_util")
 
 local M = {}
@@ -18,16 +19,16 @@ local RECIPES = {
         scout_tags = { "guard", "sustain" },
         sling_ids = { "momentum" },
         bricks = {
-            { 1, 1, { "basalt_absorber", "granite_fortifier" } },
-            { 1, 2, { "granite_fortifier", "basalt_absorber" } },
-            { 1, 3, { "mirror_pane", "prismatic_mirror" } },
+            { 1, 1, { "basalt_absorber" } },
+            { 1, 2, { "training_dummy" } },
+            { 1, 3, { "mirror_pane" } },
             { 1, 4, { "aegis_keystone" } },
-            { 1, 5, { "mirror_pane", "prismatic_mirror" } },
-            { 1, 6, { "granite_fortifier", "basalt_absorber" } },
-            { 1, 7, { "basalt_absorber", "granite_fortifier" } },
-            { 2, 2, { "moss_regenerator", "vault_arch" } },
-            { 2, 4, { "temporal_anchor", "aegis_keystone" } },
-            { 2, 6, { "moss_regenerator", "vault_arch" } },
+            { 1, 5, { "granite_fortifier" } },
+            { 1, 6, { "basalt_absorber" } },
+            { 1, 7, { "training_dummy" } },
+            { 2, 2, { "moss_regenerator" } },
+            { 2, 6, { "vault_arch" } },
+            { 3, 4, { "temporal_anchor" } },
         },
         marbles = {
             { "banded_guard_uncommon", "quartz_common" },
@@ -43,12 +44,12 @@ local RECIPES = {
         scout_tags = { "field", "release" },
         sling_ids = { "effect_amplifier" },
         bricks = {
-            { 1, 2, { "venom_glass", "rime_block" } },
-            { 1, 4, { "lodestone_block", "shatter_crystal" } },
-            { 1, 6, { "rime_block", "venom_glass" } },
-            { 2, 3, { "shatter_crystal", "splice_node" } },
-            { 2, 5, { "powder_keg", "void_prism" } },
-            { 3, 4, { "void_prism", "lodestone_block" } },
+            { 1, 2, { "venom_glass" } },
+            { 1, 4, { "lodestone_block" } },
+            { 1, 6, { "rime_block" } },
+            { 2, 3, { "shatter_crystal" } },
+            { 2, 5, { "powder_keg" } },
+            { 3, 4, { "void_prism" } },
         },
         marbles = {
             { "geode_uncommon", "silver_seed_uncommon" },
@@ -65,11 +66,11 @@ local RECIPES = {
         scout_tags = { "burst", "force" },
         sling_ids = { "ricochet", "momentum" },
         bricks = {
-            { 1, 2, { "shatter_crystal", "mirror_pane" } },
-            { 1, 4, { "powder_keg", "shatter_crystal" } },
-            { 1, 6, { "shatter_crystal", "mirror_pane" } },
-            { 2, 3, { "splice_node", "prismatic_mirror" } },
-            { 2, 5, { "prismatic_mirror", "splice_node" } },
+            { 1, 2, { "shatter_crystal" } },
+            { 1, 4, { "powder_keg" } },
+            { 1, 6, { "mirror_pane" } },
+            { 2, 3, { "splice_node" } },
+            { 2, 5, { "prismatic_mirror" } },
         },
         marbles = {
             { "shard_ram_rare", "geode_uncommon" },
@@ -180,9 +181,18 @@ function M.validate(spec)
     if #(spec.marbles or {}) == 0 then return fail("opponent needs marbles") end
 
     local brick_ids = {}
+    local collection = {}
     for _, brick in ipairs(spec.bricks) do
         if brick_ids[brick.uid] then return fail("opponent brick uids must be unique") end
         if not brick_content.has(brick.content_id) then return fail("opponent contains an unknown brick") end
+        local canonical = brick_content.canonical_rule_set(brick.content_id)
+        if not canonical.availability.cpu_recipe then
+            return fail("opponent contains a brick unavailable to CPU recipes")
+        end
+        if not rule_ast.same(brick.rule_set, canonical) then
+            return fail("opponent brick diverges from canonical authority")
+        end
+        collection[#collection + 1] = canonical
         brick_ids[brick.uid] = true
     end
 
@@ -199,6 +209,13 @@ function M.validate(spec)
                 if not brick_ids[uid] then return fail("opponent formation contains an unknown brick") end
                 if placed[uid] then return fail("opponent brick is placed twice") end
                 placed[uid] = true
+                for _, brick in ipairs(spec.bricks) do
+                    if brick.uid == uid and brick.rule_set.formation
+                        and brick.rule_set.formation.rear_row
+                        and row ~= contract.FORMATION.ROWS then
+                        return fail("rear-row brick violates its canonical formation constraint")
+                    end
+                end
             end
         end
         if cells[contract.FORMATION.COLS + 1] ~= nil then
@@ -223,6 +240,7 @@ function M.validate(spec)
             )
         end
         marble_ids[marble.uid] = true
+        collection[#collection + 1] = canonical_or_error.rule_set
     end
 
     if #(spec.bag_order or {}) ~= #spec.marbles then
@@ -236,6 +254,11 @@ function M.validate(spec)
     end
     for uid in pairs(marble_ids) do
         if not bag_ids[uid] then return fail("opponent bag omits a marble") end
+    end
+    local compatible, compatibility_errors = rule_ast.validate_collection(collection)
+    if not compatible then
+        return fail("opponent violates canonical copy/compatibility rules: "
+            .. tostring(compatibility_errors[1]))
     end
     return true
 end

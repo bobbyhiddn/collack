@@ -253,6 +253,34 @@ local function telemetry_rule(inspection)
     )
 end
 
+local function telemetry_rarity(item)
+    item = item or {}
+    local rule_set = item.rule_set or {}
+    local telegraph = item.telegraph or {}
+    local balance = item.balance or {}
+    local details = item.details or {}
+    local shell_count = item.shell_count or details.shell_count
+    if shell_count == nil and type(details.shells) == "table" then
+        shell_count = #details.shells
+    end
+    return string.format(
+        "rarity=%s beads=%d shells=%d passives=%d/%d mcu=%d/%d balance=%.3f/%s copy_cap=%d",
+        telemetry_value(rule_set.rarity or item.rarity),
+        tonumber(telegraph.beads) or 0,
+        tonumber(shell_count) or 0,
+        tonumber(telegraph.passive_count) or 0,
+        tonumber(telegraph.passive_ceiling) or 0,
+        tonumber(telegraph.mcu) or 0,
+        tonumber(telegraph.mcu_ceiling) or 0,
+        tonumber(balance.spent) or 0,
+        telemetry_value(balance.budget or telegraph.balance_budget),
+        tonumber(telegraph.copy_cap
+            or (item.compatibility and item.compatibility.max_copies)
+            or (rule_set.compatibility and rule_set.compatibility.max_copies))
+            or 0
+    )
+end
+
 local function report_guidance()
     local signature
     if view.screen == "draft" and view.draft then
@@ -282,7 +310,7 @@ local function report_guidance()
             if link.active_synergy then active_links = active_links + 1 end
         end
         signature = string.format(
-            "screen=setup rival=%s scout=%s pressure=%s build=%s active_links=%d",
+            "screen=setup rival=%s scout=%s pressure=%s build=%s active_links=%d ability_links=%d",
             telemetry_value(view.opponent and view.opponent.name),
             telemetry_tags(view.opponent and view.opponent.scout_tags),
             telemetry_value(view.opponent
@@ -290,7 +318,8 @@ local function report_guidance()
                 and view.opponent.pressure[1]
                 and view.opponent.pressure[1].name),
             telemetry_tags(view.setup.build_tags, true),
-            active_links
+            active_links,
+            #(view.setup.ability_links or {})
         )
     end
     if signature and signature ~= last_guidance_signature then
@@ -384,7 +413,7 @@ local function activate(action_id, source)
         and view.draft and view.draft.inspected or nil
     if inspected_choice then
         print(string.format(
-            "CALLACK_INSPECTION type=choice source=%s name=%s mechanics=%d operation=%s cause=%s counters=%s links=%s adds=%s %s",
+            "CALLACK_INSPECTION type=choice source=%s name=%s mechanics=%d operation=%s cause=%s counters=%s links=%s adds=%s %s %s",
             telemetry_value(source),
             telemetry_value(inspected_choice.name),
             #(inspected_choice.mechanics or {}),
@@ -395,6 +424,7 @@ local function activate(action_id, source)
             telemetry_tags(inspected_choice.synergy and inspected_choice.synergy.counters),
             telemetry_tags(inspected_choice.synergy and inspected_choice.synergy.matched),
             telemetry_tags(inspected_choice.synergy and inspected_choice.synergy.introduced),
+            telemetry_rarity(inspected_choice),
             telemetry_rule(inspected_choice.rule_inspection)
         ))
     end
@@ -402,7 +432,7 @@ local function activate(action_id, source)
         and view.battle and view.battle.inspected or nil
     if inspected_entity then
         print(string.format(
-            "CALLACK_INSPECTION type=entity source=%s id=%s name=%s owner=%s mechanic=%s %s",
+            "CALLACK_INSPECTION type=entity source=%s id=%s name=%s owner=%s mechanic=%s %s %s",
             telemetry_value(source),
             telemetry_value(inspected_entity.entity_id),
             telemetry_value(inspected_entity.name),
@@ -410,6 +440,7 @@ local function activate(action_id, source)
             telemetry_value(inspected_entity.mechanic
                 or inspected_entity.core
                 or inspected_entity.state),
+            telemetry_rarity(inspected_entity),
             telemetry_rule(inspected_entity.rule_inspection)
         ))
     end
@@ -912,6 +943,47 @@ local function draw_draft_card(card, x, y, width, height, large, index)
     love.graphics.printf(lines[2] or "",
         text_x, text_y + (large and 116 or 91), text_width,
         large and "center" or "left")
+    local telegraph = card.telegraph or {}
+    local authority_line = ""
+    if telegraph.packaging_only then
+        authority_line = string.format(
+            "%d BRICKS / MEMBER LEDGERS / %s OFFER",
+            #(telegraph.members or {}),
+            string.upper(telegraph.offer_tier or rarity or "")
+        )
+    elseif telegraph.rarity then
+        local passive = telegraph.passive_count == 0
+            and "NO PASSIVE"
+            or string.format(
+                "PASSIVE %d/%d",
+                telegraph.passive_count or 0,
+                telegraph.passive_ceiling or 0
+            )
+        local shell_copy = category == "marble"
+            and string.format(
+                " / SHELLS %d/%d",
+                card.details and card.details.shell_count or 0,
+                telegraph.shell_cap or 0
+            )
+            or ""
+        authority_line = string.format(
+            "%s%s / BAL 100 / COPY %d",
+            passive,
+            shell_copy,
+            telegraph.copy_cap or 1
+        )
+    end
+    if authority_line ~= "" then
+        love.graphics.setFont(fonts.micro)
+        set_color(COLORS.muted, alpha)
+        love.graphics.printf(
+            authority_line,
+            text_x,
+            y + height - (large and 92 or 48),
+            text_width,
+            large and "left" or "left"
+        )
+    end
     if large then
         local summary, summary_color = synergy_summary(card)
         if summary_color == COLORS.brass then summary_color = COLORS.brass_dark end
@@ -924,6 +996,23 @@ local function draw_draft_card(card, x, y, width, height, large, index)
     end
     draw_tag_chips(card.tags, text_x, large and y + height - 48 or y + height - 30, text_width)
     draw_beads(rarity or "common", x + width - 16, y + 16, -1)
+    if category == "marble" then
+        local shell_count = card.details and card.details.shell_count or 0
+        love.graphics.setFont(fonts.micro)
+        set_color(COLORS.ink, 0.74 * alpha)
+        love.graphics.printf("SHELL", x + width - 70, y + 31, 52, "right")
+        for shell_index = 1, shell_count do
+            love.graphics.rectangle(
+                "fill",
+                x + width - 18 - shell_index * 8,
+                y + 45,
+                5,
+                3,
+                1,
+                1
+            )
+        end
+    end
     if card.selected then
         set_color(COLORS.focus)
         love.graphics.setFont(fonts.label)
@@ -1294,6 +1383,23 @@ local function draw_setup_links(origin_x, origin_y, step, cell_size)
                 love.graphics.setLineWidth(4)
                 love.graphics.line(left.x, left.y, right.x, right.y)
             end
+        end
+    end
+    for _, link in ipairs(view.setup.ability_links or {}) do
+        local source = positions[link.source_uid]
+        local target = positions[link.target_uid]
+        if source and target then
+            set_color(COLORS.focus, 0.92)
+            love.graphics.setLineWidth(3)
+            love.graphics.line(source.x, source.y, target.x, target.y)
+            love.graphics.setFont(fonts.micro)
+            love.graphics.printf(
+                "COST " .. tostring(link.cost_amount),
+                (source.x + target.x) / 2 - 34,
+                (source.y + target.y) / 2 - 16,
+                68,
+                "center"
+            )
         end
     end
     love.graphics.setLineWidth(1)
@@ -1684,6 +1790,28 @@ local function draw_battle_world(frame)
             local brick = side_brick(frame, entity.owner, entity.id)
             draw_brick(x - width / 2, y - height / 2, width, height,
                 entity.family, entity.behaviour, entity.hp_ratio, false)
+            if entity.guard and (entity.guard.amount or 0) > 0 then
+                set_color(COLORS.restore)
+                love.graphics.setLineWidth(3)
+                local pad = 5
+                love.graphics.line(
+                    x - width / 2 - pad, y - height / 2,
+                    x - width / 2 - pad, y + height / 2
+                )
+                love.graphics.line(
+                    x + width / 2 + pad, y - height / 2,
+                    x + width / 2 + pad, y + height / 2
+                )
+                love.graphics.setLineWidth(1)
+                love.graphics.setFont(fonts.micro)
+                love.graphics.printf(
+                    "GUARD " .. tostring(entity.guard.amount),
+                    x - width / 2,
+                    y - height / 2 - 13,
+                    width,
+                    "center"
+                )
+            end
             if brick and brick.status then
                 set_color(COLORS.focus)
                 love.graphics.circle("line", x, y, math.min(width, height) * 0.34)
@@ -2197,6 +2325,12 @@ local function spawn_event_particles(event)
         brick_destroyed = { 6, 0.20, "triangle", COLORS.brass_dark },
         shell_break = { 9, 0.22, "line", COLORS.chalk },
         core_release = { 6, 0.28, "dot", COLORS.brass_light },
+        chain_targeted = { 5, 0.24, "line", COLORS.damage },
+        guard_applied = { 4, 0.28, "triangle", COLORS.restore },
+        guard_prevented = { 4, 0.20, "triangle", COLORS.restore },
+        ability_triggered = { 4, 0.20, "dot", COLORS.focus },
+        ability_cost_paid = { 5, 0.24, "line", COLORS.damage },
+        ability_payoff_applied = { 6, 0.28, "dot", COLORS.brass_light },
         battle_end = { 8, 0.40, "triangle", COLORS.brass },
     }
     local recipe = recipes[event.type]

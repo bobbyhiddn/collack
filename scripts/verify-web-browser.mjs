@@ -308,6 +308,18 @@ async function inspectAction(runtime, pointer, x, y, action, type, timeout = 20_
       `${type} inspection omitted exact ${field} identity: ${detail}`);
   }
   assertSharedRuleIdentity(detail, `${type} inspection`);
+  assert(/\brarity=(common|uncommon|rare|epic|legendary)\b/.test(detail),
+    `${type} inspection omitted canonical rarity: ${detail}`);
+  assert(/\bbeads=[1-5]\b/.test(detail),
+    `${type} inspection omitted the one-through-five rarity bead count: ${detail}`);
+  assert(/\bshells=\d+\b/.test(detail),
+    `${type} inspection omitted shell-pip source count: ${detail}`);
+  assert(/\bpassives=\d+\/\d+\b/.test(detail) && /\bmcu=\d+\/\d+\b/.test(detail),
+    `${type} inspection omitted passive/complexity ceilings: ${detail}`);
+  assert(/\bbalance=\d+(?:\.\d+)?\/100\b/.test(detail),
+    `${type} inspection omitted the fixed 100-point balance envelope: ${detail}`);
+  assert(/\bcopy_cap=[1-4]\b/.test(detail),
+    `${type} inspection omitted the canonical copy cap: ${detail}`);
   return detail;
 }
 

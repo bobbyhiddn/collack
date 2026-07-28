@@ -18,17 +18,11 @@ local draft = require("battle.draft")
 
 local M = {}
 
--- Rarity shell caps, straight from the spec.
-M.SHELL_CAP = {
-    common = 1,
-    uncommon = 2,
-    rare = 3,
-    epic = 4,
-    legendary = 5,
-}
-
--- Rarity ordering, used to check a core is legal for the marble's rarity.
-M.RARITY_ORDER = { "common", "uncommon", "rare", "epic", "legendary" }
+M.SHELL_CAP = {}
+M.RARITY_ORDER = rule_ast.copy(rule_ast.ECONOMY.rarity_order)
+for rarity, tier in pairs(rule_ast.ECONOMY.tiers) do
+    M.SHELL_CAP[rarity] = tier.shell_cap
+end
 
 local rarity_rank = {}
 for index, name in ipairs(M.RARITY_ORDER) do

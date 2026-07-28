@@ -452,8 +452,15 @@ function M.run(t)
             entry.category .. ":" .. entry.id .. " keeps canonical compact copy")
         t:ok(util.deep_equal(item.inspection_copy, authority.inspection_copy),
             entry.category .. ":" .. entry.id .. " keeps canonical inspection")
-        t:ok(util.deep_equal(item.balance, authority.balance),
-            entry.category .. ":" .. entry.id .. " keeps canonical accounting")
+        if entry.category == "brick_kit" then
+            t:eq(item.balance.packaging_only, true,
+                entry.category .. ":" .. entry.id .. " keeps member-only accounting")
+            t:eq(#item.balance.members, 2,
+                entry.category .. ":" .. entry.id .. " reports both member ledgers")
+        else
+            t:ok(util.deep_equal(item.balance, authority.balance),
+                entry.category .. ":" .. entry.id .. " keeps canonical accounting")
+        end
     end
     t:eq(item_count, 17, "the live authority proof covers all seventeen items")
 

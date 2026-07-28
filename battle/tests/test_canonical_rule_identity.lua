@@ -172,8 +172,11 @@ function M.run(t)
 
         t:eq(#authority.rule_ids, #authority.rules,
             key .. " exposes every canonical structured rule")
-        t:eq(#authority.balance.lines, #authority.rule_ids,
-            key .. " accounts every canonical structured rule")
+        t:eq(
+            #authority.balance.lines,
+            #authority.rule_ids + #item.rule_set.abilities,
+            key .. " accounts every canonical structured rule and ability MCU"
+        )
         for index, rule_id in ipairs(authority.rule_ids) do
             t:eq(authority_ids[rule_id], nil,
                 key .. " rejects duplicate/helper-inflated ID " .. rule_id)

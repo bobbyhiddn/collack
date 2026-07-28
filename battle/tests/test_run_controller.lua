@@ -96,12 +96,23 @@ function M.run(t)
         "touch and mouse placement are equivalent")
     model = cell_touch.model
 
-    for index = 2, #model.run.player.bricks do
-        local brick = model.run.player.bricks[index]
-        local row = math.floor((index - 1) / 7) + 1
-        local col = ((index - 1) % 7) + 1
-        model = activate(model, "brick:" .. brick.uid, "touch")
-        model = activate(model, string.format("cell:%d:%d", row, col), "touch")
+    local standard_index, rear_index = 0, 0
+    for _, brick in ipairs(model.run.player.bricks) do
+        local rear_row = brick.rule_set.formation
+            and brick.rule_set.formation.rear_row
+        local row, col
+        if rear_row then
+            rear_index = rear_index + 1
+            row, col = 3, rear_index
+        else
+            standard_index = standard_index + 1
+            row = math.floor((standard_index - 1) / 7) + 1
+            col = ((standard_index - 1) % 7) + 1
+        end
+        if model.run.setup.formation[row][col] ~= brick.uid then
+            model = activate(model, "brick:" .. brick.uid, "touch")
+            model = activate(model, string.format("cell:%d:%d", row, col), "touch")
+        end
     end
     t:eq(model.run.setup.valid, true, "tap-to-select then tap-cell places a valid formation")
 

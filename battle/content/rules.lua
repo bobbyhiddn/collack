@@ -27,7 +27,17 @@ local function node(id, trigger, target, verb, stat, value, unit, options)
     if options.as_duration then
         magnitude, duration = nil, quantity
     end
-    return {
+    if options.duration_value ~= nil then
+        local result = {
+            value = options.duration_value,
+            unit = options.duration_unit or "ticks",
+        }
+        if magnitude == nil then duration = result else
+            -- Rules such as Guard have both a magnitude and an expiry.
+            duration = result
+        end
+    end
+    local result = {
         id = id,
         trigger = {
             event = trigger,
@@ -40,6 +50,14 @@ local function node(id, trigger, target, verb, stat, value, unit, options)
         target = {
             selector = target,
             relation = options.relation,
+            topology = options.topology,
+            count = options.count,
+            exclude_self = options.exclude_self,
+            require_alive = options.require_alive,
+            required_tags = options.required_tags,
+            excluded_tags = options.excluded_tags,
+            order = options.order,
+            radius = options.radius,
         },
         operation = {
             verb = verb,
@@ -61,7 +79,10 @@ local function node(id, trigger, target, verb, stat, value, unit, options)
             unit = options.cost_unit,
         },
         visibility = options.visibility or "compact",
+        scaling = options.scaling,
+        lethal = options.lethal,
     }
+    return result
 end
 
 local function rule_set(id, name, role, tags, rules, options)
@@ -81,6 +102,22 @@ local function rule_set(id, name, role, tags, rules, options)
         },
         synergy_tags = tags,
         rarity_budget = options.rarity_budget or 100,
+        content_kind = options.content_kind or "component",
+        component_kind = options.component_kind or (
+            (options.content_kind == nil or options.content_kind == "component")
+                and "operation" or nil
+        ),
+        rarity = options.rarity,
+        min_rarity = options.min_rarity,
+        availability = options.availability or {
+            player_draft = false,
+            player_reward = false,
+            cpu_recipe = false,
+            legacy_only = false,
+        },
+        abilities = options.abilities or {},
+        components = options.components or {},
+        formation = options.formation,
     }
     ast.assert_valid(item)
     if options.register ~= false then ast.register(item) end
@@ -100,6 +137,17 @@ local function derive(spec, sources)
         },
         synergy_tags = spec.synergy_tags,
         rarity_budget = spec.rarity_budget or 100,
+        content_kind = spec.content_kind or "component",
+        component_kind = spec.component_kind or (
+            (spec.content_kind == nil or spec.content_kind == "component")
+                and "composition" or nil
+        ),
+        rarity = spec.rarity,
+        min_rarity = spec.min_rarity,
+        availability = spec.availability,
+        abilities = spec.abilities,
+        components = spec.components,
+        formation = spec.formation,
     }, sources)
     ast.register(item)
     return item
@@ -232,14 +280,17 @@ M.releases.shrapnel = rule_set(
     "Shrapnel",
     "release damage",
     { "release", "chain" },
-    complete_release({
-        node("release.shrapnel.radius", "core_release", "nearby_marbles",
-            "push", "radius", 1, "radius", { condition = "final_shell" }),
-        node("release.shrapnel.damage", "core_release", "orthogonal_neighbours",
-            "splash", "shrapnel", 1, "damage", { condition = "final_shell" }),
+    {
+        node("release.shrapnel.damage", "core_release", "nearest_enemy_brick_cluster",
+            "splash", "shrapnel", 1, "damage", {
+                condition = "final_shell",
+                relation = "enemy",
+                count = 5,
+                order = "distance_row_col_uid",
+            }),
         node("release.shrapnel.identity", "build", "self",
             "set", "release", "shrapnel", "id", { visibility = "expanded" }),
-    }),
+    },
     {
         drawback = {
             kind = "risk",
@@ -255,12 +306,12 @@ M.releases.concussion = rule_set(
     "Concussion",
     "wide displacement",
     { "release", "control" },
-    complete_release({
+    {
         node("release.concussion.radius", "core_release", "nearby_marbles",
             "push", "radius", 2, "radius", { condition = "final_shell" }),
         node("release.concussion.identity", "build", "self",
             "set", "release", "concussion", "id", { visibility = "expanded" }),
-    }),
+    },
     {
         drawback = {
             kind = "risk",
@@ -276,14 +327,12 @@ M.releases.magnetize = rule_set(
     "Magnetize",
     "clustering displacement",
     { "release", "control", "field" },
-    complete_release({
-        node("release.magnetize.radius", "core_release", "nearby_marbles",
-            "push", "radius", 1, "radius", { condition = "final_shell" }),
+    {
         node("release.magnetize.invert", "core_release", "nearby_marbles",
             "pull", "invert", true, "flag", { condition = "final_shell" }),
         node("release.magnetize.identity", "build", "self",
             "set", "release", "magnetize", "id", { visibility = "expanded" }),
-    }),
+    },
     {
         drawback = {
             kind = "risk",
@@ -299,14 +348,12 @@ M.releases.scorch = rule_set(
     "Scorch",
     "release attrition",
     { "release", "field", "burst" },
-    complete_release({
-        node("release.scorch.radius", "core_release", "nearby_marbles",
-            "push", "radius", 1, "radius", { condition = "final_shell" }),
+    {
         node("release.scorch.wear", "core_release", "nearby_marbles",
             "scorch", "scorch", 1, "durability", { condition = "final_shell" }),
         node("release.scorch.identity", "build", "self",
             "set", "release", "scorch", "id", { visibility = "expanded" }),
-    }),
+    },
     {
         drawback = {
             kind = "risk",
@@ -369,14 +416,10 @@ M.brick_behaviours.inert = rule_set(
 
 M.brick_behaviours.absorb = rule_set(
     "brick.behaviour.absorb",
-    "Absorb",
-    "impact guard",
+    "Dense Body",
+    "raw body",
     { "guard", "durable" },
     {
-        node("brick.absorb.prevent", "damaging_collision", "self",
-            "prevent", "damage_reduction", 1, "damage"),
-        node("brick.absorb.wear", "collision", "current_shell",
-            "wear", "shell_wear", 1, "durability"),
         node("brick.absorb.identity", "build", "self",
             "set", "behaviour", "absorb", "id", { visibility = "expanded" }),
     }
@@ -402,7 +445,11 @@ M.brick_behaviours.regenerate = rule_set(
     { "sustain", "durable" },
     {
         node("brick.regenerate.heal", "survives_collision", "self",
-            "heal", "heal_after_hit", 1, "hp", { condition = "survives" }),
+            "heal", "heal_after_hit", 1, "hp", {
+                condition = "survives",
+                cadence_unit = "exchange",
+                charges = 1,
+            }),
         node("brick.regenerate.identity", "build", "self",
             "set", "behaviour", "regenerate", "id", { visibility = "expanded" }),
     }
@@ -489,8 +536,14 @@ M.brick_behaviours.chain = rule_set(
     "destruction burst",
     { "chain", "burst" },
     {
-        node("brick.chain.splash", "destroyed", "orthogonal_neighbours",
-            "splash", "death_splash", 2, "damage", { limit = 3 }),
+        node("brick.chain.shell_wear", "destroyed", "chain_enemy_marbles",
+            "wear", "chain_shell_wear", 1, "durability", {
+                relation = "enemy",
+                count = 3,
+                radius = 24,
+                order = "causal_then_distance_body_id",
+                charges = 1,
+            }),
         node("brick.chain.identity", "build", "self",
             "set", "behaviour", "chain", "id", { visibility = "expanded" }),
     }
@@ -512,11 +565,23 @@ M.brick_behaviours.vault = rule_set(
 M.brick_behaviours.splice = rule_set(
     "brick.behaviour.splice",
     "Splice",
-    "contact splash",
-    { "chain", "burst" },
+    "adjacent guard",
+    { "guard", "depth" },
     {
-        node("brick.splice.splash", "collision", "orthogonal_neighbours",
-            "splash", "collision_splash", 1, "damage"),
+        node("brick.splice.guard", "damaging_collision", "orthogonal_neighbours",
+            "protect", "guard", 1, "damage", {
+                condition = "survives",
+                relation = "allied",
+                topology = "orthogonal",
+                count = 4,
+                exclude_self = true,
+                require_alive = true,
+                order = "local_up_down_left_right",
+                cadence_unit = "exchange",
+                charges = 1,
+                duration_value = 120,
+                duration_unit = "ticks",
+            }),
         node("brick.splice.identity", "build", "self",
             "set", "behaviour", "splice", "id", { visibility = "expanded" }),
     }
@@ -525,11 +590,9 @@ M.brick_behaviours.splice = rule_set(
 M.brick_behaviours.dummy = rule_set(
     "brick.behaviour.dummy",
     "Dummy",
-    "safe contact",
+    "spring body",
     { "tempo" },
     {
-        node("brick.dummy.harmless", "collision", "current_shell",
-            "prevent", "harmless", true, "flag"),
         node("brick.dummy.identity", "build", "self",
             "set", "behaviour", "dummy", "id", { visibility = "expanded" }),
     }
@@ -600,6 +663,13 @@ local function sling(id, name, role, tags, rules, drawback)
         rules,
         {
             drawback = drawback or { kind = "none" },
+            content_kind = "sling",
+            availability = {
+                player_draft = true,
+                player_reward = true,
+                cpu_recipe = true,
+                legacy_only = false,
+            },
             compatibility = {
                 requires = {},
                 excludes = {},
@@ -739,30 +809,39 @@ for id, spec in pairs(shell_specs) do
         name = id:gsub("_", " "),
         role = "shell",
         synergy_tags = spec.tags,
+        content_kind = "component",
+        component_kind = "shell",
     }, { identity, M.collisions[spec.collision] })
 end
 
 local core_specs = {
     dull_quartz = {
-        trajectory = 0, release = "baseline", tags = { "tempo", "release" },
+        trajectory = 0, release = "baseline", min_rarity = "common",
+        tags = { "tempo", "release" },
     },
     cant_pebble = {
-        trajectory = -1, release = "baseline", tags = { "angle", "control" },
+        trajectory = -1, release = "baseline", min_rarity = "common",
+        tags = { "angle", "control" },
     },
     skew_flint = {
-        trajectory = 1, release = "baseline", tags = { "angle", "burst" },
+        trajectory = 1, release = "baseline", min_rarity = "common",
+        tags = { "angle", "burst" },
     },
     shrapnel_geode = {
-        trajectory = 0, release = "shrapnel", tags = { "release", "chain" },
+        trajectory = 0, release = "shrapnel", min_rarity = "uncommon",
+        tags = { "release", "chain" },
     },
     concussion_pearl = {
-        trajectory = 1, release = "concussion", tags = { "release", "control" },
+        trajectory = 1, release = "concussion", min_rarity = "rare",
+        tags = { "release", "control" },
     },
     lodestone_heart = {
-        trajectory = -1, release = "magnetize", tags = { "control", "field" },
+        trajectory = -1, release = "magnetize", min_rarity = "epic",
+        tags = { "control", "field" },
     },
     cinder_nucleus = {
-        trajectory = 0, release = "scorch", tags = { "burst", "field" },
+        trajectory = 0, release = "scorch", min_rarity = "legendary",
+        tags = { "burst", "field" },
     },
 }
 
@@ -778,38 +857,193 @@ for id, spec in pairs(core_specs) do
             node("core." .. id .. ".release", "build", "self",
                 "set", "release", spec.release, "id", { visibility = "expanded" }),
         },
-        { register = false }
+        { register = false, component_kind = "core_identity" }
     )
     local release_sources = { M.releases.baseline }
-    if spec.release ~= "baseline" then release_sources[1] = M.releases[spec.release] end
+    local abilities = {}
+    if spec.release ~= "baseline" then
+        release_sources[#release_sources + 1] = M.releases[spec.release]
+        local rule_ids = {}
+        for _, rule in ipairs(M.releases[spec.release].rules) do
+            if rule.trigger.event == "core_release" then rule_ids[#rule_ids + 1] = rule.id end
+        end
+        abilities[1] = {
+            id = spec.release,
+            kind = "core_release",
+            rule_ids = rule_ids,
+        }
+    end
+    local sources = { identity }
+    for _, source in ipairs(release_sources) do sources[#sources + 1] = source end
     M.cores[id] = derive({
         id = "core." .. id,
         name = id:gsub("_", " "),
         role = "core",
         synergy_tags = spec.tags,
         drawback = M.releases[spec.release].drawback,
-    }, { identity, release_sources[1] })
+        content_kind = "component",
+        component_kind = "core",
+        min_rarity = spec.min_rarity,
+        abilities = abilities,
+    }, sources)
 end
 
+local function availability(player)
+    return {
+        player_draft = player,
+        player_reward = player,
+        cpu_recipe = true,
+        legacy_only = not player,
+    }
+end
+
+local BRICK_ABILITIES = {
+    inert = {},
+    absorb = {},
+    dummy = {},
+    reflect = {
+        { id = "reflect", kind = "passive", rule_ids = { "brick.reflect.rebound" } },
+    },
+    regenerate = {
+        { id = "regenerate", kind = "passive", rule_ids = { "brick.regenerate.heal" } },
+    },
+    fortify = {
+        { id = "fortify", kind = "passive", rule_ids = { "brick.fortify.protect" } },
+    },
+    poison = {
+        {
+            id = "poison_field", kind = "passive",
+            rule_ids = {
+                "brick.poison.status", "brick.poison.radius", "brick.poison.strength",
+                "status.poison.duration", "status.poison.wear",
+            },
+        },
+    },
+    freeze = {
+        {
+            id = "freeze_field", kind = "passive",
+            rule_ids = {
+                "brick.freeze.status", "brick.freeze.radius", "brick.freeze.strength",
+                "status.freeze.duration", "status.freeze.field_slow",
+                "status.freeze.launch_slow",
+            },
+        },
+    },
+    magnetic = {
+        {
+            id = "magnetic_field", kind = "passive",
+            rule_ids = { "brick.magnetic.radius", "brick.magnetic.strength" },
+        },
+    },
+    shatter = {
+        { id = "shatter", kind = "passive", rule_ids = { "brick.shatter.wear" } },
+    },
+    chain = {
+        {
+            id = "chain", kind = "passive",
+            rule_ids = { "brick.chain.shell_wear" },
+            recursion = {
+                accepts_causes = { "hostile_collision", "shrapnel" },
+                max_generation = 3,
+            },
+        },
+    },
+    vault = {
+        { id = "vault", kind = "passive", rule_ids = { "brick.vault.force" } },
+    },
+    splice = {
+        { id = "splice_guard", kind = "passive", rule_ids = { "brick.splice.guard" } },
+    },
+    aegis = {
+        { id = "aegis", kind = "passive", rule_ids = { "brick.aegis.negate" } },
+    },
+    void = {
+        { id = "void", kind = "passive", rule_ids = { "brick.void.break" } },
+    },
+    mirror = {
+        {
+            id = "prismatic_mirror", kind = "passive",
+            rule_ids = { "brick.mirror.rebound", "brick.mirror.wear" },
+        },
+    },
+    temporal = {
+        { id = "temporal", kind = "passive", rule_ids = { "brick.temporal.rewind" } },
+    },
+}
+
 local brick_specs = {
-    plain_block = { hp = 2, behaviour = "inert", tags = { "durable" } },
-    chalk_block = { hp = 1, behaviour = "inert", tags = { "tempo" } },
-    basalt_absorber = { hp = 3, behaviour = "absorb", tags = { "guard", "durable" } },
-    mirror_pane = { hp = 2, behaviour = "reflect", tags = { "rebound", "guard" } },
-    moss_regenerator = { hp = 3, behaviour = "regenerate", tags = { "sustain" } },
-    granite_fortifier = { hp = 3, behaviour = "fortify", tags = { "guard", "depth" } },
-    venom_glass = { hp = 2, behaviour = "poison", tags = { "control", "field" } },
-    rime_block = { hp = 2, behaviour = "freeze", tags = { "control", "field" } },
-    lodestone_block = { hp = 2, behaviour = "magnetic", tags = { "control", "field" } },
-    shatter_crystal = { hp = 2, behaviour = "shatter", tags = { "burst" } },
-    powder_keg = { hp = 1, behaviour = "chain", tags = { "chain", "burst" } },
-    vault_arch = { hp = 2, behaviour = "vault", tags = { "force", "depth" } },
-    splice_node = { hp = 2, behaviour = "splice", tags = { "chain", "burst" } },
-    training_dummy = { hp = 1, behaviour = "dummy", tags = { "tempo" } },
-    aegis_keystone = { hp = 3, behaviour = "aegis", tags = { "guard", "sustain" } },
-    void_prism = { hp = 2, behaviour = "void", tags = { "control", "burst" } },
-    prismatic_mirror = { hp = 3, behaviour = "mirror", tags = { "rebound", "guard" } },
-    temporal_anchor = { hp = 3, behaviour = "temporal", tags = { "sustain", "depth" } },
+    plain_block = {
+        hp = 2, restitution = 0.82, behaviour = "inert", rarity = "common",
+        tags = { "durable" }, available = false,
+    },
+    chalk_block = {
+        hp = 1, restitution = 0.90, behaviour = "inert", rarity = "common",
+        tags = { "tempo" }, available = false,
+    },
+    basalt_absorber = {
+        hp = 4, restitution = 0.68, behaviour = "absorb", rarity = "common",
+        tags = { "guard", "durable" },
+    },
+    training_dummy = {
+        hp = 2, restitution = 1.04, behaviour = "dummy", rarity = "common",
+        tags = { "tempo" },
+    },
+    mirror_pane = {
+        hp = 2, restitution = 0.88, behaviour = "reflect", rarity = "uncommon",
+        tags = { "rebound", "guard" },
+    },
+    moss_regenerator = {
+        hp = 3, restitution = 0.76, behaviour = "regenerate", rarity = "uncommon",
+        tags = { "sustain" },
+    },
+    granite_fortifier = {
+        hp = 2, restitution = 0.72, behaviour = "fortify", rarity = "uncommon",
+        tags = { "guard", "depth" },
+    },
+    shatter_crystal = {
+        hp = 2, restitution = 0.94, behaviour = "shatter", rarity = "uncommon",
+        tags = { "burst" },
+    },
+    vault_arch = {
+        hp = 2, restitution = 0.84, behaviour = "vault", rarity = "uncommon",
+        tags = { "force", "depth" },
+    },
+    venom_glass = {
+        hp = 1, restitution = 0.92, behaviour = "poison", rarity = "rare",
+        tags = { "control", "field" },
+    },
+    rime_block = {
+        hp = 1, restitution = 0.90, behaviour = "freeze", rarity = "rare",
+        tags = { "control", "field" },
+    },
+    lodestone_block = {
+        hp = 2, restitution = 0.70, behaviour = "magnetic", rarity = "rare",
+        tags = { "control", "field" },
+    },
+    powder_keg = {
+        hp = 1, restitution = 0.86, behaviour = "chain", rarity = "rare",
+        tags = { "chain", "burst" },
+    },
+    splice_node = {
+        hp = 2, restitution = 0.74, behaviour = "splice", rarity = "rare",
+        tags = { "guard", "depth" },
+    },
+    aegis_keystone = {
+        hp = 2, restitution = 0.70, behaviour = "aegis", rarity = "epic",
+        tags = { "guard", "sustain" },
+    },
+    void_prism = {
+        hp = 1, restitution = 0.96, behaviour = "void", rarity = "epic",
+        tags = { "control", "burst" },
+    },
+    prismatic_mirror = {
+        hp = 2, restitution = 0.90, behaviour = "mirror", rarity = "epic",
+        tags = { "rebound", "guard" },
+    },
+    temporal_anchor = {
+        hp = 2, restitution = 0.66, behaviour = "temporal", rarity = "legendary",
+        tags = { "sustain", "depth" }, rear_row = true,
+    },
 }
 
 for id, spec in pairs(brick_specs) do
@@ -821,10 +1055,16 @@ for id, spec in pairs(brick_specs) do
         {
             node("brick." .. id .. ".hp", "build", "self",
                 "protect", "hp", spec.hp, "hp", { visibility = "expanded" }),
+            node("brick." .. id .. ".restitution", "build", "self",
+                "set", "restitution", spec.restitution, "multiplier",
+                { visibility = "expanded" }),
             node("brick." .. id .. ".behaviour", "build", "self",
                 "set", "behaviour", spec.behaviour, "id", { visibility = "expanded" }),
         },
-        { register = false }
+        {
+            register = false,
+            component_kind = "brick_identity",
+        }
     )
     local sources = { identity, M.brick_behaviours[spec.behaviour] }
     if M.statuses[spec.behaviour] then
@@ -835,10 +1075,15 @@ for id, spec in pairs(brick_specs) do
         name = id:gsub("_", " "),
         role = M.brick_behaviours[spec.behaviour].role,
         synergy_tags = spec.tags,
+        content_kind = "brick",
+        rarity = spec.rarity,
+        availability = availability(spec.available ~= false),
+        abilities = BRICK_ABILITIES[spec.behaviour],
+        formation = spec.rear_row and { rear_row = true } or nil,
         compatibility = {
             requires = {},
             excludes = {},
-            max_copies = 8,
+            max_copies = ast.ECONOMY.tiers[spec.rarity].brick_copy_cap,
         },
     }, sources)
 end

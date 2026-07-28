@@ -22,7 +22,7 @@ local function has_error(errors, fragment)
 end
 
 function M.run(t)
-    t:eq(ast.SCHEMA_VERSION, 1, "the executable grammar is explicitly versioned")
+    t:eq(ast.SCHEMA_VERSION, 2, "the executable grammar is explicitly versioned")
 
     for _, entry in ipairs(content.COMPREHENSION_POOL) do
         local lookup = entry.category == "sling" and content.sling_by_id
