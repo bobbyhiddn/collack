@@ -25,6 +25,7 @@ harness.run({
     require("battle.tests.test_rule_attribution"),
     require("battle.tests.test_rule_compatibility"),
     require("battle.tests.test_rule_migration"),
+    require("battle.tests.test_canonical_rule_identity"),
     require("battle.tests.test_short_run_state"),
     require("battle.tests.test_short_run_economy"),
     require("battle.tests.test_short_run_save_replay"),

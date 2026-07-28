@@ -7,6 +7,7 @@ import { createHash } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
+import { evidenceSourceDigest } from "./evidence-source-digest.mjs";
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(scriptDirectory, "..");
@@ -759,10 +760,12 @@ try {
   for (const name of screenshotNames) {
     screenshotHashes[name] = digest(await readFile(path.join(verificationRoot, name)));
   }
+  const sourceDigest = await evidenceSourceDigest(root);
   await writeFile(
     path.join(verificationRoot, "packaged-runtime-evidence.json"),
     `${JSON.stringify({
-      schemaVersion: 1,
+      schemaVersion: 2,
+      sourceDigest,
       viewports: {
         phone: { width: 390, height: 844, touch: true },
         desktop: { width: 1280, height: 800, touch: false },

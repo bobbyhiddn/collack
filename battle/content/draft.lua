@@ -187,6 +187,7 @@ for _, spec in ipairs(MARBLE_SPECS) do
         rarity_budget = spec.rarity_budget,
         drawback = cores.by_id[spec.core].rule_set.drawback,
     }, sources)
+    ast.register(rule_set)
     local item = decorate(spec, rule_set)
     item.core = spec.core
     item.shells = ast.copy(spec.shell_ids)
@@ -270,6 +271,7 @@ for _, spec in ipairs(KIT_SPECS) do
         synergy_tags = spec.tags,
         rarity_budget = spec.rarity_budget,
     }, sources)
+    ast.register(rule_set)
     local item = decorate(spec, rule_set)
     item.brick_ids = ast.copy(spec.brick_ids)
     M.BRICK_KITS[#M.BRICK_KITS + 1] = item

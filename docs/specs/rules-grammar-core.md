@@ -25,7 +25,13 @@ Every rule declares:
 - magnitude or duration with a typed unit;
 - cadence interval and optional charges or limit;
 - a rule-level cost, including `none`;
-- compact, expanded, or internal visibility.
+- compact or expanded visibility.
+
+Executable routing values such as collision family, release family, brick
+behaviour, field force, and fixed-step velocity multipliers are mechanical
+rules. They cannot use a hidden visibility class. Composition preserves each
+canonical rule ID, deduplicates an identical shared node, rejects conflicting
+definitions, and records the exact RuleSet memberships resolved by that ID.
 
 Validation rejects unknown fields and vocabulary, duplicate IDs, invalid
 quantities, incomplete nodes, incompatible collections, excess copies, missing
@@ -48,7 +54,9 @@ magnitude, and unit; presentation callouts render directly from those fields.
 
 `rule_ast.balance` accounts each operation by magnitude or duration, target
 scope, cadence, rule cost, and item drawback. It is both a validation gate and
-the balance projection exposed with the card.
+the balance projection exposed with the card. Each accounting line also carries
+the canonical mechanical value and cadence, so even a zero-weight routing value
+cannot change execution without changing inspectable accounting.
 
 ## Comprehension pool
 

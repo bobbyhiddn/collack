@@ -90,6 +90,10 @@ jobs:
         if: matrix.target == 'web'
         run: bash scripts/verify-web-reproducible.sh
 
+      - name: Verify tracked browser evidence freshness
+        if: matrix.target == 'web'
+        run: npm run verify:evidence
+
       - name: Verify shell scripts
         run: |
           bash -n scripts/*.sh

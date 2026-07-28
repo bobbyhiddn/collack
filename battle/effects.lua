@@ -5,29 +5,6 @@ local rulebook = require("battle.content.rules")
 
 local M = {}
 
-local function merge_profiles(base, overlay)
-    local out = {}
-    for key, value in pairs(base or {}) do out[key] = ast.copy(value) end
-    for key, value in pairs(overlay or {}) do
-        if key ~= "_rule_ids" and key ~= "_cadence" then out[key] = ast.copy(value) end
-    end
-    out._rule_ids = {}
-    for stat, ids in pairs((base and base._rule_ids) or {}) do
-        out._rule_ids[stat] = ast.copy(ids)
-    end
-    for stat, ids in pairs((overlay and overlay._rule_ids) or {}) do
-        out._rule_ids[stat] = ast.copy(ids)
-    end
-    out._cadence = {}
-    for stat, cadence in pairs((base and base._cadence) or {}) do
-        out._cadence[stat] = ast.copy(cadence)
-    end
-    for stat, cadence in pairs((overlay and overlay._cadence) or {}) do
-        out._cadence[stat] = ast.copy(cadence)
-    end
-    return out
-end
-
 M.brick = {}
 for id, rule_set in pairs(rulebook.brick_behaviours) do
     M.brick[id] = ast.project(rule_set)
@@ -52,7 +29,7 @@ M.BASELINE_RELEASE.shrapnel = M.BASELINE_RELEASE.shrapnel or 0
 M.release = {}
 for id, rule_set in pairs(rulebook.releases) do
     if id ~= "baseline" then
-        local profile = merge_profiles(M.BASELINE_RELEASE, ast.project(rule_set))
+        local profile = ast.project(rule_set)
         profile.id = id
         profile.invert = profile.invert == true
         profile.scorch = profile.scorch or 0

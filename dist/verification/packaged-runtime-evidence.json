@@ -1,5 +1,6 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
+  "sourceDigest": "3bb4406a8203468fbb11d32780f329ad292bb42fbafa05df7267165149995bc4",
   "viewports": {
     "phone": {
       "width": 390,
@@ -69,10 +70,10 @@
       },
       "moved": {
         "label": "phone",
-        "tick": 176,
+        "tick": 160,
         "entity": "player-m01",
-        "x": 34.172,
-        "y": 43.884
+        "x": 33.496,
+        "y": 46.964
       }
     },
     "desktop": {
@@ -137,27 +138,27 @@
   "inspections": [
     {
       "label": "phone",
-      "text": "CALLACK_INSPECTION type=choice source=mouse name=Cinder mechanics=2 operation=add_marble cause=post_battle_choice counters=none links=none adds=burst,field rule=card.marble.cinder_legendary.01.01.core.cinder_nucleus.01.01.core.cinder_nucleus.trajectory page=1/19 trigger=launch target=launch icon=AIM verb=aim magnitude=0_count limit=EVERY_LAUNCH__NO_RULE_CAP drawback=RISK__CORE_RELEASE__1_DURABILITY"
+      "text": "CALLACK_INSPECTION type=choice source=touch name=Cinder mechanics=2 operation=add_marble cause=post_battle_choice counters=none links=none adds=burst,field rule=core.cinder_nucleus.trajectory page=1/30 trigger=launch target=launch icon=AIM verb=aim magnitude=0_count limit=EVERY_LAUNCH__NO_RULE_CAP drawback=RISK__CORE_RELEASE__1_DURABILITY"
     },
     {
       "label": "phone",
-      "text": "CALLACK_INSPECTION type=entity source=touch id=brickplayer-b01 name=Basalt_Absorber owner=Collector mechanic=Absorb rule=brick.basalt_absorber.01.01.brick.basalt_absorber.hp page=1/3 trigger=build target=self icon=GRD verb=protect magnitude=3_hp limit=EVERY_BUILD__NO_RULE_CAP drawback=NONE"
+      "text": "CALLACK_INSPECTION type=entity source=touch id=brickplayer-b01 name=Basalt_Absorber owner=Collector mechanic=Absorb rule=brick.basalt_absorber.hp page=1/5 trigger=build target=self icon=GRD verb=protect magnitude=3_hp limit=EVERY_BUILD__NO_RULE_CAP drawback=NONE"
     },
     {
       "label": "phone",
-      "text": "CALLACK_INSPECTION type=choice source=mouse name=Temporal_Anchor mechanics=1 operation=add_brick cause=post_battle_choice counters=sustain links=depth adds=sustain,deep_reserve rule=brick.temporal_anchor.01.01.brick.temporal_anchor.hp page=1/2 trigger=build target=self icon=GRD verb=protect magnitude=3_hp limit=EVERY_BUILD__NO_RULE_CAP drawback=NONE"
+      "text": "CALLACK_INSPECTION type=choice source=mouse name=Temporal_Anchor mechanics=2 operation=add_brick cause=post_battle_choice counters=sustain links=depth adds=sustain,deep_reserve rule=brick.vault_arch.hp page=1/8 trigger=build target=self icon=GRD verb=protect magnitude=2_hp limit=EVERY_BUILD__NO_RULE_CAP drawback=NONE"
     },
     {
       "label": "desktop",
-      "text": "CALLACK_INSPECTION type=choice source=mouse name=Cinder mechanics=2 operation=add_marble cause=post_battle_choice counters=none links=none adds=burst,field rule=card.marble.cinder_legendary.01.01.core.cinder_nucleus.01.01.core.cinder_nucleus.trajectory page=1/19 trigger=launch target=launch icon=AIM verb=aim magnitude=0_count limit=EVERY_LAUNCH__NO_RULE_CAP drawback=RISK__CORE_RELEASE__1_DURABILITY"
+      "text": "CALLACK_INSPECTION type=choice source=mouse name=Cinder mechanics=2 operation=add_marble cause=post_battle_choice counters=none links=none adds=burst,field rule=core.cinder_nucleus.trajectory page=1/30 trigger=launch target=launch icon=AIM verb=aim magnitude=0_count limit=EVERY_LAUNCH__NO_RULE_CAP drawback=RISK__CORE_RELEASE__1_DURABILITY"
     },
     {
       "label": "desktop",
-      "text": "CALLACK_INSPECTION type=entity source=mouse id=brickplayer-b01 name=Basalt_Absorber owner=Collector mechanic=Absorb rule=brick.basalt_absorber.01.01.brick.basalt_absorber.hp page=1/3 trigger=build target=self icon=GRD verb=protect magnitude=3_hp limit=EVERY_BUILD__NO_RULE_CAP drawback=NONE"
+      "text": "CALLACK_INSPECTION type=entity source=mouse id=brickplayer-b01 name=Basalt_Absorber owner=Collector mechanic=Absorb rule=brick.basalt_absorber.hp page=1/5 trigger=build target=self icon=GRD verb=protect magnitude=3_hp limit=EVERY_BUILD__NO_RULE_CAP drawback=NONE"
     },
     {
       "label": "desktop",
-      "text": "CALLACK_INSPECTION type=choice source=mouse name=Temporal_Anchor mechanics=1 operation=add_brick cause=post_battle_choice counters=sustain links=depth adds=sustain,deep_reserve rule=brick.temporal_anchor.01.01.brick.temporal_anchor.hp page=1/2 trigger=build target=self icon=GRD verb=protect magnitude=3_hp limit=EVERY_BUILD__NO_RULE_CAP drawback=NONE"
+      "text": "CALLACK_INSPECTION type=choice source=mouse name=Temporal_Anchor mechanics=2 operation=add_brick cause=post_battle_choice counters=sustain links=depth adds=sustain,deep_reserve rule=brick.vault_arch.hp page=1/8 trigger=build target=self icon=GRD verb=protect magnitude=2_hp limit=EVERY_BUILD__NO_RULE_CAP drawback=NONE"
     }
   ],
   "ruleCallouts": [
@@ -183,27 +184,7 @@
     },
     {
       "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=release.baseline.radius source=Dull_Quartz icon=PSH verb=push target=nearby_marbles magnitude=1 unit=radius"
-    },
-    {
-      "label": "phone",
       "text": "CALLACK_RULE_CALLOUT rule=brick.absorb.prevent source=Basalt_Absorber icon=PRV verb=prevent target=self magnitude=1 unit=damage"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=collision.chip.damage source=chalk icon=DMG verb=deal target=struck_brick magnitude=1 unit=damage"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=sling.ricochet.rebound source=Ricochet_Sling icon=RBD verb=rebound target=striking_marble magnitude=true unit=flag"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=release.baseline.radius source=Dull_Quartz icon=PSH verb=push target=nearby_marbles magnitude=1 unit=radius"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=release.baseline.radius source=Dull_Quartz icon=PSH verb=push target=nearby_marbles magnitude=1 unit=radius"
     },
     {
       "label": "phone",
@@ -219,111 +200,7 @@
     },
     {
       "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
       "text": "CALLACK_RULE_CALLOUT rule=collision.chip.damage source=chalk icon=DMG verb=deal target=struck_brick magnitude=1 unit=damage"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=release.baseline.radius source=Dull_Quartz icon=PSH verb=push target=nearby_marbles magnitude=1 unit=radius"
     },
     {
       "label": "phone",
@@ -332,30 +209,6 @@
     {
       "label": "phone",
       "text": "CALLACK_RULE_CALLOUT rule=brick.absorb.prevent source=Basalt_Absorber icon=PRV verb=prevent target=self magnitude=1 unit=damage"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=collision.chip.damage source=chalk icon=DMG verb=deal target=struck_brick magnitude=1 unit=damage"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=release.baseline.radius source=Dull_Quartz icon=PSH verb=push target=nearby_marbles magnitude=1 unit=radius"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=release.baseline.radius source=Dull_Quartz icon=PSH verb=push target=nearby_marbles magnitude=1 unit=radius"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=sling.momentum.force source=Momentum_Sling icon=ACC verb=accelerate target=all_owned_marbles magnitude=3 unit=launch_force"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=sling.amplifier.power source=Effect_Amplifier icon=AMP verb=amplify target=release_area magnitude=1 unit=count"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=collision.chip.damage source=quartz icon=DMG verb=deal target=struck_brick magnitude=1 unit=damage"
     },
     {
       "label": "phone",
@@ -367,663 +220,15 @@
     },
     {
       "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=sling.momentum.force source=Momentum_Sling icon=ACC verb=accelerate target=all_owned_marbles magnitude=3 unit=launch_force"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=sling.amplifier.power source=Effect_Amplifier icon=AMP verb=amplify target=release_area magnitude=1 unit=count"
-    },
-    {
-      "label": "phone",
       "text": "CALLACK_RULE_CALLOUT rule=brick.freeze.status source=Rime_Block icon=STS verb=apply_status target=striking_marble magnitude=freeze unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.freeze.status source=Rime_Block icon=STS verb=apply_status target=striking_marble magnitude=freeze unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.freeze.status source=Rime_Block icon=STS verb=apply_status target=striking_marble magnitude=freeze unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.freeze.status source=Rime_Block icon=STS verb=apply_status target=striking_marble magnitude=freeze unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.freeze.status source=Rime_Block icon=STS verb=apply_status target=striking_marble magnitude=freeze unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.freeze.status source=Rime_Block icon=STS verb=apply_status target=striking_marble magnitude=freeze unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.freeze.status source=Rime_Block icon=STS verb=apply_status target=striking_marble magnitude=freeze unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.freeze.status source=Rime_Block icon=STS verb=apply_status target=striking_marble magnitude=freeze unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.freeze.status source=Rime_Block icon=STS verb=apply_status target=striking_marble magnitude=freeze unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=collision.cleave.damage source=obsidian icon=DMG verb=deal target=struck_brick magnitude=2 unit=damage"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=sling.momentum.force source=Momentum_Sling icon=ACC verb=accelerate target=all_owned_marbles magnitude=3 unit=launch_force"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=sling.amplifier.power source=Effect_Amplifier icon=AMP verb=amplify target=release_area magnitude=1 unit=count"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.absorb.prevent source=Basalt_Absorber icon=PRV verb=prevent target=self magnitude=1 unit=damage"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=collision.chip.damage source=jade icon=DMG verb=deal target=struck_brick magnitude=1 unit=damage"
     },
     {
       "label": "phone",
       "text": "CALLACK_RULE_CALLOUT rule=release.shrapnel.radius source=Shrapnel_Geode icon=PSH verb=push target=nearby_marbles magnitude=1 unit=radius"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=release.shrapnel.radius source=Shrapnel_Geode icon=PSH verb=push target=nearby_marbles magnitude=1 unit=radius"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
     },
     {
       "label": "phone",
       "text": "CALLACK_RULE_CALLOUT rule=status.poison.wear source=Poison icon=WER verb=wear target=current_shell magnitude=1 unit=durability"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=sling.momentum.force source=Momentum_Sling icon=ACC verb=accelerate target=all_owned_marbles magnitude=3 unit=launch_force"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=sling.amplifier.power source=Effect_Amplifier icon=AMP verb=amplify target=release_area magnitude=1 unit=count"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
     },
     {
       "label": "phone",
@@ -1031,14 +236,6 @@
     },
     {
       "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=status.poison.wear source=Poison icon=WER verb=wear target=current_shell magnitude=1 unit=durability"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=sling.momentum.force source=Momentum_Sling icon=ACC verb=accelerate target=all_owned_marbles magnitude=3 unit=launch_force"
-    },
-    {
-      "label": "phone",
       "text": "CALLACK_RULE_CALLOUT rule=sling.momentum.force source=Momentum_Sling icon=ACC verb=accelerate target=all_owned_marbles magnitude=3 unit=launch_force"
     },
     {
@@ -1055,51 +252,11 @@
     },
     {
       "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=release.baseline.radius source=Dull_Quartz icon=PSH verb=push target=nearby_marbles magnitude=1 unit=radius"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.absorb.prevent source=Basalt_Absorber icon=PRV verb=prevent target=self magnitude=1 unit=damage"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=collision.chip.damage source=quartz icon=DMG verb=deal target=struck_brick magnitude=1 unit=damage"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=sling.momentum.force source=Momentum_Sling icon=ACC verb=accelerate target=all_owned_marbles magnitude=3 unit=launch_force"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=sling.momentum.force source=Momentum_Sling icon=ACC verb=accelerate target=all_owned_marbles magnitude=3 unit=launch_force"
-    },
-    {
-      "label": "phone",
       "text": "CALLACK_RULE_CALLOUT rule=collision.ward.damage source=silver icon=DMG verb=deal target=struck_brick magnitude=1 unit=damage"
     },
     {
       "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=collision.chip.damage source=quartz icon=DMG verb=deal target=struck_brick magnitude=1 unit=damage"
-    },
-    {
-      "label": "phone",
       "text": "CALLACK_RULE_CALLOUT rule=brick.shatter.wear source=Shatter_Crystal icon=WER verb=wear target=current_shell magnitude=2 unit=durability"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=release.baseline.radius source=Skew_Flint icon=PSH verb=push target=nearby_marbles magnitude=1 unit=radius"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=release.baseline.radius source=Skew_Flint icon=PSH verb=push target=nearby_marbles magnitude=1 unit=radius"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=sling.momentum.force source=Momentum_Sling icon=ACC verb=accelerate target=all_owned_marbles magnitude=3 unit=launch_force"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=sling.momentum.force source=Momentum_Sling icon=ACC verb=accelerate target=all_owned_marbles magnitude=3 unit=launch_force"
     },
     {
       "label": "phone",
@@ -1108,18 +265,6 @@
     {
       "label": "phone",
       "text": "CALLACK_RULE_CALLOUT rule=brick.chain.splash source=Powder_Keg icon=SPL verb=splash target=orthogonal_neighbours magnitude=2 unit=damage"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=sling.momentum.force source=Momentum_Sling icon=ACC verb=accelerate target=all_owned_marbles magnitude=3 unit=launch_force"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=sling.momentum.force source=Momentum_Sling icon=ACC verb=accelerate target=all_owned_marbles magnitude=3 unit=launch_force"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=collision.cleave.damage source=obsidian icon=DMG verb=deal target=struck_brick magnitude=2 unit=damage"
     },
     {
       "label": "phone",
@@ -1135,127 +280,11 @@
     },
     {
       "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=sling.momentum.force source=Momentum_Sling icon=ACC verb=accelerate target=all_owned_marbles magnitude=3 unit=launch_force"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=sling.momentum.force source=Momentum_Sling icon=ACC verb=accelerate target=all_owned_marbles magnitude=3 unit=launch_force"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.fortify.protect source=Granite_Fortifier icon=GRD verb=protect target=orthogonal_neighbours magnitude=1 unit=damage"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=collision.splinter.damage source=flint icon=DMG verb=deal target=struck_brick magnitude=1 unit=damage"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.absorb.prevent source=Basalt_Absorber icon=PRV verb=prevent target=self magnitude=1 unit=damage"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=collision.chip.damage source=quartz icon=DMG verb=deal target=struck_brick magnitude=1 unit=damage"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=release.baseline.radius source=Skew_Flint icon=PSH verb=push target=nearby_marbles magnitude=1 unit=radius"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=release.baseline.radius source=Skew_Flint icon=PSH verb=push target=nearby_marbles magnitude=1 unit=radius"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=sling.momentum.force source=Momentum_Sling icon=ACC verb=accelerate target=all_owned_marbles magnitude=3 unit=launch_force"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=sling.momentum.force source=Momentum_Sling icon=ACC verb=accelerate target=all_owned_marbles magnitude=3 unit=launch_force"
-    },
-    {
-      "label": "phone",
       "text": "CALLACK_RULE_CALLOUT rule=collision.heavy.damage source=granite icon=DMG verb=deal target=struck_brick magnitude=2 unit=damage"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.absorb.prevent source=Basalt_Absorber icon=PRV verb=prevent target=self magnitude=1 unit=damage"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=collision.heavy.damage source=granite icon=DMG verb=deal target=struck_brick magnitude=2 unit=damage"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=sling.momentum.force source=Momentum_Sling icon=ACC verb=accelerate target=all_owned_marbles magnitude=3 unit=launch_force"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=sling.momentum.force source=Momentum_Sling icon=ACC verb=accelerate target=all_owned_marbles magnitude=3 unit=launch_force"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=sling.momentum.force source=Momentum_Sling icon=ACC verb=accelerate target=all_owned_marbles magnitude=3 unit=launch_force"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=sling.momentum.force source=Momentum_Sling icon=ACC verb=accelerate target=all_owned_marbles magnitude=3 unit=launch_force"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=collision.splinter.damage source=flint icon=DMG verb=deal target=struck_brick magnitude=1 unit=damage"
     },
     {
       "label": "phone",
       "text": "CALLACK_RULE_CALLOUT rule=brick.temporal.rewind source=Temporal_Anchor icon=RWD verb=rewind target=self magnitude=true unit=flag"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.absorb.prevent source=Basalt_Absorber icon=PRV verb=prevent target=self magnitude=1 unit=damage"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=collision.heavy.damage source=granite icon=DMG verb=deal target=struck_brick magnitude=2 unit=damage"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=sling.momentum.force source=Momentum_Sling icon=ACC verb=accelerate target=all_owned_marbles magnitude=3 unit=launch_force"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=sling.momentum.force source=Momentum_Sling icon=ACC verb=accelerate target=all_owned_marbles magnitude=3 unit=launch_force"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=sling.momentum.force source=Momentum_Sling icon=ACC verb=accelerate target=all_owned_marbles magnitude=3 unit=launch_force"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=sling.momentum.force source=Momentum_Sling icon=ACC verb=accelerate target=all_owned_marbles magnitude=3 unit=launch_force"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=sling.momentum.force source=Momentum_Sling icon=ACC verb=accelerate target=all_owned_marbles magnitude=3 unit=launch_force"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=sling.momentum.force source=Momentum_Sling icon=ACC verb=accelerate target=all_owned_marbles magnitude=3 unit=launch_force"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=collision.splinter.damage source=flint icon=DMG verb=deal target=struck_brick magnitude=1 unit=damage"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.temporal.rewind source=Temporal_Anchor icon=RWD verb=rewind target=self magnitude=true unit=flag"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.absorb.prevent source=Basalt_Absorber icon=PRV verb=prevent target=self magnitude=1 unit=damage"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=collision.chip.damage source=quartz icon=DMG verb=deal target=struck_brick magnitude=1 unit=damage"
     },
     {
       "label": "desktop",
@@ -1279,27 +308,7 @@
     },
     {
       "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=release.baseline.radius source=Dull_Quartz icon=PSH verb=push target=nearby_marbles magnitude=1 unit=radius"
-    },
-    {
-      "label": "desktop",
       "text": "CALLACK_RULE_CALLOUT rule=brick.absorb.prevent source=Basalt_Absorber icon=PRV verb=prevent target=self magnitude=1 unit=damage"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=collision.chip.damage source=chalk icon=DMG verb=deal target=struck_brick magnitude=1 unit=damage"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=sling.ricochet.rebound source=Ricochet_Sling icon=RBD verb=rebound target=striking_marble magnitude=true unit=flag"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=release.baseline.radius source=Dull_Quartz icon=PSH verb=push target=nearby_marbles magnitude=1 unit=radius"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=release.baseline.radius source=Dull_Quartz icon=PSH verb=push target=nearby_marbles magnitude=1 unit=radius"
     },
     {
       "label": "desktop",
@@ -1315,111 +324,7 @@
     },
     {
       "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
       "text": "CALLACK_RULE_CALLOUT rule=collision.chip.damage source=chalk icon=DMG verb=deal target=struck_brick magnitude=1 unit=damage"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=release.baseline.radius source=Dull_Quartz icon=PSH verb=push target=nearby_marbles magnitude=1 unit=radius"
     },
     {
       "label": "desktop",
@@ -1428,30 +333,6 @@
     {
       "label": "desktop",
       "text": "CALLACK_RULE_CALLOUT rule=brick.absorb.prevent source=Basalt_Absorber icon=PRV verb=prevent target=self magnitude=1 unit=damage"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=collision.chip.damage source=chalk icon=DMG verb=deal target=struck_brick magnitude=1 unit=damage"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=release.baseline.radius source=Dull_Quartz icon=PSH verb=push target=nearby_marbles magnitude=1 unit=radius"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=release.baseline.radius source=Dull_Quartz icon=PSH verb=push target=nearby_marbles magnitude=1 unit=radius"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=sling.momentum.force source=Momentum_Sling icon=ACC verb=accelerate target=all_owned_marbles magnitude=3 unit=launch_force"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=sling.amplifier.power source=Effect_Amplifier icon=AMP verb=amplify target=release_area magnitude=1 unit=count"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=collision.chip.damage source=quartz icon=DMG verb=deal target=struck_brick magnitude=1 unit=damage"
     },
     {
       "label": "desktop",
@@ -1463,675 +344,19 @@
     },
     {
       "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=sling.momentum.force source=Momentum_Sling icon=ACC verb=accelerate target=all_owned_marbles magnitude=3 unit=launch_force"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=sling.amplifier.power source=Effect_Amplifier icon=AMP verb=amplify target=release_area magnitude=1 unit=count"
-    },
-    {
-      "label": "desktop",
       "text": "CALLACK_RULE_CALLOUT rule=brick.freeze.status source=Rime_Block icon=STS verb=apply_status target=striking_marble magnitude=freeze unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.freeze.status source=Rime_Block icon=STS verb=apply_status target=striking_marble magnitude=freeze unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.freeze.status source=Rime_Block icon=STS verb=apply_status target=striking_marble magnitude=freeze unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.freeze.status source=Rime_Block icon=STS verb=apply_status target=striking_marble magnitude=freeze unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.freeze.status source=Rime_Block icon=STS verb=apply_status target=striking_marble magnitude=freeze unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.freeze.status source=Rime_Block icon=STS verb=apply_status target=striking_marble magnitude=freeze unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.freeze.status source=Rime_Block icon=STS verb=apply_status target=striking_marble magnitude=freeze unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.freeze.status source=Rime_Block icon=STS verb=apply_status target=striking_marble magnitude=freeze unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.freeze.status source=Rime_Block icon=STS verb=apply_status target=striking_marble magnitude=freeze unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=collision.cleave.damage source=obsidian icon=DMG verb=deal target=struck_brick magnitude=2 unit=damage"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=sling.momentum.force source=Momentum_Sling icon=ACC verb=accelerate target=all_owned_marbles magnitude=3 unit=launch_force"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=sling.amplifier.power source=Effect_Amplifier icon=AMP verb=amplify target=release_area magnitude=1 unit=count"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.absorb.prevent source=Basalt_Absorber icon=PRV verb=prevent target=self magnitude=1 unit=damage"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=collision.chip.damage source=jade icon=DMG verb=deal target=struck_brick magnitude=1 unit=damage"
     },
     {
       "label": "desktop",
       "text": "CALLACK_RULE_CALLOUT rule=release.shrapnel.radius source=Shrapnel_Geode icon=PSH verb=push target=nearby_marbles magnitude=1 unit=radius"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=release.shrapnel.radius source=Shrapnel_Geode icon=PSH verb=push target=nearby_marbles magnitude=1 unit=radius"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
     },
     {
       "label": "desktop",
       "text": "CALLACK_RULE_CALLOUT rule=status.poison.wear source=Poison icon=WER verb=wear target=current_shell magnitude=1 unit=durability"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=sling.momentum.force source=Momentum_Sling icon=ACC verb=accelerate target=all_owned_marbles magnitude=3 unit=launch_force"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=sling.amplifier.power source=Effect_Amplifier icon=AMP verb=amplify target=release_area magnitude=1 unit=count"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.poison.status source=Venom_Glass icon=STS verb=apply_status target=striking_marble magnitude=poison unit=id"
     },
     {
       "label": "desktop",
       "text": "CALLACK_RULE_CALLOUT rule=collision.splinter.damage source=flint icon=DMG verb=deal target=struck_brick magnitude=1 unit=damage"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=status.poison.wear source=Poison icon=WER verb=wear target=current_shell magnitude=1 unit=durability"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=sling.momentum.force source=Momentum_Sling icon=ACC verb=accelerate target=all_owned_marbles magnitude=3 unit=launch_force"
     },
     {
       "label": "desktop",
@@ -2148,26 +373,6 @@
     {
       "label": "desktop",
       "text": "CALLACK_RULE_CALLOUT rule=release.baseline.radius source=Dull_Quartz icon=PSH verb=push target=nearby_marbles magnitude=1 unit=radius"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=release.baseline.radius source=Dull_Quartz icon=PSH verb=push target=nearby_marbles magnitude=1 unit=radius"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.absorb.prevent source=Basalt_Absorber icon=PRV verb=prevent target=self magnitude=1 unit=damage"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=collision.chip.damage source=quartz icon=DMG verb=deal target=struck_brick magnitude=1 unit=damage"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=sling.momentum.force source=Momentum_Sling icon=ACC verb=accelerate target=all_owned_marbles magnitude=3 unit=launch_force"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=sling.momentum.force source=Momentum_Sling icon=ACC verb=accelerate target=all_owned_marbles magnitude=3 unit=launch_force"
     },
     {
       "label": "desktop",
@@ -2175,27 +380,7 @@
     },
     {
       "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=collision.chip.damage source=quartz icon=DMG verb=deal target=struck_brick magnitude=1 unit=damage"
-    },
-    {
-      "label": "desktop",
       "text": "CALLACK_RULE_CALLOUT rule=brick.shatter.wear source=Shatter_Crystal icon=WER verb=wear target=current_shell magnitude=2 unit=durability"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=release.baseline.radius source=Skew_Flint icon=PSH verb=push target=nearby_marbles magnitude=1 unit=radius"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=release.baseline.radius source=Skew_Flint icon=PSH verb=push target=nearby_marbles magnitude=1 unit=radius"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=sling.momentum.force source=Momentum_Sling icon=ACC verb=accelerate target=all_owned_marbles magnitude=3 unit=launch_force"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=sling.momentum.force source=Momentum_Sling icon=ACC verb=accelerate target=all_owned_marbles magnitude=3 unit=launch_force"
     },
     {
       "label": "desktop",
@@ -2204,18 +389,6 @@
     {
       "label": "desktop",
       "text": "CALLACK_RULE_CALLOUT rule=brick.chain.splash source=Powder_Keg icon=SPL verb=splash target=orthogonal_neighbours magnitude=2 unit=damage"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=sling.momentum.force source=Momentum_Sling icon=ACC verb=accelerate target=all_owned_marbles magnitude=3 unit=launch_force"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=sling.momentum.force source=Momentum_Sling icon=ACC verb=accelerate target=all_owned_marbles magnitude=3 unit=launch_force"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=collision.cleave.damage source=obsidian icon=DMG verb=deal target=struck_brick magnitude=2 unit=damage"
     },
     {
       "label": "desktop",
@@ -2231,127 +404,11 @@
     },
     {
       "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=sling.momentum.force source=Momentum_Sling icon=ACC verb=accelerate target=all_owned_marbles magnitude=3 unit=launch_force"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=sling.momentum.force source=Momentum_Sling icon=ACC verb=accelerate target=all_owned_marbles magnitude=3 unit=launch_force"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.fortify.protect source=Granite_Fortifier icon=GRD verb=protect target=orthogonal_neighbours magnitude=1 unit=damage"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=collision.splinter.damage source=flint icon=DMG verb=deal target=struck_brick magnitude=1 unit=damage"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.absorb.prevent source=Basalt_Absorber icon=PRV verb=prevent target=self magnitude=1 unit=damage"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=collision.chip.damage source=quartz icon=DMG verb=deal target=struck_brick magnitude=1 unit=damage"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=release.baseline.radius source=Skew_Flint icon=PSH verb=push target=nearby_marbles magnitude=1 unit=radius"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=release.baseline.radius source=Skew_Flint icon=PSH verb=push target=nearby_marbles magnitude=1 unit=radius"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=sling.momentum.force source=Momentum_Sling icon=ACC verb=accelerate target=all_owned_marbles magnitude=3 unit=launch_force"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=sling.momentum.force source=Momentum_Sling icon=ACC verb=accelerate target=all_owned_marbles magnitude=3 unit=launch_force"
-    },
-    {
-      "label": "desktop",
       "text": "CALLACK_RULE_CALLOUT rule=collision.heavy.damage source=granite icon=DMG verb=deal target=struck_brick magnitude=2 unit=damage"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.absorb.prevent source=Basalt_Absorber icon=PRV verb=prevent target=self magnitude=1 unit=damage"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=collision.heavy.damage source=granite icon=DMG verb=deal target=struck_brick magnitude=2 unit=damage"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=sling.momentum.force source=Momentum_Sling icon=ACC verb=accelerate target=all_owned_marbles magnitude=3 unit=launch_force"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=sling.momentum.force source=Momentum_Sling icon=ACC verb=accelerate target=all_owned_marbles magnitude=3 unit=launch_force"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=sling.momentum.force source=Momentum_Sling icon=ACC verb=accelerate target=all_owned_marbles magnitude=3 unit=launch_force"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=sling.momentum.force source=Momentum_Sling icon=ACC verb=accelerate target=all_owned_marbles magnitude=3 unit=launch_force"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=collision.splinter.damage source=flint icon=DMG verb=deal target=struck_brick magnitude=1 unit=damage"
     },
     {
       "label": "desktop",
       "text": "CALLACK_RULE_CALLOUT rule=brick.temporal.rewind source=Temporal_Anchor icon=RWD verb=rewind target=self magnitude=true unit=flag"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.absorb.prevent source=Basalt_Absorber icon=PRV verb=prevent target=self magnitude=1 unit=damage"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=collision.heavy.damage source=granite icon=DMG verb=deal target=struck_brick magnitude=2 unit=damage"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=sling.momentum.force source=Momentum_Sling icon=ACC verb=accelerate target=all_owned_marbles magnitude=3 unit=launch_force"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=sling.momentum.force source=Momentum_Sling icon=ACC verb=accelerate target=all_owned_marbles magnitude=3 unit=launch_force"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=sling.momentum.force source=Momentum_Sling icon=ACC verb=accelerate target=all_owned_marbles magnitude=3 unit=launch_force"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=sling.momentum.force source=Momentum_Sling icon=ACC verb=accelerate target=all_owned_marbles magnitude=3 unit=launch_force"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=sling.momentum.force source=Momentum_Sling icon=ACC verb=accelerate target=all_owned_marbles magnitude=3 unit=launch_force"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=sling.momentum.force source=Momentum_Sling icon=ACC verb=accelerate target=all_owned_marbles magnitude=3 unit=launch_force"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=collision.splinter.damage source=flint icon=DMG verb=deal target=struck_brick magnitude=1 unit=damage"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.temporal.rewind source=Temporal_Anchor icon=RWD verb=rewind target=self magnitude=true unit=flag"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.absorb.prevent source=Basalt_Absorber icon=PRV verb=prevent target=self magnitude=1 unit=damage"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=collision.chip.damage source=quartz icon=DMG verb=deal target=struck_brick magnitude=1 unit=damage"
     }
   ],
   "settings": [
@@ -2359,7 +416,7 @@
       "label": "phone",
       "muted": false,
       "reducedMotion": true,
-      "source": "mouse"
+      "source": "touch"
     },
     {
       "label": "phone",
@@ -2381,15 +438,15 @@
     }
   ],
   "screenshotHashes": {
-    "phone-draft-scout.png": "2703abeff97b781cfd228cf5d54ccf6d8cc5e63ba37934d79eb24047e9335915",
-    "phone-refit-inspection.png": "1877ff329a5eecac72bc242aba9c2832bbf1d77415b56552676d3b8ccc311e44",
-    "phone-reward.png": "5b9d8e5c08d71c3edbaf184517dad4161048750a7fda6476e8a41060672df557",
-    "phone-battle-trigger.png": "b2e5b0c1cbe08c991c1870692553988343597a9711a69b4702cb41dde050f08b",
+    "phone-draft-scout.png": "f3ed15b714c6a39fb2a397b1e9f16344228c2037bbfa933570396304e623952e",
+    "phone-refit-inspection.png": "cd68469c770bd8aa2033961a17421d6f4d14fe3669b27a9cd1f5b06c99860bcb",
+    "phone-reward.png": "4e7333b719804342e71c753c34f643241f57cb4a68d79569cd0a9beaa9319549",
+    "phone-battle-trigger.png": "b64898c0d7179addf80561d44750dc06cb6ffaab36668a821682e43c2b8c2598",
     "phone-terminal-result.png": "e696ecaaa348b59845b9a7fd9677b835572f5cbbc0444e9f6cdc18d3ddfdb8f9",
-    "desktop-draft-scout.png": "eedf5579c445eec4479473720cb19e1e00c28acdda32e5ebb708c9aec1f95790",
-    "desktop-refit-inspection.png": "d98b10e99095eff564074ef00d5ccebd10a711848cc8ba0fb99c93156842f958",
+    "desktop-draft-scout.png": "b87c732afb76c115b404ebce30928a28fa11fe1aa2de487b9bdec8a8d8440f19",
+    "desktop-refit-inspection.png": "88e0209c17223cb7cea6fcbb4b17d4ac2eba8a3ed5121ddb90a26944d52a1085",
     "desktop-reward.png": "ca0c468ef0c8896e6581212b95e4ca3b37cf94831cb153fb41a00cbcededaf5a",
     "desktop-battle-trigger.png": "9f97834b2d615251747b78dbcc5b02dea9907e2149be44632f9d0ff331cfd417",
-    "desktop-terminal-result.png": "aac55cbb0217ad4024d0824b69ec84bcf7b7b76b5f714977301c43987aebc2ae"
+    "desktop-terminal-result.png": "bec7d5178b427e4306e972652e4f18424926b934b91683882aecb64d9196d84a"
   }
 }

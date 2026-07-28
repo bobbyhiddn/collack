@@ -50,7 +50,6 @@ local COMPATIBILITY_FIELDS = { requires = true, excludes = true, max_copies = tr
 local ALLOWED_VISIBILITY = {
     compact = true,
     expanded = true,
-    internal = true,
 }
 
 local ALLOWED_MODES = {
@@ -400,14 +399,29 @@ end
 
 M.copy = deep_copy
 
-local function is_player_rule(rule)
-    return type(rule) == "table" and rule.visibility ~= "internal"
+local function deep_equal(left, right, seen)
+    if type(left) ~= type(right) then return false end
+    if type(left) ~= "table" then return left == right end
+    seen = seen or {}
+    if seen[left] == right then return true end
+    seen[left] = right
+    for key, value in pairs(left) do
+        if not deep_equal(value, right[key], seen) then return false end
+    end
+    for key in pairs(right) do
+        if left[key] == nil then return false end
+    end
+    return true
 end
 
--- Internal nodes are executable routing metadata, not additional player
--- effects. Every player-facing consumer uses this exact ordered projection so
--- execution identity, copy, inspection, attribution, and accounting cannot
--- disagree about which rules belong to an item.
+local function is_player_rule(rule)
+    return type(rule) == "table"
+        and (rule.visibility == "compact" or rule.visibility == "expanded")
+end
+
+-- Executable routing values are rules, not hidden metadata. Every consumer
+-- uses this exact ordered projection so execution identity, copy, inspection,
+-- attribution, and accounting cannot disagree about item membership.
 function M.player_rules(item)
     local out = {}
     for _, rule in ipairs((item and item.rules) or {}) do
@@ -617,7 +631,7 @@ local function validate_rule(rule, path, errors, ids)
         end
     end
     if not ALLOWED_VISIBILITY[rule.visibility] then
-        errors[#errors + 1] = path .. ".visibility must be compact, expanded, or internal"
+        errors[#errors + 1] = path .. ".visibility must be compact or expanded"
     end
 end
 
@@ -653,6 +667,12 @@ function M.balance(item)
         lines[#lines + 1] = {
             rule_id = rule.id,
             stat = stat,
+            operation = rule.operation.verb,
+            mode = rule.operation.mode,
+            target = target,
+            value = deep_copy((rule.magnitude or rule.duration).value),
+            unit = (rule.magnitude or rule.duration).unit,
+            cadence = deep_copy(rule.cadence),
             points = math.floor(points * 1000 + 0.5) / 1000,
         }
     end
@@ -763,18 +783,20 @@ function M.compose(spec, sources)
         synergy_tags = deep_copy(spec.synergy_tags or {}),
         rarity_budget = assert(spec.rarity_budget, "composed rule set needs rarity_budget"),
     }
-    for source_index, source in ipairs(sources or {}) do
+    local by_id = {}
+    for _, source in ipairs(sources or {}) do
         M.assert_valid(source)
-        for rule_index, rule in ipairs(source.rules) do
-            local derived = deep_copy(rule)
-            derived.id = string.format(
-                "%s.%02d.%02d.%s",
-                item.id,
-                source_index,
-                rule_index,
-                rule.id
-            )
-            item.rules[#item.rules + 1] = derived
+        for _, rule in ipairs(source.rules) do
+            local existing = by_id[rule.id]
+            if existing then
+                if not deep_equal(existing, rule) then
+                    error("composed rule id has conflicting definitions: " .. rule.id)
+                end
+            else
+                local canonical = deep_copy(rule)
+                by_id[rule.id] = canonical
+                item.rules[#item.rules + 1] = canonical
+            end
         end
     end
     return M.assert_valid(item)
@@ -936,7 +958,13 @@ local function operation_copy(rule)
         return "add " .. value .. " to non-chip hits and core-release power"
     elseif verb == "apply_status" then
         return "apply " .. tostring(rule.magnitude.value):gsub("_", " ") .. " to " .. target
-    elseif verb == "pull" then return "pull " .. target .. " inward"
+    elseif verb == "pull" then
+        local amount = (rule.magnitude or rule.duration).value
+        if type(amount) == "boolean" then
+            return amount and ("pull " .. target .. " inward")
+                or ("do not pull " .. target .. " inward")
+        end
+        return "pull " .. target .. " inward with " .. value
     elseif verb == "splash" then return "deal " .. value .. " to " .. target
     elseif verb == "negate" then return "negate damage to " .. target
     elseif verb == "break" then return "break " .. target
@@ -1061,6 +1089,8 @@ function M.player_authority(item)
         schema_version = M.SCHEMA_VERSION,
         rule_set_id = item.id,
         rule_ids = M.player_rule_ids(item),
+        rules = M.player_rules(item),
+        canonical_rule_set = M.canonical(item),
         rarity_budget = item.rarity_budget,
         compact_copy = M.compact(item),
         compact_lines = M.compact_lines(item),
@@ -1104,15 +1134,26 @@ function M.register(item)
     M.assert_valid(item)
     for _, rule in ipairs(item.rules) do
         local existing = registry[rule.id]
-        if existing and existing.rule_set_id ~= item.id then
-            error("rule id already registered by " .. existing.rule_set_id .. ": " .. rule.id)
+        if existing then
+            if not deep_equal(existing.rule, rule) then
+                error("rule id conflicts with " .. existing.rule_set_id .. ": " .. rule.id)
+            end
+            local known = false
+            for _, rule_set_id in ipairs(existing.rule_set_ids) do
+                if rule_set_id == item.id then known = true break end
+            end
+            if not known then
+                existing.rule_set_ids[#existing.rule_set_ids + 1] = item.id
+            end
+        else
+            registry[rule.id] = {
+                rule_set_id = item.id,
+                rule_set_ids = { item.id },
+                source_name = item.name,
+                role = item.role,
+                rule = deep_copy(rule),
+            }
         end
-        registry[rule.id] = {
-            rule_set_id = item.id,
-            source_name = item.name,
-            role = item.role,
-            rule = deep_copy(rule),
-        }
     end
     return item
 end
@@ -1120,6 +1161,15 @@ end
 function M.resolve(rule_id)
     local entry = registry[rule_id]
     return entry and deep_copy(entry) or nil
+end
+
+function M.belongs_to(rule_id, rule_set_id)
+    local entry = registry[rule_id]
+    if not entry then return false end
+    for _, candidate in ipairs(entry.rule_set_ids) do
+        if candidate == rule_set_id then return true end
+    end
+    return false
 end
 
 local function rule_id_for(source, stat)

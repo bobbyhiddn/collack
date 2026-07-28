@@ -769,10 +769,25 @@ local function candidate_sling(state, seed)
     end)
 end
 
+local function canonical_rule_set(item)
+    assert(item, "canonical item is required")
+    if item.kit_id then
+        local kit = assert(
+            catalog.brick_kit_by_id[item.kit_id],
+            "canonical brick kit is required"
+        )
+        local member = false
+        for _, brick_id in ipairs(kit.brick_ids) do
+            if brick_id == item.content_id then member = true break end
+        end
+        assert(member, "reward brick must belong to its canonical kit")
+        return kit.rule_set
+    end
+    return assert(item.rule_set, "canonical item rule set is required")
+end
+
 local function canonical_rule_authority(item)
-    return rule_ast.player_authority(
-        assert(item and item.rule_set, "canonical item rule set is required")
-    )
+    return rule_ast.player_authority(canonical_rule_set(item))
 end
 
 local function weakest_marble(state)
@@ -860,7 +875,8 @@ local function reward_choice(state, slot, operation, item, category, next_oppone
     local current = current_tag_set(state)
     local scout = util.set(next_opponent.scout_tags)
     local tags = item.tags or item.rule_set.synergy_tags
-    local authority = canonical_rule_authority(item)
+    local source_rule_set = canonical_rule_set(item)
+    local authority = rule_ast.player_authority(source_rule_set)
     local operation_text = operation_copy(operation, state, item)
     return {
         choice_id = string.format(
@@ -883,8 +899,8 @@ local function reward_choice(state, slot, operation, item, category, next_oppone
         mechanics = util.deep_copy(authority.compact_lines),
         compact_copy = authority.compact_copy,
         inspection_copy = util.deep_copy(authority.inspection_copy),
-        rule_set = util.deep_copy(item.rule_set),
-        compatibility = util.deep_copy(item.rule_set.compatibility),
+        rule_set = util.deep_copy(source_rule_set),
+        compatibility = util.deep_copy(source_rule_set.compatibility),
         balance = util.deep_copy(authority.balance),
         tags = util.deep_copy(tags),
         tag_metadata = tag_metadata(tags),

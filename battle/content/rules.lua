@@ -118,7 +118,7 @@ M.collisions.chip = rule_set(
         node("collision.chip.wear", "collision", "current_shell",
             "wear", "durability_cost", 1, "durability", { visibility = "expanded" }),
         node("collision.chip.identity", "build", "self",
-            "set", "collision", "chip", "id", { visibility = "internal" }),
+            "set", "collision", "chip", "id", { visibility = "expanded" }),
     }
 )
 
@@ -133,7 +133,7 @@ M.collisions.cleave = rule_set(
         node("collision.cleave.wear", "collision", "current_shell",
             "wear", "durability_cost", 1, "durability", { visibility = "expanded" }),
         node("collision.cleave.identity", "build", "self",
-            "set", "collision", "cleave", "id", { visibility = "internal" }),
+            "set", "collision", "cleave", "id", { visibility = "expanded" }),
     }
 )
 
@@ -150,7 +150,7 @@ M.collisions.splinter = rule_set(
         node("collision.splinter.wear", "collision", "current_shell",
             "wear", "durability_cost", 1, "durability", { visibility = "expanded" }),
         node("collision.splinter.identity", "build", "self",
-            "set", "collision", "splinter", "id", { visibility = "internal" }),
+            "set", "collision", "splinter", "id", { visibility = "expanded" }),
     }
 )
 
@@ -167,7 +167,7 @@ M.collisions.ward = rule_set(
         node("collision.ward.wear", "collision", "current_shell",
             "wear", "durability_cost", 1, "durability", { visibility = "expanded" }),
         node("collision.ward.identity", "build", "self",
-            "set", "collision", "ward", "id", { visibility = "internal" }),
+            "set", "collision", "ward", "id", { visibility = "expanded" }),
     }
 )
 
@@ -182,28 +182,41 @@ M.collisions.heavy = rule_set(
         node("collision.heavy.wear", "collision", "current_shell",
             "wear", "durability_cost", 1, "durability", { visibility = "expanded" }),
         node("collision.heavy.identity", "build", "self",
-            "set", "collision", "heavy", "id", { visibility = "internal" }),
+            "set", "collision", "heavy", "id", { visibility = "expanded" }),
     }
 )
 
 -- Core release operations ----------------------------------------------------
+
+-- Every release creates the same persistent fixed-step field. The shared
+-- canonical nodes are composed into each release RuleSet, so non-baseline
+-- releases do not gain hidden mechanics from a runtime overlay.
+local RELEASE_FIELD_RULES = {
+    node("release.baseline.field_duration", "core_release", "release_area",
+        "persist", "field_duration", 24, "ticks",
+        { as_duration = true, visibility = "expanded" }),
+    node("release.baseline.field_strength", "core_release", "release_area",
+        "push", "field_release_strength", 10, "strength", { visibility = "expanded" }),
+}
+
+local function complete_release(rules)
+    local out = { rules[1] }
+    for _, rule in ipairs(RELEASE_FIELD_RULES) do out[#out + 1] = ast.copy(rule) end
+    for index = 2, #rules do out[#out + 1] = rules[index] end
+    return out
+end
 
 M.releases.baseline = rule_set(
     "release.baseline",
     "Blowback",
     "symmetric displacement",
     { "release" },
-    {
+    complete_release({
         node("release.baseline.radius", "core_release", "nearby_marbles",
             "push", "radius", 1, "radius", { condition = "final_shell" }),
-        node("release.baseline.field_duration", "core_release", "release_area",
-            "persist", "field_duration", 24, "ticks",
-            { as_duration = true, visibility = "expanded" }),
-        node("release.baseline.field_strength", "core_release", "release_area",
-            "push", "field_release_strength", 10, "strength", { visibility = "internal" }),
         node("release.baseline.identity", "build", "self",
-            "set", "release", "baseline", "id", { visibility = "internal" }),
-    },
+            "set", "release", "baseline", "id", { visibility = "expanded" }),
+    }),
     {
         drawback = {
             kind = "risk",
@@ -219,14 +232,14 @@ M.releases.shrapnel = rule_set(
     "Shrapnel",
     "release damage",
     { "release", "chain" },
-    {
+    complete_release({
         node("release.shrapnel.radius", "core_release", "nearby_marbles",
             "push", "radius", 1, "radius", { condition = "final_shell" }),
         node("release.shrapnel.damage", "core_release", "orthogonal_neighbours",
             "splash", "shrapnel", 1, "damage", { condition = "final_shell" }),
         node("release.shrapnel.identity", "build", "self",
-            "set", "release", "shrapnel", "id", { visibility = "internal" }),
-    },
+            "set", "release", "shrapnel", "id", { visibility = "expanded" }),
+    }),
     {
         drawback = {
             kind = "risk",
@@ -242,12 +255,12 @@ M.releases.concussion = rule_set(
     "Concussion",
     "wide displacement",
     { "release", "control" },
-    {
+    complete_release({
         node("release.concussion.radius", "core_release", "nearby_marbles",
             "push", "radius", 2, "radius", { condition = "final_shell" }),
         node("release.concussion.identity", "build", "self",
-            "set", "release", "concussion", "id", { visibility = "internal" }),
-    },
+            "set", "release", "concussion", "id", { visibility = "expanded" }),
+    }),
     {
         drawback = {
             kind = "risk",
@@ -263,14 +276,14 @@ M.releases.magnetize = rule_set(
     "Magnetize",
     "clustering displacement",
     { "release", "control", "field" },
-    {
+    complete_release({
         node("release.magnetize.radius", "core_release", "nearby_marbles",
             "push", "radius", 1, "radius", { condition = "final_shell" }),
         node("release.magnetize.invert", "core_release", "nearby_marbles",
             "pull", "invert", true, "flag", { condition = "final_shell" }),
         node("release.magnetize.identity", "build", "self",
-            "set", "release", "magnetize", "id", { visibility = "internal" }),
-    },
+            "set", "release", "magnetize", "id", { visibility = "expanded" }),
+    }),
     {
         drawback = {
             kind = "risk",
@@ -286,14 +299,14 @@ M.releases.scorch = rule_set(
     "Scorch",
     "release attrition",
     { "release", "field", "burst" },
-    {
+    complete_release({
         node("release.scorch.radius", "core_release", "nearby_marbles",
             "push", "radius", 1, "radius", { condition = "final_shell" }),
         node("release.scorch.wear", "core_release", "nearby_marbles",
             "scorch", "scorch", 1, "durability", { condition = "final_shell" }),
         node("release.scorch.identity", "build", "self",
-            "set", "release", "scorch", "id", { visibility = "internal" }),
-    },
+            "set", "release", "scorch", "id", { visibility = "expanded" }),
+    }),
     {
         drawback = {
             kind = "risk",
@@ -319,7 +332,7 @@ M.statuses.poison = rule_set(
             "wear", "shell_wear", 1, "durability",
             { interval = 120, cadence_unit = "ticks" }),
         node("status.poison.identity", "build", "self",
-            "set", "status", "poison", "id", { visibility = "internal" }),
+            "set", "status", "poison", "id", { visibility = "expanded" }),
     }
 )
 
@@ -333,11 +346,11 @@ M.statuses.freeze = rule_set(
             "persist", "duration_ticks", 90, "ticks",
             { as_duration = true, condition = "enemy", visibility = "expanded" }),
         node("status.freeze.field_slow", "field_contact", "striking_marble",
-            "slow", "velocity_multiplier", 0.985, "multiplier", { visibility = "internal" }),
+            "slow", "velocity_multiplier", 0.985, "multiplier", { visibility = "expanded" }),
         node("status.freeze.launch_slow", "launch", "launch",
             "slow", "launch_speed_multiplier", 0.72, "multiplier"),
         node("status.freeze.identity", "build", "self",
-            "set", "status", "freeze", "id", { visibility = "internal" }),
+            "set", "status", "freeze", "id", { visibility = "expanded" }),
     }
 )
 
@@ -350,7 +363,7 @@ M.brick_behaviours.inert = rule_set(
     { "durable" },
     {
         node("brick.inert.identity", "build", "self",
-            "hold", "behaviour", "inert", "id", { visibility = "internal" }),
+            "hold", "behaviour", "inert", "id", { visibility = "expanded" }),
     }
 )
 
@@ -365,7 +378,7 @@ M.brick_behaviours.absorb = rule_set(
         node("brick.absorb.wear", "collision", "current_shell",
             "wear", "shell_wear", 1, "durability"),
         node("brick.absorb.identity", "build", "self",
-            "set", "behaviour", "absorb", "id", { visibility = "internal" }),
+            "set", "behaviour", "absorb", "id", { visibility = "expanded" }),
     }
 )
 
@@ -378,7 +391,7 @@ M.brick_behaviours.reflect = rule_set(
         node("brick.reflect.rebound", "survives_collision", "striking_marble",
             "rebound", "reflect", 1.08, "multiplier", { condition = "survives" }),
         node("brick.reflect.identity", "build", "self",
-            "set", "behaviour", "reflect", "id", { visibility = "internal" }),
+            "set", "behaviour", "reflect", "id", { visibility = "expanded" }),
     }
 )
 
@@ -391,7 +404,7 @@ M.brick_behaviours.regenerate = rule_set(
         node("brick.regenerate.heal", "survives_collision", "self",
             "heal", "heal_after_hit", 1, "hp", { condition = "survives" }),
         node("brick.regenerate.identity", "build", "self",
-            "set", "behaviour", "regenerate", "id", { visibility = "internal" }),
+            "set", "behaviour", "regenerate", "id", { visibility = "expanded" }),
     }
 )
 
@@ -404,7 +417,7 @@ M.brick_behaviours.fortify = rule_set(
         node("brick.fortify.protect", "damaging_collision", "orthogonal_neighbours",
             "protect", "protect_adjacent", 1, "damage", { condition = "adjacent" }),
         node("brick.fortify.identity", "build", "self",
-            "set", "behaviour", "fortify", "id", { visibility = "internal" }),
+            "set", "behaviour", "fortify", "id", { visibility = "expanded" }),
     }
 )
 
@@ -419,9 +432,9 @@ M.brick_behaviours.poison = rule_set(
         node("brick.poison.radius", "passive", "self",
             "cover", "field_radius", 6.5, "radius", { visibility = "expanded" }),
         node("brick.poison.strength", "passive", "release_area",
-            "set", "field_strength", 0, "strength", { visibility = "internal" }),
+            "set", "field_strength", 0, "strength", { visibility = "expanded" }),
         node("brick.poison.identity", "build", "self",
-            "set", "behaviour", "poison", "id", { visibility = "internal" }),
+            "set", "behaviour", "poison", "id", { visibility = "expanded" }),
     }
 )
 
@@ -436,9 +449,9 @@ M.brick_behaviours.freeze = rule_set(
         node("brick.freeze.radius", "passive", "self",
             "cover", "field_radius", 6.5, "radius", { visibility = "expanded" }),
         node("brick.freeze.strength", "passive", "release_area",
-            "set", "field_strength", 0, "strength", { visibility = "internal" }),
+            "set", "field_strength", 0, "strength", { visibility = "expanded" }),
         node("brick.freeze.identity", "build", "self",
-            "set", "behaviour", "freeze", "id", { visibility = "internal" }),
+            "set", "behaviour", "freeze", "id", { visibility = "expanded" }),
     }
 )
 
@@ -453,7 +466,7 @@ M.brick_behaviours.magnetic = rule_set(
         node("brick.magnetic.strength", "passive", "nearby_marbles",
             "pull", "field_strength", -58, "strength"),
         node("brick.magnetic.identity", "build", "self",
-            "set", "behaviour", "magnetic", "id", { visibility = "internal" }),
+            "set", "behaviour", "magnetic", "id", { visibility = "expanded" }),
     }
 )
 
@@ -466,7 +479,7 @@ M.brick_behaviours.shatter = rule_set(
         node("brick.shatter.wear", "collision", "current_shell",
             "wear", "shell_wear", 2, "durability"),
         node("brick.shatter.identity", "build", "self",
-            "set", "behaviour", "shatter", "id", { visibility = "internal" }),
+            "set", "behaviour", "shatter", "id", { visibility = "expanded" }),
     }
 )
 
@@ -479,7 +492,7 @@ M.brick_behaviours.chain = rule_set(
         node("brick.chain.splash", "destroyed", "orthogonal_neighbours",
             "splash", "death_splash", 2, "damage", { limit = 3 }),
         node("brick.chain.identity", "build", "self",
-            "set", "behaviour", "chain", "id", { visibility = "internal" }),
+            "set", "behaviour", "chain", "id", { visibility = "expanded" }),
     }
 )
 
@@ -492,7 +505,7 @@ M.brick_behaviours.vault = rule_set(
         node("brick.vault.force", "collision", "striking_marble",
             "accelerate", "momentum_delta", 1, "launch_force"),
         node("brick.vault.identity", "build", "self",
-            "set", "behaviour", "vault", "id", { visibility = "internal" }),
+            "set", "behaviour", "vault", "id", { visibility = "expanded" }),
     }
 )
 
@@ -505,7 +518,7 @@ M.brick_behaviours.splice = rule_set(
         node("brick.splice.splash", "collision", "orthogonal_neighbours",
             "splash", "collision_splash", 1, "damage"),
         node("brick.splice.identity", "build", "self",
-            "set", "behaviour", "splice", "id", { visibility = "internal" }),
+            "set", "behaviour", "splice", "id", { visibility = "expanded" }),
     }
 )
 
@@ -518,7 +531,7 @@ M.brick_behaviours.dummy = rule_set(
         node("brick.dummy.harmless", "collision", "current_shell",
             "prevent", "harmless", true, "flag"),
         node("brick.dummy.identity", "build", "self",
-            "set", "behaviour", "dummy", "id", { visibility = "internal" }),
+            "set", "behaviour", "dummy", "id", { visibility = "expanded" }),
     }
 )
 
@@ -531,7 +544,7 @@ M.brick_behaviours.aegis = rule_set(
         node("brick.aegis.negate", "damaging_collision", "self",
             "negate", "negate_once", true, "flag", { charges = 1 }),
         node("brick.aegis.identity", "build", "self",
-            "set", "behaviour", "aegis", "id", { visibility = "internal" }),
+            "set", "behaviour", "aegis", "id", { visibility = "expanded" }),
     }
 )
 
@@ -544,7 +557,7 @@ M.brick_behaviours.void = rule_set(
         node("brick.void.break", "collision", "current_shell",
             "break", "break_shell", true, "flag"),
         node("brick.void.identity", "build", "self",
-            "set", "behaviour", "void", "id", { visibility = "internal" }),
+            "set", "behaviour", "void", "id", { visibility = "expanded" }),
     }
 )
 
@@ -559,7 +572,7 @@ M.brick_behaviours.mirror = rule_set(
         node("brick.mirror.wear", "collision", "current_shell",
             "wear", "shell_wear", 1, "durability"),
         node("brick.mirror.identity", "build", "self",
-            "set", "behaviour", "mirror", "id", { visibility = "internal" }),
+            "set", "behaviour", "mirror", "id", { visibility = "expanded" }),
     }
 )
 
@@ -572,7 +585,7 @@ M.brick_behaviours.temporal = rule_set(
         node("brick.temporal.rewind", "survives_collision", "self",
             "rewind", "rewind", true, "flag", { condition = "survives" }),
         node("brick.temporal.identity", "build", "self",
-            "set", "behaviour", "temporal", "id", { visibility = "internal" }),
+            "set", "behaviour", "temporal", "id", { visibility = "expanded" }),
     }
 )
 
@@ -717,7 +730,7 @@ for id, spec in pairs(shell_specs) do
                 "protect", "durability", spec.durability, "durability",
                 { visibility = "expanded" }),
             node("shell." .. id .. ".collision", "build", "self",
-                "set", "collision", spec.collision, "id", { visibility = "internal" }),
+                "set", "collision", spec.collision, "id", { visibility = "expanded" }),
         },
         { register = false }
     )
@@ -763,7 +776,7 @@ for id, spec in pairs(core_specs) do
             node("core." .. id .. ".trajectory", "launch", "launch",
                 "aim", "trajectory", spec.trajectory, "count", { visibility = "expanded" }),
             node("core." .. id .. ".release", "build", "self",
-                "set", "release", spec.release, "id", { visibility = "internal" }),
+                "set", "release", spec.release, "id", { visibility = "expanded" }),
         },
         { register = false }
     )
@@ -809,7 +822,7 @@ for id, spec in pairs(brick_specs) do
             node("brick." .. id .. ".hp", "build", "self",
                 "protect", "hp", spec.hp, "hp", { visibility = "expanded" }),
             node("brick." .. id .. ".behaviour", "build", "self",
-                "set", "behaviour", spec.behaviour, "id", { visibility = "internal" }),
+                "set", "behaviour", spec.behaviour, "id", { visibility = "expanded" }),
         },
         { register = false }
     )
