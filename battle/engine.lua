@@ -2138,6 +2138,7 @@ local function apply_splice_guard(battle, owner, source, profile, root_event)
         if index > limit then break end
         neighbour.guard = {
             amount = amount,
+            unit = rule.magnitude.unit,
             expires_tick = battle.tick + duration,
             exchange = battle.exchange,
             source_owner = owner.id,
@@ -2167,7 +2168,7 @@ local function apply_splice_guard(battle, owner, source, profile, root_event)
             y = neighbour.y,
             root_event_id = root_event.root_event_id,
             parent_event_id = root_event.event_id,
-            generation = 1,
+            generation = (root_event.generation or 0) + 1,
         }, profile, "guard", source.name)
     end
     state.last_exchange = battle.exchange
@@ -2175,14 +2176,10 @@ local function apply_splice_guard(battle, owner, source, profile, root_event)
     return true
 end
 
-function M.trigger_splice_guard(battle, owner_id, source_uid)
-    local owner = type(owner_id) == "table" and owner_id or battle.sides[owner_id]
-    local source = owner and brick_by_uid(owner, source_uid) or nil
-    if not source or not source.alive then return false, "source_dead" end
-    local profile = effects.brick_profile(source.behaviour, source.rule_set)
+local function append_splice_trigger(battle, owner, source, parent_event)
     local ability, rule = splice_contract(source)
-    if not ability or not rule then return false, "guard_ability_missing" end
-    local root = append_event(battle, owner.id, "splice_triggered", {
+    if not ability or not rule then return nil end
+    return append_event(battle, owner.id, "splice_triggered", {
         source_owner = owner.id,
         source_entity_id = source.uid or source.body_id,
         source_rule_set_id = source.rule_set.id,
@@ -2192,7 +2189,19 @@ function M.trigger_splice_guard(battle, owner_id, source_uid)
         target_selector = rule.target.selector,
         amount = rule.magnitude.value,
         unit = rule.magnitude.unit,
+        root_event_id = parent_event and parent_event.root_event_id or nil,
+        parent_event_id = parent_event and parent_event.event_id or nil,
+        generation = parent_event and (parent_event.generation or 0) + 1 or nil,
     })
+end
+
+function M.trigger_splice_guard(battle, owner_id, source_uid)
+    local owner = type(owner_id) == "table" and owner_id or battle.sides[owner_id]
+    local source = owner and brick_by_uid(owner, source_uid) or nil
+    if not source or not source.alive then return false, "source_dead" end
+    local profile = effects.brick_profile(source.behaviour, source.rule_set)
+    local root = append_splice_trigger(battle, owner, source)
+    if not root then return false, "guard_ability_missing" end
     return apply_splice_guard(battle, owner, source, profile, root)
 end
 
@@ -2309,7 +2318,12 @@ local function collision_damage(battle, attacker, defender, marble, brick, event
         end
     end
     if brick.alive and applied_damage > 0 and (profile.guard or 0) > 0 then
-        apply_splice_guard(battle, defender, brick, profile, collision_event)
+        local splice_event = append_splice_trigger(
+            battle, defender, brick, collision_event
+        )
+        if splice_event then
+            apply_splice_guard(battle, defender, brick, profile, splice_event)
+        end
     end
     if brick.alive and applied_damage > 0 and (profile.heal_after_hit or 0) > 0
         and brick.regenerate_exchange ~= battle.exchange then
@@ -2542,27 +2556,32 @@ local function tick_statuses(battle)
     end
 end
 
-local function expire_guards(battle)
+local function expire_guards(battle, exchange_end)
     for _, side_id in ipairs(battle.order) do
         local owner = battle.sides[side_id]
         for row = 1, owner.formation.rows do
             for col = 1, owner.formation.cols do
                 local brick = formation_mod.brick_at(owner.formation, row, col)
                 if brick and brick.guard
-                    and brick.guard.expires_tick <= battle.tick then
+                    and (brick.guard.expires_tick <= battle.tick or exchange_end) then
+                    local guard = brick.guard
                     append_event(battle, owner.id, "guard_expired", {
                         brick = brick.id,
-                        source_owner = brick.guard.source_owner,
-                        source_entity_id = brick.guard.source_uid,
-                        source_rule_set_id = brick.guard.source_rule_set_id,
-                        rule_id = brick.guard.rule_id,
-                        ability_id = brick.guard.ability_id,
-                        operation = brick.guard.operation,
-                        target_selector = brick.guard.target_selector,
+                        source_owner = guard.source_owner,
+                        source_entity_id = guard.source_uid,
+                        source_rule_set_id = guard.source_rule_set_id,
+                        rule_id = guard.rule_id,
+                        ability_id = guard.ability_id,
+                        operation = guard.operation,
+                        target_selector = guard.target_selector,
                         target_owner = owner.id,
                         target_entity_id = brick.uid or brick.body_id,
                         target_relation = "allied",
-                        reason = "duration",
+                        amount = guard.amount,
+                        unit = guard.unit,
+                        expires_tick = guard.expires_tick,
+                        reason = guard.expires_tick <= battle.tick
+                            and "duration" or "exchange_end",
                     })
                     brick.guard = nil
                 end

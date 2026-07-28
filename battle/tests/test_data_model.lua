@@ -77,7 +77,7 @@ function M.run(t)
 
     -- Brick archetypes: behaviour, not just hit points, and a do-nothing control.
     local seen = {}
-    for _, brick in ipairs(bricks.list) do seen[brick.behaviour] = true end
+    for _, brick in ipairs(bricks.list()) do seen[brick.behaviour] = true end
     t:ok(seen.absorb, "an absorb archetype exists")
     t:ok(seen.reflect, "a reflect archetype exists")
     t:ok(seen.chain, "a chain archetype exists")

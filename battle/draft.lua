@@ -665,7 +665,7 @@ function M.catalog_summary()
         slings = #catalog.SLINGS,
         marbles = #catalog.MARBLES,
         brick_kits = #catalog.BRICK_KITS,
-        brick_archetypes = #bricks.list,
+        brick_archetypes = bricks.count(),
         tags = #util.sorted_keys(catalog.TAGS),
         comprehension_pool = catalog.COMPREHENSION_POOL_SIZE,
         legacy_marbles = #catalog.LEGACY_MARBLES,

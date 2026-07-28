@@ -14,6 +14,7 @@ local engine = require("battle.engine")
 local presentation = require("run_presentation")
 local legacy_boundary = require("presentation")
 local rule_ast = require("battle.rule_ast")
+local brick_content = require("battle.content.bricks")
 local util = require("battle.run_util")
 local fixtures = require("battle.tests.run_fixtures")
 
@@ -277,6 +278,113 @@ function M.run(t)
         "marble inspector names its release core")
     t:ok(#projected.battle.inspected.inspection_copy > 2,
         "marble inspector exposes expanded canonical rules")
+
+    -- Exported brick projections and frame/state caches are adversarial input,
+    -- never a second presentation authority. Nested aliases, list/by-id reads,
+    -- and post-validation edits must not persist or forge a common passive.
+    local splice_projection = brick_content.by_id.splice_node
+    local splice_list
+    for _, item in ipairs(brick_content.list()) do
+        if item.id == "splice_node" then splice_list = item break end
+    end
+    for _, rule_set in ipairs({
+        splice_projection.rule_set,
+        splice_list.rule_set,
+    }) do
+        for _, rule in ipairs(rule_set.rules) do
+            if rule.id == "brick.splice.guard" then
+                rule.magnitude.value = 9
+                rule.cadence.interval = 2
+            end
+        end
+    end
+    splice_projection.telegraph.passive_ceiling = 99
+    splice_projection.balance.spent = 1
+    splice_projection.compact_copy = "FORGED SPLICE COPY"
+    local splice_state = {
+        run_id = "authority-probe",
+        run_seed = 1,
+        phase = "battle",
+        opponent = { recipe_id = "probe", name = "Probe", scout_tags = {} },
+        battle = { status = "running" },
+    }
+    local splice_frame = {
+        tick = 0,
+        exchange = 1,
+        entities = {{
+            id = "splice", uid = "splice", type = "brick", alive = true,
+            content_id = "splice_node", name = "FORGED NAME",
+            rarity = "common", behaviour = "inert",
+            hp = 2, max_hp = 2, hp_ratio = 1, owner = "A",
+        }},
+        sides = { A = { name = "A" } },
+    }
+    local splice_inspected
+    for rule_index = 1, 20 do
+        local probe = presentation.project(
+            splice_state,
+            splice_frame,
+            splice_frame,
+            1,
+            { inspected_entity_id = "splice", inspection_rule_index = rule_index }
+        ).battle.inspected
+        if probe.rule_inspection
+            and probe.rule_inspection.rule.id == "brick.splice.guard" then
+            splice_inspected = probe
+            break
+        end
+    end
+    t:ok(splice_inspected ~= nil,
+        "canonical Splice rule remains inspectable after projection poisoning")
+    t:eq(splice_inspected.name, "Splice Node",
+        "entity-frame names cannot override canonical brick presentation")
+    t:eq(splice_inspected.rarity, "Rare",
+        "entity-frame rarity cannot override canonical brick presentation")
+    t:eq(splice_inspected.mechanic, "Splice",
+        "entity-frame behaviour cannot override canonical brick presentation")
+    t:eq(splice_inspected.rule_inspection.rule.magnitude.value, 1,
+        "nested list/by-id magnitude mutations cannot poison the inspector")
+    t:eq(splice_inspected.rule_inspection.rule.cadence.interval, 1,
+        "nested list/by-id cadence mutations cannot poison the inspector")
+    t:eq(splice_inspected.telegraph.passive_ceiling, 1,
+        "telegraph mutations cannot poison later inspector reads")
+    t:eq(splice_inspected.balance.spent, 21.12,
+        "balance mutations cannot poison later inspector reads")
+    t:neq(splice_inspected.mechanic_description, "FORGED SPLICE COPY",
+        "compact-copy mutations cannot poison later inspector reads")
+
+    local common_projection = brick_content.by_id.basalt_absorber
+    common_projection.inspection_copy[2] = "FORGED PASSIVE"
+    common_projection.telegraph.passive_count = 1
+    common_projection.telegraph.passive_ceiling = 99
+    common_projection.abilities[1] = {
+        id = "forged_guard", kind = "passive", rule_ids = { "forged.rule" },
+    }
+    local common_frame = util.deep_copy(splice_frame)
+    common_frame.entities[1].id = "common"
+    common_frame.entities[1].uid = "common"
+    common_frame.entities[1].content_id = "basalt_absorber"
+    common_frame.entities[1].rarity = "legendary"
+    common_frame.entities[1].behaviour = "splice"
+    common_frame.entities[1].hp = 4
+    common_frame.entities[1].max_hp = 4
+    local common_inspected = presentation.project(
+        splice_state,
+        common_frame,
+        common_frame,
+        1,
+        { inspected_entity_id = "common" }
+    ).battle.inspected
+    t:eq(common_inspected.rarity, "Common",
+        "frame mutation cannot raise a common brick's presented rarity")
+    t:eq(common_inspected.telegraph.passive_count, 0,
+        "a projection mutation cannot create a common passive")
+    t:eq(common_inspected.telegraph.passive_ceiling, 0,
+        "a projection mutation cannot raise the common passive ceiling")
+    t:eq(#common_inspected.rule_set.abilities, 0,
+        "common inspection retains zero canonical ability groups")
+    t:neq(common_inspected.inspection_copy[2], "FORGED PASSIVE",
+        "forged inspection-copy aliases cannot survive a later read")
 
     model = assert(controller.complete_battle(model, completion)).model
     projected = controller.project(model)

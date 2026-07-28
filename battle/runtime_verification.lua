@@ -8,6 +8,7 @@ local engine = require("battle.engine")
 local physics = require("battle.physics")
 local ast = require("battle.rule_ast")
 local draft = require("battle.draft")
+local opponent = require("battle.opponent")
 local setup_rules = require("battle.setup_rules")
 
 local M = { SCHEMA_VERSION = 2 }
@@ -24,6 +25,14 @@ local function log_event(battle, kind)
         if event.type == kind then return event end
     end
     return nil
+end
+
+local function log_events(battle, kind)
+    local out = {}
+    for _, event in ipairs(battle.log.events or {}) do
+        if event.type == kind then out[#out + 1] = event end
+    end
+    return out
 end
 
 local function require_evidence(condition, message)
@@ -340,12 +349,231 @@ local function allied_enemy_blowback()
     }
 end
 
+local function splice_guard()
+    local seed = 9125
+    local glass_cannon = opponent.build(seed, "glass_cannon")
+    local empty_row = { ".", ".", ".", ".", ".", ".", "." }
+    local battle = engine.new({
+        seed = seed,
+        max_exchanges = 2,
+        max_exchange_ticks = 500,
+        sides = {
+            A = side("Guard Striker", "momentum", {
+                { "plain_block", ".", ".", ".", ".", ".", "." },
+                empty_row,
+                empty_row,
+            }, {
+                marble("hostile", "quartz_banded", 3),
+            }),
+            B = glass_cannon,
+        },
+    })
+
+    -- The shipped Glass Cannon recipe intentionally gives Splice three real
+    -- orthogonal allies: Shatter above, Powder Keg left, and Mirror right.
+    engine.step(battle, engine.FIXED_DT)
+    local owner = battle.sides.B
+    local source = owner.formation.grid[2][3]
+    local applied_target = owner.formation.grid[1][3]
+    local prevented_target = owner.formation.grid[2][4]
+    local expiry_target = applied_target
+    require_evidence(source and source.id == "splice_node",
+        "Glass Cannon did not place its canonical Splice Node")
+    require_evidence(applied_target and prevented_target and expiry_target,
+        "Glass Cannon did not retain three adjacent Guard targets")
+
+    local guard_rule = ast.rule(source.rule_set, "brick.splice.guard")
+    require_evidence(guard_rule
+        and guard_rule.magnitude.value == 1
+        and guard_rule.duration.value == 120
+        and guard_rule.cadence.unit == "exchange"
+        and guard_rule.cadence.interval == 1,
+    "Splice probe did not read the accepted canonical Guard rule")
+
+    -- Drive a real hostile marble into the protected rear Splice Node. The
+    -- low-impact Quartz shell deals one canonical damage, leaving Splice alive
+    -- so its collision-triggered passive can protect the three real allies.
+    local hostile = battle.sides.A.all_marbles[1]
+    battle.world:set_position(hostile.body_id, source.x, source.y - 4.2)
+    battle.world:set_velocity(hostile.body_id, 0, 30)
+    for _ = 1, 12 do
+        if log_event(battle, "splice_triggered") then break end
+        engine.step(battle, engine.FIXED_DT)
+    end
+    local collision = log_event(battle, "collision")
+    local triggered = log_event(battle, "splice_triggered")
+    local applied = log_events(battle, "guard_applied")
+    require_evidence(collision
+        and collision.brick == "splice_node"
+        and triggered
+        and triggered.parent_event_id == collision.event_id
+        and #applied == 3,
+    "Glass Cannon Splice did not trigger from a real collision onto three neighbours")
+    require_evidence(applied[1].target_entity_id == applied_target.uid
+        and applied[1].amount == 1
+        and applied[1].expires_tick == battle.tick + 120
+        and applied[1].parent_event_id == triggered.event_id,
+    "Splice Guard application diverged from canonical order/magnitude/expiry")
+
+    -- Reuse the same canonical hostile marble for a second, harder physical
+    -- collision against a guarded neighbour. Higher impact adds one canonical
+    -- damage to Chip, so Guard must intercept exactly one of two requested
+    -- damage before the ordinary brick-harm boundary applies the remainder.
+    local hp_before = prevented_target.hp
+    local collision_count = #log_events(battle, "collision")
+    battle.world:set_position(
+        hostile.body_id,
+        prevented_target.x,
+        prevented_target.y - 4.2
+    )
+    battle.world:set_velocity(hostile.body_id, 0, 60)
+    for _ = 1, 12 do
+        if log_event(battle, "guard_prevented") then break end
+        engine.step(battle, engine.FIXED_DT)
+    end
+    local prevented = log_event(battle, "guard_prevented")
+    local collisions = log_events(battle, "collision")
+    local prevention_collision = collisions[collision_count + 1]
+    local applied_damage = hp_before - prevented_target.hp
+    require_evidence(prevention_collision
+        and prevention_collision.brick == prevented_target.id
+        and prevention_collision.damage == 2
+        and applied_damage == 1
+        and prevented and prevented.prevented == 1
+        and prevented.parent_event_id == prevention_collision.event_id
+        and prevented.target_entity_id == prevented_target.uid
+        and prevented_target.hp == hp_before - 1
+        and prevented_target.guard == nil,
+    string.format(
+        "Splice Guard physical prevention diverged: collisions=%d, prevention=%s, brick=%s, requested=%s, prevented=%s, applied=%s, hp=%s",
+        #collisions,
+        tostring(prevention_collision and prevention_collision.event_id),
+        tostring(prevention_collision and prevention_collision.brick),
+        tostring(prevention_collision and prevention_collision.damage),
+        tostring(prevented and prevented.prevented),
+        tostring(applied_damage),
+        tostring(prevented_target.hp)
+    ))
+
+    local visual_frame = engine.snapshot(battle)
+    local visual_guard_count = 0
+    for _, brick in ipairs(visual_frame.sides.B.bricks) do
+        if brick.guard and brick.guard.amount == 1 then
+            visual_guard_count = visual_guard_count + 1
+        end
+    end
+    require_evidence(visual_frame.sides.B.name == "Glass Cannon"
+        and visual_guard_count == 2,
+    "Splice visual frame did not preserve the real Glass Cannon Guard state")
+
+    local expiry_tick = expiry_target.guard and expiry_target.guard.expires_tick
+    require_evidence(expiry_tick
+        and expiry_tick - triggered.tick == guard_rule.duration.value,
+        "unspent Splice Guard did not retain its canonical 120-tick expiry")
+    -- Advance the ordinary fixed-step engine to the authored expiry tick. No
+    -- tick jump or direct Guard mutation is accepted as packaged evidence.
+    for _ = 1, guard_rule.duration.value + 4 do
+        if #log_events(battle, "guard_expired") > 0 then break end
+        engine.step(battle, engine.FIXED_DT)
+    end
+    local expired = log_events(battle, "guard_expired")
+    require_evidence(#expired == 2
+        and expired[1].target_entity_id == expiry_target.uid
+        and expired[1].tick == expiry_tick
+        and expired[1].reason == "duration"
+        and expiry_target.guard == nil,
+    "unspent Glass Cannon Guard did not expire canonically at tick 120")
+    require_evidence(triggered.seq < applied[1].seq
+        and applied[#applied].seq < prevented.seq
+        and prevented.seq < expired[1].seq,
+    "Splice trigger/apply/prevent/expiry records are not causally ordered")
+
+    local common = require("battle.content.bricks").canonical_rule_set(
+        "basalt_absorber"
+    )
+    require_evidence(ast.ability_summary(common).count == 0,
+        "Splice verification accidentally created a common passive")
+
+    return {
+        recipe_id = glass_cannon.recipe_id,
+        battle_seed = seed,
+        source_uid = source.uid,
+        source_rule_set_id = source.rule_set.id,
+        rule_id = guard_rule.id,
+        ability_id = applied[1].ability_id,
+        magnitude = guard_rule.magnitude.value,
+        cadence_unit = guard_rule.cadence.unit,
+        cadence_interval = guard_rule.cadence.interval,
+        duration_ticks = guard_rule.duration.value,
+        applied_count = #applied,
+        expired_count = #expired,
+        trigger_collision_event_id = collision.event_id,
+        prevention_collision_event_id = prevention_collision.event_id,
+        visual_frame = visual_frame,
+        visual_frame_tick = visual_frame.tick,
+        visual_guard_count = visual_guard_count,
+        stages = {
+            {
+                order = 1,
+                stage = "triggered",
+                type = triggered.type,
+                event_id = triggered.event_id,
+                tick = triggered.tick,
+                target_uid = "none",
+                amount = triggered.amount,
+                unit = triggered.unit,
+                reason = "hostile_collision",
+            },
+            {
+                order = 2,
+                stage = "applied",
+                type = applied[1].type,
+                event_id = applied[1].event_id,
+                tick = applied[1].tick,
+                target_uid = applied[1].target_entity_id,
+                amount = applied[1].amount,
+                unit = applied[1].unit,
+                expires_tick = applied[1].expires_tick,
+                reason = "adjacent_allied_guard",
+            },
+            {
+                order = 3,
+                stage = "prevented",
+                type = prevented.type,
+                event_id = prevented.event_id,
+                tick = prevented.tick,
+                target_uid = prevented.target_entity_id,
+                amount = prevented.prevented,
+                unit = prevented.unit,
+                requested_damage = 2,
+                applied_damage = applied_damage,
+                integrity_before = hp_before,
+                integrity_after = prevented_target.hp,
+                reason = "hostile_damage",
+            },
+            {
+                order = 4,
+                stage = "expired",
+                type = expired[1].type,
+                event_id = expired[1].event_id,
+                tick = expired[1].tick,
+                target_uid = expired[1].target_entity_id,
+                amount = expired[1].amount,
+                unit = expired[1].unit,
+                expires_tick = expired[1].expires_tick,
+                reason = expired[1].reason,
+            },
+        },
+    }
+end
+
 function M.run()
     return {
         schema_version = M.SCHEMA_VERSION,
         sweep = swept_collision(),
         blowback = allied_enemy_blowback(),
         linked_cost = linked_cost(),
+        splice_guard = splice_guard(),
     }
 end
 

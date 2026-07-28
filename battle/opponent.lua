@@ -66,11 +66,11 @@ local RECIPES = {
         scout_tags = { "burst", "force" },
         sling_ids = { "ricochet", "momentum" },
         bricks = {
-            { 1, 2, { "shatter_crystal" } },
-            { 1, 4, { "powder_keg" } },
+            { 1, 3, { "shatter_crystal" } },
+            { 2, 2, { "powder_keg" } },
             { 1, 6, { "mirror_pane" } },
             { 2, 3, { "splice_node" } },
-            { 2, 5, { "prismatic_mirror" } },
+            { 2, 4, { "prismatic_mirror" } },
         },
         marbles = {
             { "shard_ram_rare", "geode_uncommon" },

@@ -258,8 +258,137 @@ function M.run(t)
                 shadow
             )
         end, "diverges from canonical RuleSet",
-        "brick projection rejects shadow field " .. field)
+            "brick projection rejects shadow field " .. field)
     end
+
+    local splice_by_id = bricks.by_id.splice_node
+    local splice_by_id_again = bricks.by_id.splice_node
+    local splice_from_list
+    for _, item in ipairs(bricks.list()) do
+        if item.id == "splice_node" then splice_from_list = item break end
+    end
+    t:neq(splice_by_id, splice_by_id_again,
+        "by-id brick lookup returns fresh isolated projections")
+    t:neq(splice_by_id, splice_from_list,
+        "list and by-id brick lookups cannot share a mutable alias")
+    local function mutate_splice_projection(item)
+        item.balance.spent = 1
+        item.telegraph.passive_ceiling = 99
+        item.compact_copy = "FORGED SPLICE COPY"
+        for _, rule in ipairs(item.rule_set.rules) do
+            if rule.id == "brick.splice.guard" then
+                rule.magnitude.value = 9
+                rule.cadence.interval = 2
+                rule.duration.value = 17
+            end
+        end
+    end
+    mutate_splice_projection(splice_by_id)
+    mutate_splice_projection(splice_from_list)
+    local clean_splice = bricks.by_id.splice_node
+    local clean_guard = ast.rule(clean_splice.rule_set, "brick.splice.guard")
+    t:eq(clean_guard.magnitude.value, 1,
+        "by-id nested magnitude mutation cannot poison later reads")
+    t:eq(clean_guard.cadence.interval, 1,
+        "by-id nested cadence mutation cannot poison later reads")
+    t:eq(clean_guard.duration.value, 120,
+        "list nested duration mutation cannot poison later reads")
+    t:eq(clean_splice.telegraph.passive_ceiling, 1,
+        "telegraph cache mutation cannot poison later reads")
+    t:eq(clean_splice.balance.spent, 21.12,
+        "balance cache mutation cannot poison later reads")
+    t:neq(clean_splice.compact_copy, "FORGED SPLICE COPY",
+        "compact-copy cache mutation cannot poison later reads")
+    t:raises(function()
+        bricks.by_id.splice_node = splice_by_id
+    end, "read-only", "the by-id projection lookup rejects replacement")
+    t:raises(function()
+        bricks.by_id = { splice_node = splice_by_id }
+    end, "read-only", "the brick projection module rejects lookup replacement")
+    t:raises(function()
+        bricks.get = function() return splice_by_id end
+    end, "read-only", "the brick projection module rejects accessor replacement")
+    t:raises(function()
+        rawset(bricks.by_id, "splice_node", splice_by_id)
+    end, "table expected",
+    "raw writes cannot bypass the protected by-id projection lookup")
+    t:raises(function()
+        rawset(bricks, "by_id", { splice_node = splice_by_id })
+    end, "table expected",
+    "raw writes cannot replace the protected brick projection module")
+
+    local authored_splice = rulebook.bricks.splice_node
+    ast.assert_valid(authored_splice)
+    for _, rule in ipairs(authored_splice.rules) do
+        if rule.id == "brick.splice.guard" then
+            rule.magnitude.value = 9
+            rule.cadence.interval = 2
+        end
+    end
+    authored_splice.abilities[1].id = "forged_guard"
+    local fresh_authored_splice = rulebook.bricks.splice_node
+    local fresh_authored_guard = ast.rule(
+        fresh_authored_splice,
+        "brick.splice.guard"
+    )
+    t:eq(fresh_authored_guard.magnitude.value, 1,
+        "post-validation authored-table magnitude edits stay isolated")
+    t:eq(fresh_authored_guard.cadence.interval, 1,
+        "post-validation authored-table cadence edits stay isolated")
+    t:eq(fresh_authored_splice.abilities[1].id, "splice_guard",
+        "post-validation nested ability aliases stay isolated")
+    t:raises(function()
+        rulebook.bricks.splice_node = authored_splice
+    end, "read-only", "the canonical RuleSet lookup rejects replacement")
+    t:raises(function()
+        rulebook.bricks = { splice_node = authored_splice }
+    end, "read-only", "the canonical RuleSet module rejects group replacement")
+    t:raises(function()
+        rulebook.get = function() return authored_splice end
+    end, "read-only", "the canonical RuleSet module rejects accessor replacement")
+    t:raises(function()
+        rawset(rulebook.bricks, "splice_node", authored_splice)
+    end, "table expected",
+    "raw writes cannot bypass the protected canonical RuleSet lookup")
+    t:raises(function()
+        rawset(rulebook, "bricks", { splice_node = authored_splice })
+    end, "table expected",
+    "raw writes cannot replace the protected canonical RuleSet module")
+
+    local common_shadow = bricks.by_id.basalt_absorber
+    common_shadow.telegraph.passive_count = 1
+    common_shadow.telegraph.passive_ceiling = 99
+    common_shadow.inspection_copy[2] = "FORGED PASSIVE"
+    common_shadow.abilities[1] = {
+        id = "forged_guard", kind = "passive",
+        rule_ids = { "brick.splice.guard" },
+    }
+    local canonical_common = bricks.by_id.basalt_absorber
+    t:eq(canonical_common.telegraph.passive_count, 0,
+        "projection edits cannot create a common passive")
+    t:eq(canonical_common.telegraph.passive_ceiling, 0,
+        "projection edits cannot raise the common passive ceiling")
+    t:eq(#canonical_common.abilities, 0,
+        "common projection retains zero canonical ability groups")
+    t:neq(canonical_common.inspection_copy[2], "FORGED PASSIVE",
+        "common inspection-copy mutation cannot poison later reads")
+
+    local common_rules = rulebook.bricks.basalt_absorber
+    ast.assert_valid(common_rules)
+    local splice_rule = ast.rule(
+        rulebook.bricks.splice_node,
+        "brick.splice.guard"
+    )
+    common_rules.rules[#common_rules.rules + 1] = splice_rule
+    common_rules.abilities[1] = {
+        id = "forged_guard", kind = "passive",
+        rule_ids = { splice_rule.id },
+    }
+    local common_valid = ast.validate(common_rules)
+    t:eq(common_valid, false,
+        "a common passive remains invalid even on an isolated post-validation copy")
+    t:eq(ast.ability_summary(rulebook.bricks.basalt_absorber).count, 0,
+        "a rejected common mutation cannot poison canonical RuleSet reads")
 
     local release_shadow = effects.release_profile("baseline")
     release_shadow.field_release_strength = 999

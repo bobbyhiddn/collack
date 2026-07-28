@@ -190,6 +190,12 @@ function M.event_text(event, names)
     elseif event.type == "guard_applied" then
         return string.format("%s grants Guard 1 to %s",
             actor, readable(event.target_entity_id))
+    elseif event.type == "guard_prevented" then
+        return string.format("%s Splice Guard prevents %d hostile damage to %s",
+            actor, event.prevented or 0, readable(event.target_entity_id))
+    elseif event.type == "guard_expired" then
+        return string.format("%s Splice Guard expires on %s (%s)",
+            actor, readable(event.target_entity_id), readable(event.reason))
     elseif event.type == "ability_triggered" then
         return string.format("%s triggers %s", actor, readable(event.ability_id))
     elseif event.type == "ability_cost_paid" then
@@ -223,7 +229,9 @@ function M.cues(events)
         elseif event.type == "core_release" or event.type == "blowback" then cue.effect = "release"
         elseif event.type == "status_applied" then cue.effect = event.status
         elseif event.type == "chain_targeted" then cue.effect = "chain_target"
-        elseif event.type == "guard_applied" or event.type == "guard_prevented" then
+        elseif event.type == "guard_applied"
+            or event.type == "guard_prevented"
+            or event.type == "guard_expired" then
             cue.effect = "guard"
         elseif event.type == "ability_triggered"
             or event.type == "ability_cost_paid"

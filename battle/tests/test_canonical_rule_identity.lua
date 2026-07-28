@@ -137,7 +137,7 @@ local function all_runtime_rule_sets()
         "bricks",
     }
     for _, group in ipairs(groups) do
-        for _, rule_set in pairs(rulebook[group]) do
+        for _, rule_set in ipairs(rulebook.list(group)) do
             if not seen[rule_set] then
                 seen[rule_set] = true
                 out[#out + 1] = rule_set

@@ -39,6 +39,9 @@ local last_guidance_signature
 local last_action_state_signature
 local battle_rule_telemetry_seen = {}
 local verification_mode = false
+local verification_splice_evidence
+local verification_splice_frame
+local verification_splice_view = false
 
 local COLORS = {
     shadow = P.shadow.rgb,
@@ -700,7 +703,7 @@ local function draw_button(id, label, accent)
     love.graphics.printf(string.upper(label or action.label), x + 6, y + height / 2 - 8, width - 12, "center")
 end
 
-local function draw_chrome()
+local function draw_chrome(phase_label, seed_label)
     local desktop = mode() == "desktop"
     local x, y, width, height = desktop and 24 or 12, desktop and 16 or 12,
         desktop and 1232 or 366, desktop and 64 or 52
@@ -714,9 +717,21 @@ local function draw_chrome()
     love.graphics.setLineWidth(1)
     love.graphics.setFont(fonts.micro)
     set_color(COLORS.brass)
-    love.graphics.printf(view.labels.phase, x + width - 210, y + 12, 194, "right")
+    love.graphics.printf(
+        phase_label or view.labels.phase,
+        x + width - 210,
+        y + 12,
+        194,
+        "right"
+    )
     set_color(COLORS.muted)
-    love.graphics.printf(view.labels.seed, x + width - 210, y + 34, 194, "right")
+    love.graphics.printf(
+        seed_label or view.labels.seed,
+        x + width - 210,
+        y + 34,
+        194,
+        "right"
+    )
 end
 
 local function draw_tag_chips(tags, x, y, width)
@@ -2123,10 +2138,97 @@ local function draw_battle_overlay(replay)
     -- shared trigger/target/effect identity.
 end
 
+local function splice_stage(name)
+    for _, stage in ipairs(
+        verification_splice_evidence and verification_splice_evidence.stages or {}
+    ) do
+        if stage.stage == name then return stage end
+    end
+    return {}
+end
+
+local function draw_verification_splice_card()
+    if not verification_mode
+        or not verification_splice_evidence
+        or not verification_splice_view
+        or view.battle.inspected then
+        return
+    end
+    local applied = splice_stage("applied")
+    local prevented = splice_stage("prevented")
+    local expired = splice_stage("expired")
+    local phone = mode() == "phone"
+    local x, y, width, height = phone
+        and 24 or 418,
+        phone and 334 or 190,
+        phone and 342 or 444,
+        phone and 148 or 292
+    panel(x, y, width, height, "paper", phone and 10 or 16)
+    love.graphics.setFont(phone and fonts.micro or fonts.meta)
+    set_color(COLORS.brass_ink)
+    love.graphics.printf("PACKAGED CANONICAL PROBE  /  REAL BATTLE",
+        x + 12, y + 10, width - 24, "center")
+    love.graphics.setFont(phone and fonts.meta or fonts.section)
+    set_color(COLORS.ink)
+    love.graphics.printf(string.format("SPLICE GUARD  •  %s  •  SEED %d",
+        tostring(verification_splice_evidence.recipe_id):upper():gsub("_", " "),
+        verification_splice_evidence.battle_seed),
+        x + 12, y + (phone and 28 or 40), width - 24, "center")
+    love.graphics.setFont(phone and fonts.micro or fonts.body)
+    local lines = {
+        string.format("1  TRIGGER  HOSTILE COLLISION  •  %s",
+            verification_splice_evidence.rule_id),
+        string.format("2  APPLY    GUARD %s  •  %d ADJACENT ALLIES",
+            tostring(applied.amount),
+            verification_splice_evidence.applied_count),
+        string.format("3  PREVENT  %s OF %s DAMAGE  •  %s TO %s INTEGRITY",
+            tostring(prevented.amount),
+            tostring(prevented.requested_damage),
+            tostring(prevented.integrity_before),
+            tostring(prevented.integrity_after)),
+        string.format("4  EXPIRE   %d UNTOUCHED  •  +%d TICKS  •  TICK %s",
+            verification_splice_evidence.expired_count,
+            verification_splice_evidence.duration_ticks,
+            tostring(expired.tick)),
+    }
+    local line_y = y + (phone and 48 or 86)
+    local line_step = phone and 18 or 39
+    for index, line in ipairs(lines) do
+        set_color(index == 3 and COLORS.restore or COLORS.ink)
+        love.graphics.printf(line, x + 14, line_y + (index - 1) * line_step,
+            width - 28, phone and "left" or "center")
+    end
+    love.graphics.setFont(fonts.micro)
+    set_color(COLORS.brass_ink)
+    local footer = phone
+        and string.format("%s  /  X%d  /  G%d  /  %dT",
+            verification_splice_evidence.source_rule_set_id,
+            verification_splice_evidence.cadence_interval,
+            verification_splice_evidence.magnitude,
+            verification_splice_evidence.duration_ticks)
+        or string.format(
+            "RULESET %s  /  EXCHANGE/%d  /  MAGNITUDE %d  /  DURATION %d",
+            verification_splice_evidence.source_rule_set_id,
+            verification_splice_evidence.cadence_interval,
+            verification_splice_evidence.magnitude,
+            verification_splice_evidence.duration_ticks)
+    love.graphics.printf(footer,
+        x + 12, y + height - (phone and 17 or 30), width - 24, "center")
+end
+
 local function draw_battle()
-    draw_chrome()
-    draw_battle_world(view.battle.frame)
-    draw_battle_overlay(false)
+    if verification_splice_view then
+        draw_chrome(
+            "PACKAGED CANONICAL PROBE",
+            "SEED " .. tostring(verification_splice_evidence.battle_seed)
+        )
+        draw_battle_world(verification_splice_frame)
+    else
+        draw_chrome()
+        draw_battle_world(view.battle.frame)
+        draw_battle_overlay(false)
+    end
+    draw_verification_splice_card()
 end
 
 local function result_side(frame)
@@ -2343,6 +2445,7 @@ local function spawn_event_particles(event)
         chain_targeted = { 5, 0.24, "line", COLORS.damage },
         guard_applied = { 4, 0.28, "triangle", COLORS.restore },
         guard_prevented = { 4, 0.20, "triangle", COLORS.restore },
+        guard_expired = { 3, 0.18, "line", COLORS.muted },
         ability_triggered = { 4, 0.20, "dot", COLORS.focus },
         ability_cost_paid = { 5, 0.24, "line", COLORS.damage },
         ability_payoff_applied = { 6, 0.28, "dot", COLORS.brass_light },
@@ -2501,6 +2604,12 @@ function love.load(args)
     if verification_mode then
         local runtime_verification = require("battle.runtime_verification")
         local evidence = runtime_verification.run()
+        verification_splice_evidence = evidence.splice_guard
+        verification_splice_frame = battle_presentation.project_battle(
+            evidence.splice_guard.visual_frame,
+            evidence.splice_guard.visual_frame,
+            1
+        )
         print(string.format(
             "CALLACK_CANONICAL_SWEEP kind=%s speed=%.3f toi=%.6f reflected=%s tunneled=%s substeps=%d iterations=%d",
             evidence.sweep.kind,
@@ -2542,6 +2651,41 @@ function love.load(args)
             tostring(evidence.linked_cost.ordered),
             telemetry_value(evidence.linked_cost.compact_copy)
         ))
+        for _, stage in ipairs(evidence.splice_guard.stages) do
+            print(string.format(
+                "CALLACK_SPLICE_GUARD stage=%s order=%d recipe=%s seed=%d type=%s event_id=%s trigger_collision_event_id=%s prevention_collision_event_id=%s tick=%d rule=%s source_rule_set=%s ability=%s source_uid=%s target_uid=%s amount=%s unit=%s magnitude=%d cadence=%s/%d duration_ticks=%d expires_tick=%s applied_count=%d expired_count=%d requested_damage=%s applied_damage=%s integrity=%s_to_%s visual_tick=%d visual_guards=%d reason=%s",
+                stage.stage,
+                stage.order,
+                evidence.splice_guard.recipe_id,
+                evidence.splice_guard.battle_seed,
+                stage.type,
+                tostring(stage.event_id),
+                tostring(evidence.splice_guard.trigger_collision_event_id),
+                tostring(evidence.splice_guard.prevention_collision_event_id),
+                stage.tick,
+                evidence.splice_guard.rule_id,
+                evidence.splice_guard.source_rule_set_id,
+                evidence.splice_guard.ability_id,
+                evidence.splice_guard.source_uid,
+                stage.target_uid,
+                tostring(stage.amount),
+                tostring(stage.unit or "none"),
+                evidence.splice_guard.magnitude,
+                evidence.splice_guard.cadence_unit,
+                evidence.splice_guard.cadence_interval,
+                evidence.splice_guard.duration_ticks,
+                tostring(stage.expires_tick or "none"),
+                evidence.splice_guard.applied_count,
+                evidence.splice_guard.expired_count,
+                tostring(stage.requested_damage or "none"),
+                tostring(stage.applied_damage or "none"),
+                tostring(stage.integrity_before or "none"),
+                tostring(stage.integrity_after or "none"),
+                evidence.splice_guard.visual_frame_tick,
+                evidence.splice_guard.visual_guard_count,
+                stage.reason
+            ))
+        end
     end
     if not touch and not desktop and love.system.getOS() ~= "Web" then
         local desktop_width, desktop_height = love.window.getDesktopDimensions()
@@ -2644,6 +2788,19 @@ function love.keypressed(key)
         if focused_action_id then activate(focused_action_id, "keyboard") end
     elseif key == "space" and view.screen == "battle" then
         activate("battle_pause", "keyboard")
+    elseif key == "p"
+        and verification_mode
+        and verification_splice_frame
+        and view.screen == "battle" then
+        verification_splice_view = not verification_splice_view
+        print(string.format(
+            "CALLACK_SPLICE_VIEW active=%s recipe=%s seed=%d tick=%d guards=%d",
+            tostring(verification_splice_view),
+            verification_splice_evidence.recipe_id,
+            verification_splice_evidence.battle_seed,
+            verification_splice_evidence.visual_frame_tick,
+            verification_splice_evidence.visual_guard_count
+        ))
     elseif key == "right" and view.screen == "battle" then
         if not app.model.ui.paused then activate("battle_pause", "keyboard") end
         run_loop.advance(app, 1)

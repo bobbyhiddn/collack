@@ -1088,4 +1088,66 @@ for id, spec in pairs(brick_specs) do
     }, sources)
 end
 
-return M
+-- Keep authored RuleSets behind fresh value projections. Lua 5.1 cannot make
+-- nested tables deeply immutable, so exposing the construction tables would
+-- let a caller turn a post-validation edit into new global authority. Every
+-- indexed read below receives an isolated copy; assigning a collection member
+-- fails, and list() returns another isolated, deterministically ordered view.
+local protected_groups = {
+    "collisions",
+    "releases",
+    "statuses",
+    "brick_behaviours",
+    "slings",
+    "cores",
+    "shells",
+    "bricks",
+}
+local canonical_groups = {}
+for _, group in ipairs(protected_groups) do canonical_groups[group] = M[group] end
+
+function M.get(group, id)
+    local collection = canonical_groups[group]
+    if not collection then error("unknown canonical RuleSet group: " .. tostring(group), 2) end
+    local item = collection[id]
+    return item and ast.copy(item) or nil
+end
+
+function M.list(group)
+    local collection = canonical_groups[group]
+    if not collection then error("unknown canonical RuleSet group: " .. tostring(group), 2) end
+    local ids = {}
+    for id in pairs(collection) do ids[#ids + 1] = id end
+    table.sort(ids)
+    local out = {}
+    for _, id in ipairs(ids) do out[#out + 1] = ast.copy(collection[id]) end
+    return out
+end
+
+local function protected_lookup(group)
+    local proxy = newproxy(true)
+    local metatable = getmetatable(proxy)
+    metatable.__index = function(_, id)
+        return M.get(group, id)
+    end
+    metatable.__newindex = function(_, id)
+        error(string.format(
+            "canonical RuleSet lookup %s is read-only (%s)",
+            tostring(group),
+            tostring(id)
+        ), 2)
+    end
+    metatable.__metatable = "protected canonical RuleSet lookup"
+    return proxy
+end
+
+for _, group in ipairs(protected_groups) do M[group] = protected_lookup(group) end
+
+local module = newproxy(true)
+local module_metatable = getmetatable(module)
+module_metatable.__index = M
+module_metatable.__newindex = function(_, key)
+        error("canonical RuleSet module is read-only (" .. tostring(key) .. ")", 2)
+end
+module_metatable.__metatable = "protected canonical RuleSet module"
+return module

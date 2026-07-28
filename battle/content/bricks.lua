@@ -24,8 +24,6 @@ local SPECS = {
     { id = "temporal_anchor", name = "Temporal Anchor", family = "rare" },
 }
 
-local BRICKS = {}
-local by_id = {}
 local spec_by_id = {}
 for _, spec in ipairs(SPECS) do spec_by_id[spec.id] = spec end
 
@@ -109,26 +107,54 @@ local function runtime(id, rule_set, shadow)
 end
 
 local function canonical_rule_set(id)
-    local rule_set = rulebook.bricks[id]
+    local rule_set = rulebook.get("bricks", id)
     if not rule_set then error("unknown brick: " .. tostring(id)) end
-    return ast.copy(rule_set)
+    return rule_set
 end
 
 local function has(id)
-    return spec_by_id[id] ~= nil and rulebook.bricks[id] ~= nil
+    return spec_by_id[id] ~= nil and rulebook.get("bricks", id) ~= nil
 end
 
-for _, spec in ipairs(SPECS) do
-    local rule_set = rulebook.bricks[spec.id]
-    local brick = compile(spec, rule_set)
-    BRICKS[#BRICKS + 1] = brick
-    by_id[brick.id] = brick
+local function get(id)
+    if not has(id) then return nil end
+    return compile(spec_by_id[id], canonical_rule_set(id))
 end
 
-return {
-    list = BRICKS,
+local function all()
+    local out = {}
+    for _, spec in ipairs(SPECS) do out[#out + 1] = get(spec.id) end
+    return out
+end
+
+local by_id = newproxy(true)
+local by_id_metatable = getmetatable(by_id)
+by_id_metatable.__index = function(_, id)
+    return get(id)
+end
+by_id_metatable.__newindex = function(_, id)
+        error("brick projection lookup is read-only (" .. tostring(id) .. ")", 2)
+end
+by_id_metatable.__metatable = "fresh isolated brick projection lookup"
+
+local API = {
+    -- list() and get() are fresh isolated projections. by_id retains convenient
+    -- indexed reads while returning a new projection for every access.
+    list = all,
+    all = all,
     by_id = by_id,
+    get = get,
+    count = function() return #SPECS end,
     runtime = runtime,
     canonical_rule_set = canonical_rule_set,
     has = has,
 }
+
+local module = newproxy(true)
+local module_metatable = getmetatable(module)
+module_metatable.__index = API
+module_metatable.__newindex = function(_, key)
+        error("brick projection module is read-only (" .. tostring(key) .. ")", 2)
+end
+module_metatable.__metatable = "protected brick projection module"
+return module

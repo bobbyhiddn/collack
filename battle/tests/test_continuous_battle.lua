@@ -131,6 +131,8 @@ function M.run(t)
             lane = 1,
             second_brick = "plain_block",
         })
+        t:ok(has_event(spliced, "splice_triggered"),
+            "physical Splice contact emits its attributed trigger")
         t:ok(has_event(spliced, "guard_applied"),
             "Splice grants bounded Guard to an adjacent physical brick")
 

@@ -1147,6 +1147,38 @@ function M.run(t)
     )
     t:eq(guarded_ok, true, "Splice cadence reopens on the canonical interval")
 
+    local duration_battle, _, duration_splice, duration_guarded = prepare_splice()
+    engine.trigger_splice_guard(duration_battle, "A", duration_splice.uid)
+    local duration_expiry = duration_guarded.guard.expires_tick
+    duration_battle.tick = duration_expiry - 1
+    duration_battle.world.tick = duration_expiry - 1
+    duration_battle.world.time = duration_battle.tick * engine.FIXED_DT
+    duration_battle.exchange_started_tick = duration_battle.tick
+    duration_battle.state = "running"
+    engine.step(duration_battle, engine.FIXED_DT)
+    local duration_events = harness.of_type(duration_battle.log, "guard_expired")
+    t:eq(duration_guarded.guard, nil,
+        "unspent Splice Guard clears at its canonical duration")
+    t:eq(#duration_events, 1,
+        "duration expiry emits one attributed Guard event")
+    t:eq(duration_events[1].reason, "duration",
+        "duration expiry names its canonical boundary")
+    t:eq(duration_events[1].expires_tick, duration_expiry,
+        "duration expiry preserves the exact scheduled tick")
+
+    local exchange_battle, _, exchange_splice, exchange_guarded = prepare_splice()
+    engine.trigger_splice_guard(exchange_battle, "A", exchange_splice.uid)
+    exchange_battle.state = "running"
+    exchange_battle.active = {}
+    engine.step(exchange_battle, engine.FIXED_DT)
+    local exchange_events = harness.of_type(exchange_battle.log, "guard_expired")
+    t:eq(exchange_guarded.guard, nil,
+        "unspent Splice Guard clears when its exchange ends early")
+    t:eq(#exchange_events, 1,
+        "exchange-end expiry emits one attributed Guard event")
+    t:eq(exchange_events[1].reason, "exchange_end",
+        "early Guard expiry names the exchange boundary")
+
     local tampered_battle, _, tampered_splice, tampered_guarded = prepare_splice()
     for _, guard in ipairs(tampered_splice.rule_set.rules) do
         if guard.id == "brick.splice.guard" then guard.magnitude.value = 9 end
