@@ -238,8 +238,19 @@ function M.run(t)
                 rule.id .. " cannot hide executable routing or mechanics")
             local changed = mutate_rule(rule_set, rule.id, changed_value(rule))
             local valid, errors = ast.validate(changed)
-            t:ok(valid, rule.id .. " remains valid for the small adversarial mutation: "
-                .. table.concat(errors or {}, "; "))
+            local error_text = table.concat(errors or {}, "; ")
+            local rejected_negative = error_text:find(
+                "negative net ability cost",
+                1,
+                true
+            ) ~= nil
+            t:ok(valid or rejected_negative,
+                rule.id .. " either remains valid or fails the canonical negative-net guard: "
+                    .. error_text)
+            if rejected_negative then
+                t:ok(not valid,
+                    rule.id .. " cannot use a mutation to create negative net cost")
+            end
             if valid then
                 local before_profile = ast.project(rule_set)
                 local after_profile = ast.project(changed)

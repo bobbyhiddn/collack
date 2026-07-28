@@ -281,6 +281,19 @@ function M.run(t)
         .. table.concat(errors or {}, "; "))
     t:eq(ast.ability_summary(relay).mcu, 4,
         "the rare linked-cost fixture is exactly at its MCU ceiling")
+    local relay_compact = ast.compact(relay, 2)
+    local relay_expanded = ast.expanded(relay)
+    t:ok(relay_compact:find(
+        "COST 1 linked allied integrity (once per exchange, 2 charges)",
+        1,
+        true
+    ) ~= nil, "compact copy projects the exact linked cost and cadence")
+    t:ok(relay_compact:find("wear the striking shell by 2 durability", 1, true) ~= nil,
+        "compact copy projects the promised payoff from its canonical rule")
+    t:ok(relay_expanded:find("required tags: any tags; excluded tags: none", 1, true)
+        ~= nil, "expanded copy projects the exact eligibility filter")
+    t:ok(relay_expanded:find("Payoff 1 fixture.relay.payoff scales floor(2 × cost / 1)",
+        1, true) ~= nil, "expanded copy projects scaling and payoff identity")
 
     local too_low = ast.copy(relay)
     too_low.rarity = "uncommon"
@@ -301,6 +314,32 @@ function M.run(t)
     free_payoff.rules[5].scaling = nil
     valid, errors = ast.validate(free_payoff)
     t:eq(valid, false, "a linked payoff without canonical scaling is rejected")
+
+    local duplicate_payoff = ast.copy(relay)
+    local second_payoff = ast.copy(duplicate_payoff.rules[5])
+    second_payoff.id = "fixture.relay.payoff.second"
+    duplicate_payoff.rules[#duplicate_payoff.rules + 1] = second_payoff
+    duplicate_payoff.abilities[1].payoff_rule_ids[2] = second_payoff.id
+    t:eq(ast.ability_summary(duplicate_payoff).mcu, 5,
+        "a second payoff operation costs MCU even when it reuses the same verb")
+    valid, errors = ast.validate(duplicate_payoff)
+    t:eq(valid, false, "a rare linked ability cannot hide a second payoff above its MCU ceiling")
+    t:ok(table.concat(errors, "; "):find("MCU ceiling", 1, true) ~= nil,
+        "duplicate-operation complexity fails through the canonical tier ceiling")
+
+    local overcredited_cost = ast.copy(relay)
+    overcredited_cost.rules[4].magnitude.value = 2
+    valid, errors = ast.validate(overcredited_cost)
+    t:eq(valid, false, "an allied cost cannot claim more credit than its priced payoff")
+    t:ok(table.concat(errors, "; "):find("allied-cost credit exceeds", 1, true) ~= nil,
+        "allied-cost overcredit is rejected by canonical balance accounting")
+
+    local combined_credit = ast.copy(relay)
+    combined_credit.drawback.magnitude = 23
+    valid, errors = ast.validate(combined_credit)
+    t:eq(valid, false, "authored and allied-cost credits cannot exceed 25 together")
+    t:ok(table.concat(errors, "; "):find("credit exceeds 25", 1, true) ~= nil,
+        "combined drawback credit uses the single canonical cap")
 
     local generic_harm = ast.copy(relay)
     generic_harm.abilities = {
@@ -355,6 +394,10 @@ function M.run(t)
         {
             label = "unbounded charges",
             apply = function(item) item.rules[4].cadence.charges = 4 end,
+        },
+        {
+            label = "mismatched trigger cadence",
+            apply = function(item) item.rules[4].cadence.unit = "collision" end,
         },
         {
             label = "missing lethal declaration",
@@ -562,6 +605,41 @@ function M.run(t)
     t:eq(other.hp, hp_before,
         "a used authorization cannot be copied or widened to another ally")
 
+    local fresh_battle, fresh_owner, fresh_source, fresh_target, _, _ =
+        prepare_relay()
+    fresh_battle.authorizations["fresh-cost"] = {
+        root_event_id = "fresh-root",
+        activation_id = "fresh-activation",
+        ability_id = "bloodstone_relay",
+        source_uid = fresh_source.uid,
+        source_rule_set_id = fresh_source.rule_set.id,
+        cost_rule_id = "fixture.relay.cost",
+        target_uid = fresh_target.uid,
+        target_owner = fresh_owner.id,
+        amount = 1,
+        lethal = false,
+        used = false,
+    }
+    local fresh_before = fresh_target.hp
+    engine.apply_brick_harm(fresh_battle, fresh_owner, fresh_target, 1, {
+        source_owner = fresh_owner.id,
+        source_uid = fresh_source.uid,
+        source_entity_id = fresh_source.uid,
+        source_rule_set_id = fresh_source.rule_set.id,
+        rule_id = "generic.splash",
+        ability_id = "bloodstone_relay",
+        operation = "splash",
+        target_selector = "orthogonal_neighbours",
+        cause = "generic_splash",
+        root_event_id = "fresh-root",
+        activation_id = "fresh-activation",
+        authorization_id = "fresh-cost",
+    })
+    t:eq(fresh_target.hp, fresh_before,
+        "a fresh cost authorization cannot be attached to generic splash")
+    t:eq(fresh_battle.authorizations["fresh-cost"].used, false,
+        "a denied generic path cannot consume the narrow authorization")
+
     local roster_battle = all_behaviour_battle()
     local roster_owner = roster_battle.sides.A
     local roster_count = 0
@@ -605,6 +683,14 @@ function M.run(t)
     t:eq(unknown_target.hp, unknown_before,
         "brick harm with a missing source owner fails closed")
     engine.apply_brick_harm(roster_battle, roster_owner, unknown_target, 1, {
+        source_owner = "forged-owner",
+        source_entity_id = "hostile-probe",
+        cause = "environment",
+        root_event_id = "forged-owner",
+    })
+    t:eq(unknown_target.hp, unknown_before,
+        "brick harm with an unknown source owner fails closed")
+    engine.apply_brick_harm(roster_battle, roster_owner, unknown_target, 1, {
         source_owner = "B",
         source_entity_id = "hostile-probe",
         cause = "generation_four",
@@ -645,6 +731,30 @@ function M.run(t)
     t:eq(striking.shells[1].durability, shell_before,
         "cadence block grants no payoff")
 
+    local interval_battle, _, interval_source, interval_target, _, interval_striking =
+        prepare_relay()
+    interval_source.rule_set.rules[4].cadence.interval = 2
+    interval_battle.ability_links["A|relay|bloodstone_relay"].cadence.interval = 2
+    activated = engine.activate_linked_cost(
+        interval_battle, "A", interval_source.uid, "bloodstone_relay",
+        "hostile_collision", interval_striking
+    )
+    t:eq(activated, true, "an interval-two exchange cadence activates on its first window")
+    interval_battle.exchange = 2
+    activated = engine.activate_linked_cost(
+        interval_battle, "A", interval_source.uid, "bloodstone_relay",
+        "hostile_collision", interval_striking
+    )
+    t:eq(activated, false, "an interval-two exchange cadence blocks the skipped exchange")
+    t:eq(interval_target.hp, 2, "the skipped cadence window spends no linked integrity")
+    interval_battle.exchange = 3
+    activated = engine.activate_linked_cost(
+        interval_battle, "A", interval_source.uid, "bloodstone_relay",
+        "hostile_collision", interval_striking
+    )
+    t:eq(activated, true, "an interval-two exchange cadence reopens on the next window")
+    t:eq(interval_target.hp, 1, "the reopened cadence window pays exactly once")
+
     battle.exchange = 2
     target.hp = 1
     activated = engine.activate_linked_cost(
@@ -675,6 +785,22 @@ function M.run(t)
     )
     t:eq(activated, true, "an explicitly lethal exact payment may reach zero")
     t:eq(lethal_target.alive, false, "lethal payment destroys only its linked ally")
+    local lethal_paid = harness.of_type(lethal_battle.log, "ability_cost_paid")[1]
+    local lethal_payoff = harness.of_type(lethal_battle.log, "ability_payoff_applied")[1]
+    local lethal_destroyed = harness.of_type(lethal_battle.log, "brick_destroyed")[1]
+    t:ok(lethal_paid.seq < lethal_payoff.seq
+        and lethal_payoff.seq < lethal_destroyed.seq,
+        "lethal destruction and descendants wait until the promised payoff completes")
+    for _, field in ipairs({
+        "event_id", "tick", "exchange", "root_event_id", "parent_event_id",
+        "generation", "source_owner", "source_entity_id", "source_rule_set_id",
+        "rule_id", "ability_id", "operation", "target_selector", "target_owner",
+        "target_entity_id", "target_relation", "amount", "unit", "cause",
+        "activation_id", "linked_source_uid", "linked_target_uid",
+    }) do
+        t:ok(lethal_destroyed[field] ~= nil,
+            "linked-cost destruction carries attributed field " .. field)
+    end
 
     local capped_activation, _, capped_source, capped_link_target, _,
         capped_striking = prepare_relay()
@@ -726,6 +852,109 @@ function M.run(t)
     t:eq(neighbour.hp, 3, "Powder Keg never damages an adjacent brick")
     t:eq(enemy_marble.shells[1].durability, 2,
         "Powder Keg Chain wears the causal enemy marble shell exactly once")
+
+    local cascade_battle = engine.new({
+        seed = 17017,
+        sides = {
+            A = {
+                name = "Keg",
+                sling = "momentum",
+                formation = { { "plain_block", "plain_block", "plain_block" } },
+                marbles = {
+                    {
+                        name = "Owner", rarity = "common",
+                        core = "dull_quartz", shells = { "chalk_plain" },
+                    },
+                },
+            },
+            B = {
+                name = "Cluster",
+                sling = "momentum",
+                formation = { { "plain_block", "plain_block", "plain_block" } },
+                marbles = {
+                    {
+                        name = "Causal", rarity = "common",
+                        core = "dull_quartz", shells = { "chalk_plain" },
+                    },
+                    {
+                        name = "Nearby", rarity = "common",
+                        core = "dull_quartz", shells = { "chalk_plain" },
+                    },
+                },
+            },
+        },
+        max_exchanges = 2,
+        max_exchange_ticks = 20,
+    })
+    cascade_battle.exchange = 1
+    local cascade_owner = cascade_battle.sides.A
+    local cascade_keg = cascade_owner.formation.grid[1][1]
+    cascade_keg.uid = "cascade-keg"
+    cascade_keg.rule_set = bricks.canonical_rule_set("powder_keg")
+    cascade_keg.behaviour = "chain"
+    cascade_keg.hp, cascade_keg.max_hp = 1, 1
+    local causal = cascade_battle.sides.B.all_marbles[1]
+    local nearby = cascade_battle.sides.B.all_marbles[2]
+    local nearby_body = cascade_battle.world:get_body(nearby.body_id)
+    cascade_battle.world:set_position(
+        nearby.body_id,
+        cascade_keg.x + 2,
+        cascade_keg.y + 2
+    )
+    nearby_body = cascade_battle.world:get_body(nearby.body_id)
+    t:ok(nearby_body ~= nil, "the bounded Chain fixture places a second live target")
+    engine.apply_brick_harm(cascade_battle, cascade_owner, cascade_keg, 1, {
+        source_owner = "B",
+        source_entity_id = causal.uid,
+        source_rule_set_id = causal.shells[1].rule_set.id,
+        cause = "hostile_collision",
+        root_event_id = "chain-breadth-first",
+        parent_event_id = "chain-breadth-first",
+        generation = 0,
+        source_marble = causal,
+    })
+    local cascade_targets = harness.of_type(cascade_battle.log, "chain_targeted")
+    local cascade_releases = harness.of_type(cascade_battle.log, "core_release")
+    t:eq(#cascade_targets, 2, "bounded Chain selects the causal and one nearby enemy")
+    t:eq(#cascade_releases, 2, "both one-shell Chain targets release their cores")
+    t:ok(cascade_targets[2].seq < cascade_releases[1].seq,
+        "all generation-one Chain targets resolve before generation-two releases")
+    for _, release in ipairs(cascade_releases) do
+        t:eq(release.root_event_id, "chain-breadth-first",
+            "descendant core release retains the physical root identity")
+        t:eq(release.generation, 2,
+            "a shell broken by generation-one Chain releases at generation two")
+    end
+
+    local generation_battle = test_battle()
+    generation_battle.exchange = 1
+    local generation_owner = generation_battle.sides.A
+    local generation_keg = generation_owner.formation.grid[1][1]
+    generation_keg.uid = "generation-keg"
+    generation_keg.rule_set = bricks.canonical_rule_set("powder_keg")
+    generation_keg.behaviour = "chain"
+    generation_keg.hp, generation_keg.max_hp = 1, 1
+    local generation_marble = generation_battle.sides.B.all_marbles[1]
+    generation_marble.shells[1].durability = 1
+    engine.apply_brick_harm(generation_battle, generation_owner, generation_keg, 1, {
+        source_owner = "B",
+        source_entity_id = generation_marble.uid,
+        source_rule_set_id = generation_marble.shells[1].rule_set.id,
+        cause = "hostile_collision",
+        root_event_id = "generation-release-cap",
+        parent_event_id = "generation-release-cap",
+        generation = 2,
+        source_marble = generation_marble,
+    })
+    t:eq(#harness.of_type(generation_battle.log, "core_release"), 0,
+        "a fourth-generation release attempt is not applied")
+    local generation_caps = harness.of_type(generation_battle.log, "cascade_capped")
+    t:eq(#generation_caps, 1,
+        "the refused fourth-generation release emits one visible cap event")
+    t:eq(generation_caps[1].root_event_id, "generation-release-cap",
+        "the generation cap retains the original physical root")
+    t:eq(generation_caps[1].cap_reason, "generation",
+        "the cap evidence names the refused generation")
 
     local splice_battle = test_battle()
     splice_battle.exchange = 1

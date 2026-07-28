@@ -365,6 +365,66 @@ local function reserve_cascade(battle, side, root_event_id, counter, limit, fiel
     return true
 end
 
+local CASCADE_PHASE_ORDER = {
+    before = 1,
+    during = 2,
+    after = 3,
+}
+
+local function cascade_work_less(left, right)
+    local left_keys = {
+        left.tick or 0,
+        CASCADE_PHASE_ORDER[left.phase] or CASCADE_PHASE_ORDER.after,
+        left.generation or 0,
+        tostring(left.source_owner or "-"),
+        left.source_row or 0,
+        left.source_col or 0,
+        tostring(left.source_uid or ""),
+        tostring(left.ability_id or ""),
+        left.payoff_index or 0,
+        tostring(left.target_uid or ""),
+        left.enqueue_index or 0,
+    }
+    local right_keys = {
+        right.tick or 0,
+        CASCADE_PHASE_ORDER[right.phase] or CASCADE_PHASE_ORDER.after,
+        right.generation or 0,
+        tostring(right.source_owner or "-"),
+        right.source_row or 0,
+        right.source_col or 0,
+        tostring(right.source_uid or ""),
+        tostring(right.ability_id or ""),
+        right.payoff_index or 0,
+        tostring(right.target_uid or ""),
+        right.enqueue_index or 0,
+    }
+    for index = 1, #left_keys do
+        if left_keys[index] ~= right_keys[index] then
+            return left_keys[index] < right_keys[index]
+        end
+    end
+    return false
+end
+
+local function enqueue_cascade(battle, work)
+    battle.next_cascade_work_id = (battle.next_cascade_work_id or 0) + 1
+    work.enqueue_index = battle.next_cascade_work_id
+    work.tick = work.tick or battle.tick
+    work.phase = work.phase or "after"
+    battle.cascade_queue[#battle.cascade_queue + 1] = work
+end
+
+local function drain_cascade(battle)
+    if battle.cascade_draining then return end
+    battle.cascade_draining = true
+    while #battle.cascade_queue > 0 do
+        table.sort(battle.cascade_queue, cascade_work_less)
+        local work = table.remove(battle.cascade_queue, 1)
+        work.run()
+    end
+    battle.cascade_draining = false
+end
+
 local function append_rule_event(battle, side, kind, fields, source, stat, source_name)
     rule_ast.attribute(fields, source, stat, { source_name = source_name })
     fields.source_owner = fields.source_owner or (side ~= "-" and side or nil)
@@ -530,6 +590,9 @@ function M.new(opts)
         authorizations = {},
         next_activation_id = 0,
         cascade_attempts = {},
+        cascade_queue = {},
+        cascade_draining = false,
+        next_cascade_work_id = 0,
         rule_set_identities = {},
         enforce_rule_set_identity = product_handoff,
         state = "boundary",
@@ -638,6 +701,11 @@ end
 local function destroy_brick(battle, owner, brick, request)
     if not formation_mod.kill(owner.formation, brick) then return false end
     request = request or {}
+    local source_owner_known = request.source_owner ~= nil
+        and battle.sides[request.source_owner] ~= nil
+    local target_relation = request.source_owner == owner.id and "allied"
+        or source_owner_known and "enemy"
+        or "unknown"
     battle.world:remove_box(brick.body_id, request.cause)
     battle.brick_by_body[brick.body_id] = nil
     local field_id = "field:" .. brick.body_id
@@ -650,9 +718,20 @@ local function destroy_brick(battle, owner, brick, request)
         source_rule_set_id = request.source_rule_set_id,
         rule_id = request.rule_id,
         ability_id = request.ability_id,
+        operation = request.operation or "deal",
+        target_selector = request.target_selector or "struck_brick",
+        target_owner = owner.id,
+        target_entity_id = brick.uid or brick.body_id,
+        target_relation = target_relation,
+        amount = request.applied_damage or request.requested_damage or 0,
+        unit = request.unit or "damage",
         root_event_id = request.root_event_id,
         parent_event_id = request.parent_event_id,
         generation = request.generation or 0,
+        activation_id = request.activation_id,
+        authorization_id = request.authorization_id,
+        linked_source_uid = request.linked_source_uid,
+        linked_target_uid = request.linked_target_uid,
         bricks_left = owner.formation.alive,
         x = brick.x, y = brick.y,
     })
@@ -695,79 +774,104 @@ local function destroy_brick(battle, owner, brick, request)
         ) then
             -- The cap event is the complete, attributed refusal.
         else
-            local enemy = opponent_of(battle, owner)
-            local causal = request.source_marble
-            local targets, seen = {}, {}
-            if causal and causal.state ~= "destroyed"
-                and request.source_owner == enemy.id then
-                targets[#targets + 1] = causal
-                seen[causal.body_id] = true
-            end
-            local nearby = {}
-            for _, marble in ipairs(enemy.roster) do
-                local body = battle.world:get_body(marble.body_id)
-                if body and not seen[marble.body_id] then
-                    local dx, dy = body.x - brick.x, body.y - brick.y
-                    local distance = dx * dx + dy * dy
-                    if distance <= radius * radius then
-                        nearby[#nearby + 1] = { marble = marble, distance = distance }
-                    end
-                end
-            end
-            table.sort(nearby, function(left, right)
-                if left.distance ~= right.distance then return left.distance < right.distance end
-                return tostring(left.marble.body_id) < tostring(right.marble.body_id)
-            end)
-            for _, candidate in ipairs(nearby) do
-                if #targets >= max_targets then break end
-                targets[#targets + 1] = candidate.marble
-            end
-            append_rule_event(battle, owner.id, "chain_retaliate", {
-                brick = brick.id,
-                target_count = #targets,
-                source_owner = owner.id,
-                source_entity_id = brick.uid or brick.body_id,
-                source_rule_set_id = brick.rule_set.id,
-                target_owner = enemy.id,
-                target_relation = "enemy",
-                root_event_id = root_event_id,
-                parent_event_id = destroyed_event.event_id,
+            enqueue_cascade(battle, {
                 generation = generation,
+                source_owner = owner.id,
+                source_row = brick.row,
+                source_col = brick.col,
+                source_uid = brick.uid or brick.body_id,
                 ability_id = "chain",
-            }, profile, "chain_shell_wear", brick.name)
-            for _, marble in ipairs(targets) do
-                local body = battle.world:get_body(marble.body_id)
-                append_event(battle, owner.id, "chain_targeted", {
-                    source_owner = owner.id,
-                    source_entity_id = brick.uid or brick.body_id,
-                    source_rule_set_id = brick.rule_set.id,
-                    rule_id = "brick.chain.shell_wear",
-                    ability_id = "chain",
-                    operation = "wear",
-                    target_selector = "chain_enemy_marbles",
-                    target_owner = enemy.id,
-                    target_entity_id = marble.uid,
-                    target_relation = "enemy",
-                    amount = profile.chain_shell_wear,
-                    unit = "durability",
-                    root_event_id = root_event_id,
-                    parent_event_id = destroyed_event.event_id,
-                    generation = generation,
-                    cause = "chain",
-                    x = body and body.x or brick.x,
-                    y = body and body.y or brick.y,
-                })
-                wear_shell(
-                    battle,
-                    enemy,
-                    marble,
-                    profile.chain_shell_wear,
-                    "chain",
-                    body and body.x or brick.x,
-                    body and body.y or brick.y,
-                    generation
-                )
-            end
+                run = function()
+                    local enemy = opponent_of(battle, owner)
+                    local causal = request.source_marble
+                    local targets, seen = {}, {}
+                    if causal and causal.state ~= "destroyed"
+                        and request.source_owner == enemy.id then
+                        targets[#targets + 1] = causal
+                        seen[causal.body_id] = true
+                    end
+                    local nearby = {}
+                    for _, marble in ipairs(enemy.roster) do
+                        local body = battle.world:get_body(marble.body_id)
+                        if body and not seen[marble.body_id] then
+                            local dx, dy = body.x - brick.x, body.y - brick.y
+                            local distance = dx * dx + dy * dy
+                            if distance <= radius * radius then
+                                nearby[#nearby + 1] = { marble = marble, distance = distance }
+                            end
+                        end
+                    end
+                    table.sort(nearby, function(left, right)
+                        if left.distance ~= right.distance then
+                            return left.distance < right.distance
+                        end
+                        return tostring(left.marble.body_id) < tostring(right.marble.body_id)
+                    end)
+                    for _, candidate in ipairs(nearby) do
+                        if #targets >= max_targets then break end
+                        targets[#targets + 1] = candidate.marble
+                    end
+                    append_rule_event(battle, owner.id, "chain_retaliate", {
+                        brick = brick.id,
+                        target_count = #targets,
+                        source_owner = owner.id,
+                        source_entity_id = brick.uid or brick.body_id,
+                        source_rule_set_id = brick.rule_set.id,
+                        target_owner = enemy.id,
+                        target_relation = "enemy",
+                        root_event_id = root_event_id,
+                        parent_event_id = destroyed_event.event_id,
+                        generation = generation,
+                        ability_id = "chain",
+                    }, profile, "chain_shell_wear", brick.name)
+                    for _, marble in ipairs(targets) do
+                        local body = battle.world:get_body(marble.body_id)
+                        local targeted_event = append_event(battle, owner.id, "chain_targeted", {
+                            source_owner = owner.id,
+                            source_entity_id = brick.uid or brick.body_id,
+                            source_rule_set_id = brick.rule_set.id,
+                            rule_id = "brick.chain.shell_wear",
+                            ability_id = "chain",
+                            operation = "wear",
+                            target_selector = "chain_enemy_marbles",
+                            target_owner = enemy.id,
+                            target_entity_id = marble.uid,
+                            target_relation = "enemy",
+                            amount = profile.chain_shell_wear,
+                            unit = "durability",
+                            root_event_id = root_event_id,
+                            parent_event_id = destroyed_event.event_id,
+                            generation = generation,
+                            cause = "chain",
+                            x = body and body.x or brick.x,
+                            y = body and body.y or brick.y,
+                        })
+                        wear_shell(
+                            battle,
+                            enemy,
+                            marble,
+                            profile.chain_shell_wear,
+                            "chain",
+                            body and body.x or brick.x,
+                            body and body.y or brick.y,
+                            generation,
+                            {
+                                source_owner = owner.id,
+                                source_entity_id = brick.uid or brick.body_id,
+                                source_rule_set_id = brick.rule_set.id,
+                                rule_id = "brick.chain.shell_wear",
+                                ability_id = "chain",
+                                operation = "wear",
+                                target_selector = "chain_enemy_marbles",
+                                target_relation = "enemy",
+                                root_event_id = root_event_id,
+                                parent_event_id = targeted_event.event_id,
+                                generation = generation,
+                            }
+                        )
+                    end
+                end,
+            })
         end
     end
     return true
@@ -781,9 +885,14 @@ local function authorization_valid(battle, request, owner, brick, amount)
         and authorization.activation_id == request.activation_id
         and authorization.ability_id == request.ability_id
         and authorization.source_uid == request.source_uid
+        and authorization.source_rule_set_id == request.source_rule_set_id
+        and authorization.cost_rule_id == request.rule_id
         and authorization.target_uid == brick.uid
         and authorization.target_owner == owner.id
         and authorization.amount == amount
+        and request.cause == "ability_cost"
+        and request.operation == "deal"
+        and request.target_selector == "setup_linked_allied_brick"
 end
 
 local function guard_valid(battle, brick)
@@ -837,8 +946,10 @@ apply_brick_harm = function(battle, owner, brick, amount, request)
     ) then
         return false, 0
     end
+    local source_owner_known = request.source_owner ~= nil
+        and battle.sides[request.source_owner] ~= nil
     local relation = request.source_owner == owner.id and "allied"
-        or request.source_owner ~= nil and "enemy"
+        or source_owner_known and "enemy"
         or "unknown"
     local authorized = relation == "allied"
         and authorization_valid(battle, request, owner, brick, amount)
@@ -849,11 +960,15 @@ apply_brick_harm = function(battle, owner, brick, amount, request)
             target_owner = owner.id,
             target_relation = relation,
             requested_damage = amount,
+            amount = amount,
+            unit = request.unit or "damage",
             source_owner = request.source_owner,
             source_entity_id = request.source_entity_id or request.source_uid,
             source_rule_set_id = request.source_rule_set_id,
             rule_id = request.rule_id,
             ability_id = request.ability_id,
+            operation = request.operation or "deal",
+            target_selector = request.target_selector,
             cause = request.cause or "unknown",
             root_event_id = request.root_event_id,
             parent_event_id = request.parent_event_id,
@@ -945,7 +1060,16 @@ apply_brick_harm = function(battle, owner, brick, amount, request)
         unit = request.unit or "damage",
         x = brick.x, y = brick.y,
     })
-    if brick.hp <= 0 then return destroy_brick(battle, owner, brick, request), applied end
+    -- Linked ability costs are atomic. A lethal payment records its exact
+    -- integrity mutation here, but destruction (and any descendant trigger)
+    -- waits until every promised payoff has completed.
+    request.applied_damage = applied
+    if brick.hp <= 0 and request.defer_destruction then return false, applied end
+    if brick.hp <= 0 then
+        local destroyed = destroy_brick(battle, owner, brick, request)
+        if not request.defer_cascade_drain then drain_cascade(battle) end
+        return destroyed, applied
+    end
     return false, applied
 end
 
@@ -971,40 +1095,157 @@ local function destroy_marble(battle, owner, marble, cause, x, y)
     return true
 end
 
-wear_shell = function(battle, owner, marble, amount, cause, x, y, depth)
+wear_shell = function(battle, owner, marble, amount, cause, x, y, depth, context)
     if marble.state == "destroyed" or amount <= 0 then return false end
+    context = context or {}
     local shell = marble.shells[1]
     if not shell then return false end
     shell.durability = shell.durability - amount
-    append_event(battle, owner.id, "shell_damaged", {
+    local damaged_event = append_event(battle, owner.id, "shell_damaged", {
         marble = marble.uid, mineral = shell.mineral, damage = amount,
         durability_left = max(0, shell.durability), cause = cause,
+        source_owner = context.source_owner,
+        source_entity_id = context.source_entity_id,
+        source_rule_set_id = context.source_rule_set_id,
+        rule_id = context.rule_id,
+        ability_id = context.ability_id,
+        operation = context.operation or "wear",
+        target_selector = context.target_selector or "current_shell",
+        target_owner = owner.id,
+        target_entity_id = marble.uid,
+        target_relation = context.target_relation,
+        amount = amount,
+        unit = "durability",
+        root_event_id = context.root_event_id,
+        parent_event_id = context.parent_event_id,
+        generation = context.generation or depth or 0,
         x = quantize(x or 0), y = quantize(y or 0),
     })
     if shell.durability > 0 then return false end
     table.remove(marble.shells, 1)
     local body = battle.world:get_body(marble.body_id)
     if body then body.data.shells = #marble.shells end
-    append_event(battle, owner.id, "shell_break", {
+    local break_event = append_event(battle, owner.id, "shell_break", {
         marble = marble.uid, mineral = shell.mineral,
         shells_left = #marble.shells, cause = cause,
+        source_owner = context.source_owner,
+        source_entity_id = context.source_entity_id,
+        source_rule_set_id = context.source_rule_set_id,
+        rule_id = context.rule_id,
+        ability_id = context.ability_id,
+        operation = context.operation or "wear",
+        target_selector = context.target_selector or "current_shell",
+        target_owner = owner.id,
+        target_entity_id = marble.uid,
+        target_relation = context.target_relation,
+        amount = amount,
+        unit = "durability",
+        root_event_id = context.root_event_id or damaged_event.root_event_id,
+        parent_event_id = damaged_event.event_id,
+        generation = context.generation or depth or 0,
         x = quantize(x or 0), y = quantize(y or 0),
     })
     if #marble.shells == 0 then
-        release_core(battle, owner, opponent_of(battle, owner), marble, x, y, depth or 1)
+        local generation = (depth or 0) + 1
+        local release_context = {
+            root_event_id = context.root_event_id or damaged_event.root_event_id,
+            parent_event_id = break_event.event_id,
+            generation = generation,
+            source_owner = owner.id,
+            source_entity_id = marble.uid,
+            source_rule_set_id = marble.core.rule_set.id,
+        }
+        local release_ability =
+            tostring(marble.core.release or "baseline") .. "_release"
+        local permitted = generation <= M.MAX_CASCADE_GENERATION
+        if not permitted then
+            cascade_refused(
+                battle,
+                owner.id,
+                release_context.root_event_id,
+                "generation",
+                {
+                    source_owner = owner.id,
+                    source_entity_id = marble.uid,
+                    source_rule_set_id = marble.core.rule_set.id,
+                    ability_id = release_ability,
+                    target_owner = owner.id,
+                    target_entity_id = marble.uid,
+                    generation = generation,
+                }
+            )
+        elseif not reserve_cascade(
+            battle,
+            owner.id,
+            release_context.root_event_id,
+            "ability_activations",
+            M.MAX_CASCADE_ACTIVATIONS,
+            {
+                source_owner = owner.id,
+                source_entity_id = marble.uid,
+                source_rule_set_id = marble.core.rule_set.id,
+                ability_id = release_ability,
+                target_owner = owner.id,
+                target_entity_id = marble.uid,
+                generation = generation,
+            }
+        ) then
+            permitted = false
+        end
+        if permitted then
+            enqueue_cascade(battle, {
+                generation = generation,
+                source_owner = owner.id,
+                source_uid = marble.uid,
+                ability_id = release_ability,
+                target_uid = marble.uid,
+                run = function()
+                    release_core(
+                        battle,
+                        owner,
+                        opponent_of(battle, owner),
+                        marble,
+                        x,
+                        y,
+                        generation,
+                        release_context
+                    )
+                end,
+            })
+        else
+            destroy_marble(
+                battle,
+                owner,
+                marble,
+                "release_cascade_cap",
+                x,
+                y
+            )
+        end
+        if not context.defer_drain then drain_cascade(battle) end
         return true
     end
     return false
 end
 
-release_core = function(battle, owner, other, marble, x, y, depth)
+release_core = function(battle, owner, other, marble, x, y, depth, context)
     if marble.state == "destroyed" then return end
+    context = context or {}
     depth = depth or 1
     if depth > M.MAX_RELEASE_DEPTH then
-        append_event(battle, owner.id, "release_capped", {
-            marble = marble.uid, x = quantize(x), y = quantize(y), depth = depth,
+        cascade_refused(battle, owner.id, context.root_event_id, "generation", {
+            marble = marble.uid,
+            source_owner = owner.id,
+            source_entity_id = marble.uid,
+            source_rule_set_id = marble.core.rule_set.id,
+            ability_id = tostring(marble.core.release or "baseline") .. "_release",
+            target_owner = owner.id,
+            target_entity_id = marble.uid,
+            generation = depth,
+            x = quantize(x),
+            y = quantize(y),
         })
-        destroy_marble(battle, owner, marble, "release_depth_cap", x, y)
+        destroy_marble(battle, owner, marble, "release_generation_cap", x, y)
         return
     end
     local base = effects.release_profile(marble.core.release, marble.core.rule_set)
@@ -1016,6 +1257,9 @@ release_core = function(battle, owner, other, marble, x, y, depth)
         x = quantize(x), y = quantize(y), radius = radius,
         strength = strength, invert = base.invert, depth = depth,
         amplification = amplification,
+        root_event_id = context.root_event_id,
+        parent_event_id = context.parent_event_id,
+        generation = context.generation or depth,
     }, base, "radius", marble.core.name)
     destroy_marble(battle, owner, marble, "core_released", x, y)
 
@@ -1025,10 +1269,13 @@ release_core = function(battle, owner, other, marble, x, y, depth)
         wake_static = true,
         falloff = true,
     })
-    append_rule_event(battle, owner.id, "blowback", {
+    local blowback_event = append_rule_event(battle, owner.id, "blowback", {
         marble = marble.uid, x = quantize(x), y = quantize(y),
         radius = radius, affected = copy(affected), ally = true, enemy = true,
         invert = base.invert, release = base.id,
+        root_event_id = release_event.root_event_id,
+        parent_event_id = release_event.event_id,
+        generation = depth,
     }, base, "radius", marble.core.name)
     for _, affected_id in ipairs(affected) do
         local entry = battle.marble_by_body[affected_id]
@@ -1043,10 +1290,41 @@ release_core = function(battle, owner, other, marble, x, y, depth)
                 marble = affected_marble.uid,
                 source_marble = marble.uid,
                 allied = entry.owner.id == owner.id,
+                source_owner = owner.id,
+                source_entity_id = marble.uid,
+                source_rule_set_id = marble.core.rule_set.id,
+                rule_id = "release.baseline.radius",
+                ability_id = tostring(marble.core.release or "baseline") .. "_release",
+                operation = "push",
+                target_selector = "nearby_marbles",
+                target_owner = entry.owner.id,
+                target_entity_id = affected_marble.uid,
+                target_relation = entry.owner.id == owner.id and "allied" or "enemy",
+                amount = strength,
+                unit = "strength",
+                root_event_id = release_event.root_event_id,
+                parent_event_id = blowback_event.event_id,
+                generation = depth,
+                cause = "core_release",
             })
             if base.scorch > 0 then
                 wear_shell(battle, entry.owner, affected_marble, base.scorch, "scorch",
-                    battle.world:get_body(affected_id).x, battle.world:get_body(affected_id).y, depth + 1)
+                    battle.world:get_body(affected_id).x,
+                    battle.world:get_body(affected_id).y,
+                    depth + 1,
+                    {
+                        source_owner = owner.id,
+                        source_entity_id = marble.uid,
+                        source_rule_set_id = marble.core.rule_set.id,
+                        rule_id = "release.scorch.wear",
+                        ability_id = "scorch",
+                        operation = "scorch",
+                        target_selector = "nearby_marbles",
+                        target_relation = entry.owner.id == owner.id and "allied" or "enemy",
+                        root_event_id = release_event.root_event_id,
+                        parent_event_id = release_event.event_id,
+                        generation = depth + 1,
+                    })
             end
         end
     end
@@ -1281,6 +1559,9 @@ local function apply_status_from_field(battle, field_event)
             next_tick = tick_cadence
                 and battle.tick + tick_cadence.interval
                 or nil,
+            source_owner = field.owner,
+            source_entity_id = field.data.brick,
+            source_rule_set_id = source_rule_set.id,
             rule_set = rule_ast.copy(source_rule_set),
         }
         append_rule_event(battle, entry.owner.id, "status_applied", {
@@ -1411,13 +1692,28 @@ function M.activate_linked_cost(battle, owner_id, source_uid, ability_id, cause,
     local state = source.ability_state[ability_id] or {
         spent = 0,
         last_exchange = nil,
+        last_tick = nil,
+        trigger_count = 0,
     }
     source.ability_state[ability_id] = state
     local charges = cost_rule.cadence.charges
     if state.spent >= charges then return blocked("charges_spent") end
-    if cost_rule.cadence.unit == "exchange"
-        and state.last_exchange == battle.exchange then
-        return blocked("cadence")
+    local cadence = cost_rule.cadence
+    if cadence.unit == "exchange" then
+        if state.last_exchange ~= nil
+            and battle.exchange - state.last_exchange < cadence.interval then
+            return blocked("cadence")
+        end
+    elseif cadence.unit == "ticks" then
+        if state.last_tick ~= nil
+            and battle.tick - state.last_tick < cadence.interval then
+            return blocked("cadence")
+        end
+    else
+        state.trigger_count = (state.trigger_count or 0) + 1
+        if (state.trigger_count - 1) % cadence.interval ~= 0 then
+            return blocked("cadence")
+        end
     end
     local generation = event_context.generation or 1
     local root_event_id = event_context.root_event_id
@@ -1496,6 +1792,8 @@ function M.activate_linked_cost(battle, owner_id, source_uid, ability_id, cause,
         activation_id = activation_id,
         ability_id = ability_id,
         source_uid = source_uid,
+        source_rule_set_id = source.rule_set.id,
+        cost_rule_id = ability.cost_rule_id,
         target_uid = target.uid,
         target_owner = owner.id,
         amount = amount,
@@ -1543,6 +1841,7 @@ function M.activate_linked_cost(battle, owner_id, source_uid, ability_id, cause,
         generation = event_context.generation or 1,
         activation_id = activation_id,
         authorization_id = authorization_id,
+        defer_destruction = true,
     })
     if applied ~= amount then
         battle.authorizations[authorization_id] = nil
@@ -1550,6 +1849,7 @@ function M.activate_linked_cost(battle, owner_id, source_uid, ability_id, cause,
     end
     state.spent = state.spent + 1
     state.last_exchange = battle.exchange
+    state.last_tick = battle.tick
     local cost_event = append_event(battle, owner.id, "ability_cost_paid", {
         activation_id = activation_id,
         authorization_id = authorization_id,
@@ -1601,7 +1901,21 @@ function M.activate_linked_cost(battle, owner_id, source_uid, ability_id, cause,
                 "ability_payoff",
                 source.x,
                 source.y,
-                (event_context.generation or 1) + 1
+                (event_context.generation or 1) + 1,
+                {
+                    source_owner = owner.id,
+                    source_entity_id = source_uid,
+                    source_rule_set_id = source.rule_set.id,
+                    rule_id = payoff_id,
+                    ability_id = ability_id,
+                    operation = payoff.operation.verb,
+                    target_selector = payoff.target.selector,
+                    target_relation = "enemy",
+                    root_event_id = root_event_id,
+                    parent_event_id = cost_event.event_id,
+                    generation = (event_context.generation or 1) + 1,
+                    defer_drain = true,
+                }
             )
             applied_payoff = min(magnitude, before_shell)
         end
@@ -1631,6 +1945,29 @@ function M.activate_linked_cost(battle, owner_id, source_uid, ability_id, cause,
             cause = "ability_cost_paid",
         })
     end
+    if target.hp <= 0 and target.alive then
+        destroy_brick(battle, owner, target, {
+            source_owner = owner.id,
+            source_entity_id = source_uid,
+            source_uid = source_uid,
+            source_rule_set_id = source.rule_set.id,
+            rule_id = ability.cost_rule_id,
+            ability_id = ability_id,
+            operation = "deal",
+            target_selector = "setup_linked_allied_brick",
+            cause = "ability_cost",
+            root_event_id = root_event_id,
+            parent_event_id = cost_event.event_id,
+            generation = event_context.generation or 1,
+            activation_id = activation_id,
+            authorization_id = authorization_id,
+            linked_source_uid = source_uid,
+            linked_target_uid = target.uid,
+            applied_damage = amount,
+            unit = cost_rule.magnitude.unit,
+        })
+    end
+    if not event_context.defer_cascade_drain then drain_cascade(battle) end
     return true, activation_id
 end
 
@@ -1760,6 +2097,7 @@ local function collision_damage(battle, attacker, defender, marble, brick, event
         parent_event_id = collision_event.event_id,
         generation = 0,
         source_marble = marble,
+        defer_cascade_drain = true,
     })
 
     if collision.splash_behind > 0 then
@@ -1779,6 +2117,7 @@ local function collision_damage(battle, attacker, defender, marble, brick, event
                 parent_event_id = collision_event.event_id,
                 generation = 1,
                 source_marble = marble,
+                defer_cascade_drain = true,
             })
         end
     end
@@ -1841,6 +2180,7 @@ local function collision_damage(battle, attacker, defender, marble, brick, event
                     root_event_id = collision_event.event_id,
                     parent_event_id = collision_event.event_id,
                     generation = 1,
+                    defer_cascade_drain = true,
                 }
             )
         end
@@ -1896,7 +2236,43 @@ local function collision_damage(battle, attacker, defender, marble, brick, event
     local wear = collision.durability_cost + passive_wear
     if profile.harmless then wear = 0 end
     if profile.break_shell then wear = max(wear, shell.durability) end
-    wear_shell(battle, attacker, marble, wear, "collision", brick.x, brick.y, 1)
+    local passive_source = passive_wear > 0 or profile.break_shell
+    wear_shell(
+        battle,
+        attacker,
+        marble,
+        wear,
+        "collision",
+        brick.x,
+        brick.y,
+        0,
+        {
+            source_owner = passive_source and defender.id or attacker.id,
+            source_entity_id = passive_source
+                and (brick.uid or brick.body_id)
+                or marble.uid,
+            source_rule_set_id = passive_source
+                and brick.rule_set.id
+                or shell.rule_set.id,
+            rule_id = passive_source
+                and ((profile._rule_ids.shell_wear
+                        and profile._rule_ids.shell_wear[1])
+                    or (profile._rule_ids.break_shell
+                        and profile._rule_ids.break_shell[1]))
+                or (collision._rule_ids.durability_cost
+                    and collision._rule_ids.durability_cost[1]),
+            ability_id = passive_source and brick.behaviour or shell.collision,
+            operation = passive_source and (profile.break_shell and "break" or "wear")
+                or "wear",
+            target_selector = "current_shell",
+            target_relation = passive_source and "enemy" or "self",
+            root_event_id = collision_event.event_id,
+            parent_event_id = collision_event.event_id,
+            generation = 0,
+            defer_drain = true,
+        }
+    )
+    drain_cascade(battle)
 end
 
 local function handle_box_contact(battle, event)
@@ -1941,12 +2317,32 @@ local function tick_statuses(battle)
             elseif poison and poison.next_tick and poison.next_tick <= battle.tick then
                 local body = battle.world:get_body(marble.body_id)
                 local profile = effects.status_profile("poison", poison.rule_set)
-                append_rule_event(battle, owner.id, "status_tick", {
-                    marble = marble.uid, status = "poison",
+                local tick_event = append_rule_event(battle, owner.id, "status_tick", {
+                    marble = marble.uid,
+                    status = "poison",
+                    source_owner = poison.source_owner,
+                    source_entity_id = poison.source_entity_id,
+                    source_rule_set_id = poison.source_rule_set_id,
+                    target_owner = owner.id,
+                    target_entity_id = marble.uid,
+                    target_relation = "enemy",
+                    generation = 0,
                 }, profile, "shell_wear", "Poison")
                 poison.next_tick = poison.next_tick + profile._cadence.shell_wear.interval
                 wear_shell(battle, owner, marble, profile.shell_wear, "poison",
-                    body and body.x or 0, body and body.y or 0, 1)
+                    body and body.x or 0, body and body.y or 0, 0, {
+                        source_owner = poison.source_owner,
+                        source_entity_id = poison.source_entity_id,
+                        source_rule_set_id = poison.source_rule_set_id,
+                        rule_id = "status.poison.wear",
+                        ability_id = "poison_field",
+                        operation = "wear",
+                        target_selector = "current_shell",
+                        target_relation = "enemy",
+                        root_event_id = tick_event.event_id,
+                        parent_event_id = tick_event.event_id,
+                        generation = 0,
+                    })
             end
             local freeze = marble.statuses.freeze
             if freeze and freeze.expires <= battle.tick then

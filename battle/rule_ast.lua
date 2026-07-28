@@ -908,6 +908,9 @@ local ROUTING_STATS = {
     duration_ticks = true,
     field_duration = true,
     release = true,
+    -- Applying a named status routes into that status's separately authored
+    -- and separately priced operations; it does not hide an extra payoff.
+    status = true,
     trajectory = true,
 }
 
@@ -926,19 +929,16 @@ local function ability_mcu(group, by_id)
         if by_id[rule_id] then rules[#rules + 1] = by_id[rule_id] end
     end
     local effect_operations = 0
-    local effect_kinds = {}
     local multi, tracked, rule_change = false, false, false
     for _, rule in ipairs(rules) do
         local stat = rule.operation and rule.operation.stat
         local is_linked_cost = group.kind == "allied_brick_cost"
             and rule.id == group.cost_rule_id
         if not ROUTING_STATS[stat] and not is_linked_cost then
-            local operation_kind = rule.operation and rule.operation.verb or stat
-            if operation_kind == "slow" then operation_kind = "slow" end
-            if not effect_kinds[operation_kind] then
-                effect_kinds[operation_kind] = true
-                effect_operations = effect_operations + 1
-            end
+            -- MCU prices authored effect operations, not distinct verb names.
+            -- Two payoffs that both wear a shell remain two mechanics to
+            -- understand and cannot collapse into one by sharing a verb.
+            effect_operations = effect_operations + 1
         end
         local target = rule.target or {}
         if MULTI_TARGET[target.selector] or (target.count or 1) > 1 then multi = true end
@@ -1044,6 +1044,14 @@ local function validate_abilities(item, errors)
                 and group.kind ~= "allied_brick_cost" then
                 errors[#errors + 1] = path .. ".kind is invalid"
             end
+            if item.content_kind == "brick" and group.kind == "core_release" then
+                errors[#errors + 1] = path .. " brick ability cannot be a core release"
+            elseif item.content_kind == "marble" and group.kind ~= "core_release" then
+                errors[#errors + 1] = path .. " marble bonus ability must be a core release"
+            end
+            if group.kind == "allied_brick_cost" and item.content_kind ~= "brick" then
+                errors[#errors + 1] = path .. " linked allied cost source must be a brick"
+            end
             if group.recursion ~= nil
                 and check_fields(group.recursion, RECURSION_FIELDS,
                     path .. ".recursion", errors) then
@@ -1108,6 +1116,11 @@ local function validate_abilities(item, errors)
                     if cadence.charges == nil or cadence.charges < 1 or cadence.charges > 3 then
                         errors[#errors + 1] = path .. " cost cadence needs one through three charges"
                     end
+                    if cadence.unit ~= "ticks" and cadence.unit ~= "exchange"
+                        and cadence.unit ~= cost_rule.trigger.event then
+                        errors[#errors + 1] =
+                            path .. " cost trigger and cadence data do not match"
+                    end
                     if type(cost_rule.lethal) ~= "boolean" then
                         errors[#errors + 1] = path .. " cost rule must declare lethal"
                     end
@@ -1139,6 +1152,17 @@ local function validate_abilities(item, errors)
                 elseif assigned[rule_id] then
                     errors[#errors + 1] = path .. " double-groups rule " .. tostring(rule_id)
                 else
+                    local grouped_rule = rules[rule_id]
+                    if group.kind == "passive"
+                        and grouped_rule.trigger.event == "build" then
+                        errors[#errors + 1] =
+                            path .. " cannot disguise a body rule as a passive"
+                    elseif group.kind == "core_release"
+                        and (grouped_rule.trigger.event ~= "core_release"
+                            or rule_id:match("^release%.baseline%.")) then
+                        errors[#errors + 1] =
+                            path .. " must contain only bonus core-release rules"
+                    end
                     assigned[rule_id] = group.id
                 end
             end
@@ -1177,6 +1201,14 @@ end
 function M.balance(item)
     local gross = 0
     local lines = {}
+    local points_by_rule = {}
+    local linked_cost_group_by_rule = {}
+    local linked_cost_points = {}
+    for _, group in ipairs((item and item.abilities) or {}) do
+        if group.kind == "allied_brick_cost" then
+            linked_cost_group_by_rule[group.cost_rule_id] = group.id
+        end
+    end
     for _, rule in ipairs(M.player_rules(item)) do
         local stat = rule.operation and rule.operation.stat or ""
         local weight = BALANCE_WEIGHT[stat] or 1
@@ -1189,7 +1221,13 @@ function M.balance(item)
             points = points - math.abs(tonumber(rule.cost.magnitude) or 1)
         end
         if points < 0 then points = 0 end
-        gross = gross + points
+        points_by_rule[rule.id] = points
+        local linked_group = linked_cost_group_by_rule[rule.id]
+        if linked_group then
+            linked_cost_points[linked_group] = points
+        else
+            gross = gross + points
+        end
         lines[#lines + 1] = {
             rule_id = rule.id,
             stat = stat,
@@ -1199,7 +1237,9 @@ function M.balance(item)
             value = deep_copy((rule.magnitude or rule.duration).value),
             unit = (rule.magnitude or rule.duration).unit,
             cadence = deep_copy(rule.cadence),
-            points = math.floor(points * 1000 + 0.5) / 1000,
+            points = linked_group and 0 or math.floor(points * 1000 + 0.5) / 1000,
+            credit = linked_group and math.floor(points * 1000 + 0.5) / 1000
+                or nil,
         }
     end
     local ability_summary = M.ability_summary(item)
@@ -1218,14 +1258,32 @@ function M.balance(item)
             points = points,
         }
     end
-    local credit = drawback_credit(item.drawback)
-    if credit > 25 then credit = 25 end
-    local spent = math.max(0, gross - credit)
+    local allied_cost_credit = 0
+    local allied_cost_excess = 0
+    for _, group in ipairs((item and item.abilities) or {}) do
+        if group.kind == "allied_brick_cost" then
+            local payoff_points = 0
+            for _, rule_id in ipairs(group.payoff_rule_ids or {}) do
+                payoff_points = payoff_points + (points_by_rule[rule_id] or 0)
+            end
+            local cost_points = linked_cost_points[group.id] or 0
+            allied_cost_credit = allied_cost_credit + math.min(cost_points, payoff_points)
+            if cost_points > payoff_points then
+                allied_cost_excess = allied_cost_excess + cost_points - payoff_points
+            end
+        end
+    end
+    local authored_credit = drawback_credit(item.drawback)
+    local total_credit = authored_credit + allied_cost_credit
+    local spent = gross - total_credit
     return {
         schema_version = M.SCHEMA_VERSION,
         rule_set_id = item.id,
         gross = math.floor(gross * 1000 + 0.5) / 1000,
-        drawback_credit = credit,
+        drawback_credit = authored_credit,
+        allied_cost_credit = math.floor(allied_cost_credit * 1000 + 0.5) / 1000,
+        total_credit = math.floor(total_credit * 1000 + 0.5) / 1000,
+        allied_cost_excess = math.floor(allied_cost_excess * 1000 + 0.5) / 1000,
         spent = math.floor(spent * 1000 + 0.5) / 1000,
         budget = item.rarity_budget,
         remaining = math.floor(((item.rarity_budget or 0) - spent) * 1000 + 0.5) / 1000,
@@ -1253,6 +1311,10 @@ function M.validate(item)
     end
     if item.content_kind == "component" then
         check_string(item.component_kind, "rule_set.component_kind", errors)
+        if item.component_kind == "core" and not RARITY_RANK[item.min_rarity] then
+            errors[#errors + 1] =
+                "core component rule set must declare canonical min_rarity"
+        end
     elseif item.component_kind ~= nil then
         errors[#errors + 1] = "rule_set.component_kind is only valid for components"
     end
@@ -1400,6 +1462,17 @@ function M.validate(item)
 
     if #errors == 0 then
         local accounting = M.balance(item)
+        if accounting.allied_cost_excess > 0 then
+            errors[#errors + 1] =
+                "allied-cost credit exceeds the priced value of its payoff"
+        end
+        if accounting.total_credit > 25 then
+            errors[#errors + 1] =
+                "rule_set drawback/formation/copy credit exceeds 25"
+        end
+        if accounting.spent < 0 then
+            errors[#errors + 1] = "rule_set has a negative net ability cost"
+        end
         if item.content_kind ~= "brick_kit" and accounting.spent > item.rarity_budget then
             errors[#errors + 1] = string.format(
                 "rule_set exceeds rarity budget: %.3f > %.3f",
@@ -1813,8 +1886,13 @@ end
 
 local function linked_cost_copy(item, group)
     local cost = M.rule(item, group.cost_rule_id)
-    local payoff = M.rule(item, group.payoff_rule_ids[1])
-    if not cost or not payoff then return nil end
+    if not cost then return nil end
+    local payoff_copy = {}
+    for _, payoff_id in ipairs(group.payoff_rule_ids or {}) do
+        local payoff = M.rule(item, payoff_id)
+        if not payoff then return nil end
+        payoff_copy[#payoff_copy + 1] = operation_copy(payoff)
+    end
     local cadence = cost.cadence
     local timing
     if cadence.unit == "exchange" and cadence.interval == 1 then
@@ -1836,7 +1914,7 @@ local function linked_cost_copy(item, group)
         "COST %d linked allied integrity (%s) → %s.",
         cost.magnitude.value,
         timing,
-        operation_copy(payoff)
+        table.concat(payoff_copy, " then ")
     )
 end
 
@@ -1908,21 +1986,34 @@ function M.expanded_lines(item)
     for _, line in ipairs(rules) do lines[#lines + 1] = line end
     for _, group in ipairs(M.linked_cost_groups(item)) do
         local cost = M.rule(item, group.cost_rule_id)
-        local payoff = M.rule(item, group.payoff_rule_ids[1])
+        local required = #cost.target.required_tags > 0
+            and table.concat(cost.target.required_tags, ", ")
+            or "any tags"
+        local excluded = #cost.target.excluded_tags > 0
+            and table.concat(cost.target.excluded_tags, ", ")
+            or "none"
         lines[#lines + 1] = string.format(
-            "Linked cost %s selects one live orthogonal ally by local row, column, and UID; %s.",
+            "Linked cost %s selects one live orthogonal ally by local row, column, and UID "
+                .. "(required tags: %s; excluded tags: %s); %s.",
             group.id,
+            required,
+            excluded,
             cost.lethal and "lethal payment is allowed" or "payment must leave it alive"
         )
-        lines[#lines + 1] = string.format(
-            "Payoff %s scales floor(%d × cost / %d), capped at %d; causes: %s; generation %d.",
-            payoff.id,
-            payoff.scaling.numerator,
-            payoff.scaling.denominator,
-            payoff.scaling.cap,
-            table.concat(group.recursion.accepts_causes, ", "),
-            group.recursion.max_generation
-        )
+        for payoff_index, payoff_id in ipairs(group.payoff_rule_ids) do
+            local payoff = M.rule(item, payoff_id)
+            lines[#lines + 1] = string.format(
+                "Payoff %d %s scales floor(%d × cost / %d), capped at %d; "
+                    .. "causes: %s; generation %d.",
+                payoff_index,
+                payoff.id,
+                payoff.scaling.numerator,
+                payoff.scaling.denominator,
+                payoff.scaling.cap,
+                table.concat(group.recursion.accepts_causes, ", "),
+                group.recursion.max_generation
+            )
+        end
     end
     lines[#lines + 1] = drawback_copy(item.drawback)
     if #item.compatibility.requires > 0 then
