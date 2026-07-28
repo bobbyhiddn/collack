@@ -1095,7 +1095,42 @@ function M.run(t)
             kit.id .. " offer tier equals its highest member")
         t:eq(kit.balance.packaging_only, true,
             kit.id .. " is packaging rather than a shadow power authority")
+        local lowered = ast.copy(kit.rule_set)
+        local lowered_rank = ast.rarity_rank(kit.rarity) == 1
+            and 2
+            or ast.rarity_rank(kit.rarity) - 1
+        lowered.rarity = ast.RARITY_ORDER[lowered_rank]
+        local lowered_valid, lowered_errors = ast.validate(lowered)
+        t:eq(lowered_valid, false,
+            kit.id .. " rejects an offer tier unlike its highest member")
+        t:ok(table.concat(lowered_errors, "; "):find(
+            "highest member rarity",
+            1,
+            true
+        ) ~= nil, kit.id .. " reports its forged kit tier")
     end
+    t:raises(function()
+        draft.instantiate_marble({ content_id = "drifter_common" }, 1, "player")
+    end, "not player-draft eligible",
+    "a legacy-only marble cannot be forged into a player draft choice")
+    local legacy_mutation = ast.copy(catalog.LEGACY_MARBLES[1].rule_set)
+    legacy_mutation.availability.player_draft = true
+    valid, errors = ast.validate(legacy_mutation)
+    t:eq(valid, false, "legacy-only authority cannot opt into player draft")
+    t:ok(table.concat(errors, "; "):find("legacy-only", 1, true) ~= nil,
+        "legacy availability mutation fails at canonical validation")
+
+    local win_one_state = short_run.new({ run_seed = 17017, short_run = true })
+    win_one_state.fight.index = 1
+    local legendary_reward_valid, legendary_reward_error =
+        short_run.reward_operation_legal(win_one_state, {
+            kind = "add_marble",
+            content_id = "cinder_legendary",
+        })
+    t:eq(legendary_reward_valid, false,
+        "a legendary add reward is illegal after win one")
+    t:eq(legendary_reward_error, "marble_not_reward_eligible",
+        "the unavailable win-one tier reports canonical reward illegality")
     local recipe_count = 0
     for _, recipe in ipairs(opponent.recipes()) do
         recipe_count = recipe_count + 1

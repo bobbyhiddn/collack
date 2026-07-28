@@ -56,12 +56,12 @@ local ENCOUNTERS = {
         description = "Status lanes pull the opener into a delayed release chain.",
         scout_tags = { "field", "release" },
         sling_id = "effect_amplifier",
-        marbles = { "chalk_common", "geode_uncommon", "lodestone_epic" },
+        marbles = { "chalk_common", "quartz_common", "chalk_common" },
         bricks = {
             { "venom_rime", "venom_glass", 1, 2 },
-            { "venom_rime", "rime_block", 1, 3 },
-            { "shatter_keg", "shatter_crystal", 1, 4 },
-            { "shatter_keg", "powder_keg", 1, 5 },
+            { "venom_rime", "rime_block", 2, 2 },
+            { "guard_pair", "training_dummy", 1, 5 },
+            { "shatter_keg", "powder_keg", 2, 5 },
         },
     },
     {

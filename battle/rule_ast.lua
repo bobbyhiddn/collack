@@ -1447,6 +1447,35 @@ function M.validate(item)
             end
         end
     end
+    if item.content_kind == "brick_kit" then
+        local highest_rank, member_count = 0, 0
+        for _, component in ipairs(item.components or {}) do
+            member_count = member_count + 1
+            if component.kind ~= "brick" then
+                errors[#errors + 1] =
+                    "brick kit components must be individual bricks"
+            end
+            highest_rank = math.max(
+                highest_rank,
+                RARITY_RANK[component.min_rarity] or 0
+            )
+        end
+        if member_count < 1 then
+            errors[#errors + 1] = "brick kit must contain at least one brick"
+        end
+        if not item.rarity or RARITY_RANK[item.rarity] ~= highest_rank then
+            errors[#errors + 1] =
+                "brick kit rarity must equal its highest member rarity"
+        end
+        if #(item.abilities or {}) ~= 0 then
+            errors[#errors + 1] =
+                "brick kit is packaging and cannot own ability groups"
+        end
+        if item.availability and item.availability.player_reward then
+            errors[#errors + 1] =
+                "brick kit cannot enter individual player rewards"
+        end
+    end
 
     if item.drawback and drawback_credit(item.drawback) > 25 then
         errors[#errors + 1] = "rule_set drawback/formation/copy credit exceeds 25"

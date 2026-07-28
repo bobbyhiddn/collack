@@ -73,7 +73,13 @@ local function shuffled_available(state, category)
     local selected = selected_ids(state, category)
     local available = {}
     for _, item in ipairs(pool_for(category)) do
-        if not selected[item.id] then available[#available + 1] = item end
+        local availability = item.rule_set and item.rule_set.availability
+        if not selected[item.id]
+            and availability
+            and availability.player_draft
+            and not availability.legacy_only then
+            available[#available + 1] = item
+        end
     end
 
     local offer_index = state.draft.offer_index or 1
@@ -374,6 +380,10 @@ end
 function M.instantiate_sling(choice)
     local item = catalog_item("sling", choice.content_id)
     if not item then error("unknown sling draft choice: " .. tostring(choice.content_id)) end
+    if not item.rule_set.availability.player_draft
+        or item.rule_set.availability.legacy_only then
+        error("sling is not player-draft eligible: " .. tostring(choice.content_id))
+    end
     local out = util.deep_copy(item)
     local rules = slings.runtime(item.id, item.rule_set)
     for key, value in pairs(rules) do out[key] = util.deep_copy(value) end
@@ -515,6 +525,14 @@ end
 function M.instantiate_marble(choice, index, owner)
     local item = catalog_item("marble", choice.content_id)
     if not item then error("unknown marble draft choice: " .. tostring(choice.content_id)) end
+    if owner == "player"
+        and (not item.rule_set.availability.player_draft
+            or item.rule_set.availability.legacy_only) then
+        error("marble is not player-draft eligible: " .. tostring(choice.content_id))
+    end
+    if owner == "opponent" and not item.rule_set.availability.cpu_recipe then
+        error("marble is not CPU-recipe eligible: " .. tostring(choice.content_id))
+    end
     return materialize_marble(
         item,
         string.format("%s-m%02d", owner or "player", index)
@@ -558,6 +576,14 @@ end
 function M.instantiate_kit(choice, first_brick_index, owner)
     local item = catalog_item("brick_kit", choice.content_id)
     if not item then error("unknown brick kit draft choice: " .. tostring(choice.content_id)) end
+    if owner == "player"
+        and (not item.rule_set.availability.player_draft
+            or item.rule_set.availability.legacy_only) then
+        error("brick kit is not player-draft eligible: " .. tostring(choice.content_id))
+    end
+    if owner == "opponent" and not item.rule_set.availability.cpu_recipe then
+        error("brick kit is not CPU-recipe eligible: " .. tostring(choice.content_id))
+    end
     local instances = {}
     for offset, brick_id in ipairs(item.brick_ids) do
         instances[#instances + 1] = M.instantiate_brick(

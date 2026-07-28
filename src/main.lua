@@ -952,13 +952,24 @@ local function draw_draft_card(card, x, y, width, height, large, index)
             string.upper(telegraph.offer_tier or rarity or "")
         )
     elseif telegraph.rarity then
-        local passive = telegraph.passive_count == 0
-            and "NO PASSIVE"
-            or string.format(
-                "PASSIVE %d/%d",
-                telegraph.passive_count or 0,
-                telegraph.passive_ceiling or 0
-            )
+        local passive
+        if category == "marble" then
+            passive = telegraph.passive_count == 0
+                and "BASELINE RELEASE"
+                or string.format(
+                    "BONUS RELEASE %d/%d",
+                    telegraph.passive_count or 0,
+                    telegraph.passive_ceiling or 0
+                )
+        else
+            passive = telegraph.passive_count == 0
+                and "NO PASSIVE"
+                or string.format(
+                    "PASSIVE %d/%d",
+                    telegraph.passive_count or 0,
+                    telegraph.passive_ceiling or 0
+                )
+        end
         local shell_copy = category == "marble"
             and string.format(
                 " / SHELLS %d/%d",
@@ -966,10 +977,14 @@ local function draw_draft_card(card, x, y, width, height, large, index)
                 telegraph.shell_cap or 0
             )
             or ""
+        local balance_spent = card.balance and card.balance.spent or 0
         authority_line = string.format(
-            "%s%s / BAL 100 / COPY %d",
+            "%s%s / MCU %d/%d / BAL %.3g/100 / COPY %d",
             passive,
             shell_copy,
+            telegraph.mcu or 0,
+            telegraph.mcu_ceiling or 0,
+            balance_spent,
             telegraph.copy_cap or 1
         )
     end
