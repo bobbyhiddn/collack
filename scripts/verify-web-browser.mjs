@@ -60,6 +60,7 @@ const settingSamples = [];
 const guidanceSamples = [];
 const inspectionSamples = [];
 const ruleCallouts = [];
+const actionStates = new Map();
 const canonicalSweeps = [];
 const canonicalBlowbacks = [];
 const expectedRuleMarks = {
@@ -119,6 +120,13 @@ function observePage(page, label) {
     }
     if (text.startsWith("CALLACK_RULE_CALLOUT ")) {
       ruleCallouts.push({ label, text });
+    }
+    const actionState = text.match(/^CALLACK_ACTION_STATE phase=(\S+) enabled=(\S+)$/);
+    if (actionState) {
+      actionStates.set(label, {
+        phase: actionState[1],
+        enabled: actionState[2] === "none" ? [] : actionState[2].split(","),
+      });
     }
     const sweep = text.match(
       /CALLACK_CANONICAL_SWEEP kind=(\S+) speed=(-?\d+\.\d+) toi=(-?\d+\.\d+) reflected=(true|false) tunneled=(true|false) substeps=(\d+) iterations=(\d+)/
@@ -191,6 +199,23 @@ async function waitForConsole(page, fragment, timeout = 20_000) {
   });
 }
 
+function actionIsEnabled(state, action) {
+  return state?.enabled.some((id) => id === action || id.startsWith(action)) ?? false;
+}
+
+async function waitForEnabled(runtime, action, timeout = 20_000) {
+  const started = Date.now();
+  while (!actionIsEnabled(actionStates.get(runtime.label), action)) {
+    if (Date.now() - started > timeout) {
+      throw new Error(
+        `${runtime.label}: ${action} was not enabled in `
+          + `${JSON.stringify(actionStates.get(runtime.label) ?? null)}`
+      );
+    }
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+}
+
 async function bootPage(context, url, expected, label) {
   const page = await context.newPage();
   observePage(page, label);
@@ -210,22 +235,25 @@ async function bootPage(context, url, expected, label) {
     `${label}: #canvas width is ${bounds.width}, expected ${expected.width}`);
   assert(Math.abs(bounds.height - expected.height) < 0.5,
     `${label}: #canvas height is ${bounds.height}, expected ${expected.height}`);
-  return { page, canvas, bounds };
+  return { page, canvas, bounds, label };
 }
 
 async function touchAction(runtime, x, y, action, timeout = 20_000) {
+  await waitForEnabled(runtime, action, timeout);
   const handled = waitForConsole(runtime.page, `CALLACK_ACTION ${action}`, timeout);
   await runtime.page.touchscreen.tap(runtime.bounds.x + x, runtime.bounds.y + y);
   await handled;
 }
 
 async function mouseAction(runtime, x, y, action, timeout = 20_000) {
+  await waitForEnabled(runtime, action, timeout);
   const handled = waitForConsole(runtime.page, `CALLACK_ACTION ${action}`, timeout);
   await runtime.page.mouse.click(runtime.bounds.x + x, runtime.bounds.y + y);
   await handled;
 }
 
 async function inspectAction(runtime, pointer, x, y, action, type, timeout = 20_000) {
+  await waitForEnabled(runtime, action, timeout);
   const handled = waitForConsole(runtime.page, `CALLACK_ACTION ${action}`, timeout);
   const inspected = waitForConsole(
     runtime.page,
@@ -351,7 +379,9 @@ async function completeMobile(runtime) {
   );
   await touchAction(runtime, 195, 800, "lock_setup");
   await battleReached;
+  await touchAction(runtime, 57, 796, "battle_pause");
   await touchAction(runtime, 147, 796, "battle_speed");
+  await touchAction(runtime, 57, 796, "battle_pause");
   await firstRefitReached;
   await screenshot(runtime, "phone-refit-1.png");
   await screenshot(runtime, "phone-draft-scout.png");
@@ -399,6 +429,13 @@ async function completeMobile(runtime) {
     "entity"
   );
   await screenshot(runtime, "phone-battle-inspection.png");
+  await touchAction(runtime, 330, 796, "battle_motion");
+  await touchAction(runtime, 237, 796, "battle_mute");
+  const phoneSettings = settingSamples.filter((sample) => sample.label === "phone");
+  const finalSettings = phoneSettings[phoneSettings.length - 1];
+  assert(finalSettings?.muted && finalSettings?.reducedMotion,
+    `phone: touch settings did not remain enabled: ${JSON.stringify(phoneSettings)}`);
+  await screenshot(runtime, "phone-battle-settings.png");
   await touchAction(runtime, 57, 796, "battle_pause");
   await waitForPhysics("phone", 2);
   const firstBattle = await runtime.canvas.screenshot();
@@ -407,14 +444,6 @@ async function completeMobile(runtime) {
   const secondBattle = await runtime.canvas.screenshot();
   assert(digest(firstBattle) !== digest(secondBattle),
     "phone: battle canvas did not visually change while canonical physics advanced");
-  await touchAction(runtime, 330, 796, "battle_motion");
-  await touchAction(runtime, 237, 796, "battle_mute");
-  await runtime.page.waitForTimeout(1_500);
-  const phoneSettings = settingSamples.filter((sample) => sample.label === "phone");
-  const finalSettings = phoneSettings[phoneSettings.length - 1];
-  assert(finalSettings?.muted && finalSettings?.reducedMotion,
-    `phone: touch settings did not remain enabled: ${JSON.stringify(phoneSettings)}`);
-  await screenshot(runtime, "phone-battle-settings.png");
   await secondRefitReached;
   await screenshot(runtime, "phone-refit-2.png");
   await touchAction(runtime, 195, 180, "offer:");
@@ -497,7 +526,9 @@ async function completeDesktop(runtime) {
   );
   await mouseAction(runtime, 1122, 732, "lock_setup");
   await battleReached;
+  await mouseAction(runtime, 816, 732, "battle_pause");
   await mouseAction(runtime, 940, 732, "battle_speed");
+  await mouseAction(runtime, 816, 732, "battle_pause");
   await firstRefitReached;
   await screenshot(runtime, "desktop-refit-1.png");
   await screenshot(runtime, "desktop-draft-scout.png");
@@ -545,10 +576,10 @@ async function completeDesktop(runtime) {
     "entity"
   );
   await screenshot(runtime, "desktop-battle-inspection.png");
-  await mouseAction(runtime, 816, 732, "battle_pause");
   await mouseAction(runtime, 1194, 732, "battle_motion");
   await mouseAction(runtime, 1064, 732, "battle_mute");
   await screenshot(runtime, "desktop-battle-settings.png");
+  await mouseAction(runtime, 816, 732, "battle_pause");
   await waitForPhysics("desktop", 2);
   const firstBattle = await runtime.canvas.screenshot();
   await screenshot(runtime, "desktop-battle.png");

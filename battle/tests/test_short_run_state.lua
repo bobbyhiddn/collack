@@ -130,8 +130,16 @@ function M.run(t)
             "reward operation language is generated from its typed operation")
         t:eq(choice.causal_attribution.source_rule_set_id, choice.rule_set.id,
             "reward causality names its canonical rule set")
-        t:ok(#choice.causal_attribution.source_rule_ids > 0,
-            "reward causality exposes executable source rules")
+        local authority = rule_ast.player_authority(choice.rule_set)
+        t:ok(util.deep_equal(
+            choice.causal_attribution.source_rule_ids,
+            authority.rule_ids
+        ), "reward causality exposes exactly the inspectable executable rules")
+        t:eq(#choice.causal_attribution.source_rule_ids,
+            #authority.balance.lines,
+            "reward attribution and accounting expose the same rule count")
+        t:ok(util.deep_equal(choice.inspection_copy, authority.inspection_copy),
+            "reward inspection shares the exact causal rule authority")
     end
 
     state = fixtures.choose(state, 1)

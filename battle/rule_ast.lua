@@ -400,6 +400,28 @@ end
 
 M.copy = deep_copy
 
+local function is_player_rule(rule)
+    return type(rule) == "table" and rule.visibility ~= "internal"
+end
+
+-- Internal nodes are executable routing metadata, not additional player
+-- effects. Every player-facing consumer uses this exact ordered projection so
+-- execution identity, copy, inspection, attribution, and accounting cannot
+-- disagree about which rules belong to an item.
+function M.player_rules(item)
+    local out = {}
+    for _, rule in ipairs((item and item.rules) or {}) do
+        if is_player_rule(rule) then out[#out + 1] = deep_copy(rule) end
+    end
+    return out
+end
+
+function M.player_rule_ids(item)
+    local out = {}
+    for _, rule in ipairs(M.player_rules(item)) do out[#out + 1] = rule.id end
+    return out
+end
+
 local function sorted_keys(value)
     local keys = {}
     for key in pairs(value or {}) do keys[#keys + 1] = key end
@@ -615,7 +637,7 @@ end
 function M.balance(item)
     local gross = 0
     local lines = {}
-    for _, rule in ipairs(item.rules or {}) do
+    for _, rule in ipairs(M.player_rules(item)) do
         local stat = rule.operation and rule.operation.stat or ""
         local weight = BALANCE_WEIGHT[stat] or 1
         local target = rule.target and rule.target.selector or "self"
@@ -779,8 +801,10 @@ function M.project(item)
         else
             profile[stat] = value
         end
-        profile._rule_ids[stat] = profile._rule_ids[stat] or {}
-        profile._rule_ids[stat][#profile._rule_ids[stat] + 1] = rule.id
+        if is_player_rule(rule) then
+            profile._rule_ids[stat] = profile._rule_ids[stat] or {}
+            profile._rule_ids[stat][#profile._rule_ids[stat] + 1] = rule.id
+        end
         profile._cadence[stat] = deep_copy(rule.cadence)
     end
     return profile
@@ -958,7 +982,7 @@ end
 
 local function unique_lines(item, include)
     local lines, counts, order = {}, {}, {}
-    for _, rule in ipairs(item.rules or {}) do
+    for _, rule in ipairs(M.player_rules(item)) do
         if include[rule.visibility] then
             local line = M.rule_sentence(rule)
             if not counts[line] then order[#order + 1] = line end
@@ -1028,6 +1052,23 @@ function M.expanded(item)
     return table.concat(M.expanded_lines(item), " ")
 end
 
+-- A serializable snapshot of every player-facing projection controlled by a
+-- RuleSet. Consumers copy this value instead of rebuilding parallel notions of
+-- identity, language, or accounting.
+function M.player_authority(item)
+    M.assert_valid(item)
+    return {
+        schema_version = M.SCHEMA_VERSION,
+        rule_set_id = item.id,
+        rule_ids = M.player_rule_ids(item),
+        rarity_budget = item.rarity_budget,
+        compact_copy = M.compact(item),
+        compact_lines = M.compact_lines(item),
+        inspection_copy = M.expanded_lines(item),
+        balance = M.balance(item),
+    }
+end
+
 local function canonical_scalar(value)
     if type(value) == "string" then return string.format("%q", value) end
     if type(value) == "number" or type(value) == "boolean" then return tostring(value) end
@@ -1084,10 +1125,13 @@ end
 local function rule_id_for(source, stat)
     if not source then return nil end
     if source._rule_ids and source._rule_ids[stat] then
-        return source._rule_ids[stat][1]
+        for _, rule_id in ipairs(source._rule_ids[stat]) do
+            local entry = registry[rule_id]
+            if not entry or is_player_rule(entry.rule) then return rule_id end
+        end
     end
     for _, rule in ipairs(source.rules or {}) do
-        if rule.operation.stat == stat then return rule.id end
+        if is_player_rule(rule) and rule.operation.stat == stat then return rule.id end
     end
     return nil
 end
@@ -1098,6 +1142,7 @@ function M.attribute(fields, source, stat, overrides)
     if not rule_id then return fields end
     local entry = registry[rule_id]
     local rule = entry and entry.rule
+    if rule and not is_player_rule(rule) then return fields end
     fields.rule_id = rule_id
     fields.rule_source = (overrides and overrides.source_name)
         or (entry and entry.source_name)

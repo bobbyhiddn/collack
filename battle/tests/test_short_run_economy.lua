@@ -11,6 +11,7 @@ package.path = table.concat({
 local draft = require("battle.draft")
 local harness = require("battle.tests.harness")
 local fixtures = require("battle.tests.short_run_fixtures")
+local ast = require("battle.rule_ast")
 local run = require("battle.run")
 local short_run = require("battle.short_run")
 local util = require("battle.run_util")
@@ -21,6 +22,13 @@ local function kinds(offer, out)
     out = out or {}
     for _, choice in ipairs(offer.choices) do out[choice.operation.kind] = true end
     return out
+end
+
+local function choice_of_kind(offer, kind)
+    for _, choice in ipairs(offer.choices or {}) do
+        if choice.operation.kind == kind then return choice end
+    end
+    return nil
 end
 
 local function add_marble(state, id)
@@ -58,6 +66,76 @@ function M.run(t)
     local replace_offer = assert(short_run.preview_reward_offer(replace_state))
     kinds(replace_offer, coverage)
     t:ok(coverage.replace_marble, "two-marble bag can offer a full marble replacement")
+
+    local authority_state = run.new({ run_seed = 9301, short_run = true })
+    authority_state.fight.index = 2
+    local canonical_offer = assert(short_run.preview_reward_offer(authority_state))
+    local canonical_replace = assert(choice_of_kind(canonical_offer, "replace_marble"))
+    t:eq(canonical_replace.operation.target_uid, "player-m01",
+        "canonical accounting selects the lower-spend marble")
+    t:ok(util.deep_equal(
+        canonical_replace.operation.target_authority,
+        ast.player_authority(authority_state.player.marbles[1].rule_set)
+    ), "replacement records the target's canonical identity, copy, and accounting")
+    t:ok(util.deep_equal(
+        canonical_replace.causal_attribution.target_authority,
+        canonical_replace.operation.target_authority
+    ), "visible causal attribution records the exact targeting authority")
+
+    local shadow_mutation = util.deep_copy(authority_state)
+    shadow_mutation.player.marbles[1].draft_value = 1000
+    shadow_mutation.player.marbles[2].draft_value = -1000
+    shadow_mutation.player.marbles[1].balance.spent = 999
+    shadow_mutation.player.marbles[2].balance.spent = -999
+    shadow_mutation.player.marbles[1].compact_copy = "shadow copy"
+    shadow_mutation.player.marbles[1].inspection_copy = { "shadow inspection" }
+    local shadow_offer = assert(short_run.preview_reward_offer(shadow_mutation))
+    local shadow_replace = assert(choice_of_kind(shadow_offer, "replace_marble"))
+    t:eq(shadow_replace.operation.target_uid, canonical_replace.operation.target_uid,
+        "mutable draft and cached projections cannot change replacement behavior")
+    t:ok(util.deep_equal(
+        shadow_replace.operation.target_authority,
+        canonical_replace.operation.target_authority
+    ), "mutable projections cannot drift target identity, copy, or accounting")
+    t:eq(shadow_replace.operation_copy, canonical_replace.operation_copy,
+        "mutable projections cannot drift player-facing operation copy")
+
+    local rule_mutation = util.deep_copy(authority_state)
+    for _, rule in ipairs(rule_mutation.player.marbles[1].rule_set.rules) do
+        if rule.visibility ~= "internal" and rule.operation.stat == "damage" then
+            rule.magnitude.value = 3
+            break
+        end
+    end
+    local rule_offer = assert(short_run.preview_reward_offer(rule_mutation))
+    local rule_replace = assert(choice_of_kind(rule_offer, "replace_marble"))
+    t:eq(rule_replace.operation.target_uid, "player-m02",
+        "an executable structured-rule change can change replacement behavior")
+    local selected_target = rule_mutation.player.marbles[2]
+    t:ok(util.deep_equal(
+        rule_replace.operation.target_authority,
+        ast.player_authority(selected_target.rule_set)
+    ), "structured-rule behavior carries matching identity, copy, and accounting")
+
+    local stale_state = util.deep_copy(authority_state)
+    stale_state.phase = "draft"
+    stale_state.draft.offer = util.deep_copy(canonical_offer)
+    for _, rule in ipairs(stale_state.player.marbles[1].rule_set.rules) do
+        if rule.visibility ~= "internal" and rule.operation.stat == "damage" then
+            rule.magnitude.value = 3
+            break
+        end
+    end
+    local stale_result, stale_error = run.dispatch(stale_state, {
+        kind = "choose_offer",
+        offer_id = stale_state.draft.offer.offer_id,
+        choice_id = canonical_replace.choice_id,
+    })
+    t:eq(stale_result, nil,
+        "an offered replacement cannot execute after target authority changes")
+    t:eq(stale_error and stale_error.details and stale_error.details.reason,
+        "target_authority_changed",
+        "stale targeting fails with an explicit canonical-authority reason")
 
     local repair_state = util.deep_copy(base)
     local broken = table.remove(repair_state.player.bricks, 2)

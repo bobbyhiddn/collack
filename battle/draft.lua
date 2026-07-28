@@ -238,6 +238,7 @@ local function kit_details(item)
 end
 
 local function choice_from_item(item, category, current, scouts)
+    local authority = rule_ast.player_authority(item.rule_set)
     local content_ids
     local details
     if category == "sling" then
@@ -261,13 +262,13 @@ local function choice_from_item(item, category, current, scouts)
         name = item.name,
         role = item.role,
         rarity = item.rarity,
-        draft_value = item.draft_value,
-        mechanics = util.deep_copy(item.mechanics),
-        compact_copy = item.compact_copy,
-        inspection_copy = util.deep_copy(item.inspection_copy),
+        draft_value = authority.rarity_budget,
+        mechanics = util.deep_copy(authority.compact_lines),
+        compact_copy = authority.compact_copy,
+        inspection_copy = util.deep_copy(authority.inspection_copy),
         rule_set = util.deep_copy(item.rule_set),
         compatibility = util.deep_copy(item.compatibility),
-        balance = util.deep_copy(item.balance),
+        balance = util.deep_copy(authority.balance),
         tags = util.deep_copy(item.tags),
         tag_metadata = tag_metadata(item.tags),
         synergy = {
@@ -351,7 +352,6 @@ function M.instantiate_marble(choice, index, owner)
         rarity = item.rarity,
         core = item.core,
         shells = util.deep_copy(item.shells),
-        draft_value = item.draft_value,
         mechanics = util.deep_copy(item.mechanics),
         compact_copy = item.compact_copy,
         inspection_copy = util.deep_copy(item.inspection_copy),
@@ -387,7 +387,7 @@ function M.instantiate_kit(choice, first_brick_index, owner)
         compatibility = util.deep_copy(item.compatibility),
         balance = util.deep_copy(item.balance),
         suggested_placement = item.suggested_placement,
-        draft_value = item.draft_value,
+        draft_value = item.rule_set.rarity_budget,
         art_id = item.art_id,
     }, instances
 end

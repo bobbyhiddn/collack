@@ -282,11 +282,7 @@ local function rule_identity(rule)
 end
 
 local function visible_rules(rule_set)
-    local out = {}
-    for _, rule in ipairs((rule_set and rule_set.rules) or {}) do
-        if rule.visibility ~= "internal" then out[#out + 1] = rule end
-    end
-    return out
+    return rule_ast.player_rules(rule_set)
 end
 
 local function rule_inspection(rule_set, requested_index)
@@ -307,6 +303,10 @@ local function rule_inspection(rule_set, requested_index)
         compatibility = util.deep_copy(rule_set.compatibility),
     }
 end
+
+-- Pure projection used by both the UI and exact cross-consumer consistency
+-- tests. It follows the RuleSet's canonical ordered player-rule authority.
+M.inspect_rule_set = rule_inspection
 
 local function comparison_rule(rule_set)
     local inspection = rule_inspection(rule_set, 1)

@@ -3,14 +3,18 @@
 local here = (arg and arg[0] and arg[0]:match("^(.*)[/\\][^/\\]*$")) or "."
 package.path = table.concat({
     here .. "/../../?.lua",
+    here .. "/../../src/?.lua",
     here .. "/../?.lua",
     "./?.lua",
+    "./src/?.lua",
     package.path,
 }, ";")
 
 local harness = require("battle.tests.harness")
 local ast = require("battle.rule_ast")
 local content = require("battle.content.draft")
+local run_presentation = require("run_presentation")
+local util = require("battle.run_util")
 
 local M = { name = "rule_migration" }
 
@@ -43,6 +47,13 @@ local LEGACY = {
     magnet_needle_epic = true,
 }
 
+local function contains(values, wanted)
+    for _, value in ipairs(values or {}) do
+        if value == wanted then return true end
+    end
+    return false
+end
+
 function M.run(t)
     t:eq(content.COMPREHENSION_POOL_SIZE, 17,
         "the comprehension pool remains exactly seventeen items")
@@ -68,6 +79,49 @@ function M.run(t)
             key .. " balance is tied to the same rule set")
         t:eq(item.compatibility.max_copies, item.rule_set.compatibility.max_copies,
             key .. " compatibility is tied to the same rule set")
+
+        local authority = ast.player_authority(item.rule_set)
+        local player_rules = ast.player_rules(item.rule_set)
+        local profile = ast.project(item.rule_set)
+        t:eq(#authority.rule_ids, #player_rules,
+            key .. " has one canonical ID per inspectable rule")
+        t:eq(item.draft_value, authority.rarity_budget,
+            key .. " legacy draft value is only a RuleSet budget projection")
+        t:eq(item.compact_copy, authority.compact_copy,
+            key .. " compact copy uses canonical player rules")
+        t:ok(util.deep_equal(item.mechanics, authority.compact_lines),
+            key .. " compact lines use canonical player rules")
+        t:ok(util.deep_equal(item.inspection_copy, authority.inspection_copy),
+            key .. " expanded inspection uses canonical player rules")
+        t:ok(util.deep_equal(item.balance, authority.balance),
+            key .. " accounting uses canonical player rules")
+        t:eq(#authority.balance.lines, #authority.rule_ids,
+            key .. " accounting cannot count hidden helper rules")
+
+        local first_inspection = run_presentation.inspect_rule_set(item.rule_set, 1)
+        t:eq(first_inspection.count, #authority.rule_ids,
+            key .. " inspection and attribution expose the exact same count")
+        for rule_index, rule in ipairs(player_rules) do
+            local rule_id = authority.rule_ids[rule_index]
+            t:eq(rule_id, rule.id,
+                key .. " canonical player-rule order is stable at " .. rule_index)
+            local inspection = run_presentation.inspect_rule_set(
+                item.rule_set,
+                rule_index
+            )
+            t:eq(inspection.rule.id, rule_id,
+                key .. " inspection exposes attributed rule " .. rule_index)
+            t:eq(authority.balance.lines[rule_index].rule_id, rule_id,
+                key .. " accounting exposes attributed rule " .. rule_index)
+            t:ok(contains(profile._rule_ids[rule.operation.stat], rule_id),
+                key .. " execution projects attributed rule " .. rule_index)
+        end
+        for _, rule_ids in pairs(profile._rule_ids) do
+            for _, rule_id in ipairs(rule_ids) do
+                t:ok(contains(authority.rule_ids, rule_id),
+                    key .. " execution cannot attribute an internal helper rule")
+            end
+        end
     end
 
     t:eq(#content.LEGACY_MARBLES, 6,

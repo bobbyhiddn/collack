@@ -36,6 +36,8 @@ local particles = {}
 local trails = {}
 local telemetry_tick = -100
 local last_guidance_signature
+local last_action_state_signature
+local battle_rule_telemetry_seen = {}
 local verification_mode = false
 
 local COLORS = {
@@ -297,13 +299,33 @@ local function report_guidance()
     end
 end
 
+local function report_action_state()
+    if not verification_mode then return end
+    local ids = {}
+    for _, action in ipairs(view.actions or {}) do
+        if action.enabled then ids[#ids + 1] = action.id end
+    end
+    table.sort(ids)
+    local signature = view.screen .. "|" .. table.concat(ids, ",")
+    if signature == last_action_state_signature then return end
+    last_action_state_signature = signature
+    print(string.format(
+        "CALLACK_ACTION_STATE phase=%s enabled=%s",
+        telemetry_value(view.screen),
+        #ids > 0 and table.concat(ids, ",") or "none"
+    ))
+end
+
 local function refresh_view()
     view = run_loop.project(app)
     if last_screen ~= view.screen then
         last_screen = view.screen
         screen_age = 0
         trails = {}
-        if view.screen == "battle" then last_rule_callout = nil end
+        if view.screen == "battle" then
+            last_rule_callout = nil
+            battle_rule_telemetry_seen = {}
+        end
         update_title()
         report_action("phase_" .. view.screen)
     end
@@ -313,6 +335,7 @@ local function refresh_view()
         offer_age = 0
     end
     report_guidance()
+    report_action_state()
 end
 
 local function setting_read(name, default)
@@ -2111,11 +2134,12 @@ local function pointer_pressed(x, y, source)
         local elapsed = now - last_pointer_press.at
         local same_position =
             (x - last_pointer_press.x) ^ 2 + (y - last_pointer_press.y) ^ 2 < 256
-        local repeated_action =
-            action.id == last_pointer_press.action_id and elapsed < 0.35
         local synthetic_cross_source =
             source ~= last_pointer_press.source and elapsed < 1.5
-        if same_position and (repeated_action or synthetic_cross_source) then
+        -- Browser touch already has a dedicated synthetic-mouse guard below.
+        -- Suppressing rapid same-source presses made legitimate pause/resume
+        -- and ledger toggles depend on renderer timing.
+        if same_position and synthetic_cross_source then
             return true
         end
     end
@@ -2220,16 +2244,19 @@ local function handle_event(event)
                 opponent = app.model.run.opponent.name,
             }),
         }
-        print(string.format(
-            "CALLACK_RULE_CALLOUT rule=%s source=%s icon=%s verb=%s target=%s magnitude=%s unit=%s",
-            telemetry_value(last_rule_callout.rule_id),
-            telemetry_value(last_rule_callout.source),
-            telemetry_value(last_rule_callout.icon),
-            telemetry_value(last_rule_callout.verb),
-            telemetry_value(last_rule_callout.target),
-            telemetry_value(last_rule_callout.magnitude),
-            telemetry_value(last_rule_callout.unit)
-        ))
+        if not battle_rule_telemetry_seen[event.rule_id] then
+            battle_rule_telemetry_seen[event.rule_id] = true
+            print(string.format(
+                "CALLACK_RULE_CALLOUT rule=%s source=%s icon=%s verb=%s target=%s magnitude=%s unit=%s",
+                telemetry_value(last_rule_callout.rule_id),
+                telemetry_value(last_rule_callout.source),
+                telemetry_value(last_rule_callout.icon),
+                telemetry_value(last_rule_callout.verb),
+                telemetry_value(last_rule_callout.target),
+                telemetry_value(last_rule_callout.magnitude),
+                telemetry_value(last_rule_callout.unit)
+            ))
+        end
     end
     spawn_event_particles(event)
     if not app.model.ui.reduced_motion

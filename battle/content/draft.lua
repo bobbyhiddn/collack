@@ -40,22 +40,25 @@ M.TAGS = {
 
 local function decorate(spec, rule_set)
     ast.assert_valid(rule_set)
+    local authority = ast.player_authority(rule_set)
     local item = {
         id = spec.id,
         name = spec.name or rule_set.name,
         role = rule_set.role,
         rarity = spec.rarity,
-        draft_value = spec.draft_value,
+        -- Kept as a compatibility projection for the legacy draft UI. The
+        -- canonical RuleSet budget is the only authored balance authority.
+        draft_value = authority.rarity_budget,
         tags = ast.copy(rule_set.synergy_tags),
         counter_tags = ast.copy(spec.counter_tags or {}),
         art_id = spec.art_id,
         suggested_placement = spec.suggested_placement,
         rule_set = ast.copy(rule_set),
-        compact_copy = ast.compact(rule_set),
-        inspection_copy = ast.expanded_lines(rule_set),
-        mechanics = ast.compact_lines(rule_set),
+        compact_copy = authority.compact_copy,
+        inspection_copy = ast.copy(authority.inspection_copy),
+        mechanics = ast.copy(authority.compact_lines),
         compatibility = ast.copy(rule_set.compatibility),
-        balance = ast.balance(rule_set),
+        balance = ast.copy(authority.balance),
     }
     return item
 end
@@ -63,19 +66,16 @@ end
 local SLING_SPECS = {
     {
         id = "momentum",
-        draft_value = 100,
         counter_tags = { "guard", "depth" },
         art_id = "sling_momentum",
     },
     {
         id = "ricochet",
-        draft_value = 100,
         counter_tags = { "depth", "burst" },
         art_id = "sling_ricochet",
     },
     {
         id = "effect_amplifier",
-        draft_value = 100,
         counter_tags = { "sustain", "control" },
         art_id = "sling_effect_amplifier",
     },
@@ -89,44 +89,44 @@ end
 local MARBLE_SPECS = {
     {
         id = "chalk_common", name = "Chalk Pebble", role = "opener", rarity = "common",
-        core = "dull_quartz", shell_ids = { "chalk_plain" }, draft_value = 98,
+        core = "dull_quartz", shell_ids = { "chalk_plain" }, rarity_budget = 98,
         tags = { "tempo", "release" }, counter_tags = { "depth" },
         art_id = "marble_chalk_common", in_pool = true,
     },
     {
         id = "quartz_common", name = "Quartz Round", role = "survivor", rarity = "common",
-        core = "skew_flint", shell_ids = { "quartz_banded" }, draft_value = 102,
+        core = "skew_flint", shell_ids = { "quartz_banded" }, rarity_budget = 102,
         tags = { "durable", "angle" }, counter_tags = { "burst" },
         art_id = "marble_quartz_common", in_pool = true,
     },
     {
         id = "drifter_common", name = "Drifter", role = "control", rarity = "common",
-        core = "cant_pebble", shell_ids = { "jade_lattice" }, draft_value = 99,
+        core = "cant_pebble", shell_ids = { "jade_lattice" }, rarity_budget = 99,
         tags = { "angle", "control" }, counter_tags = { "rebound" },
         art_id = "marble_drifter_common",
     },
     {
         id = "flint_hook_common", name = "Flint Hook", role = "breaker", rarity = "common",
-        core = "skew_flint", shell_ids = { "flint_spiral" }, draft_value = 101,
+        core = "skew_flint", shell_ids = { "flint_spiral" }, rarity_budget = 101,
         tags = { "burst", "angle" }, counter_tags = { "guard" },
         art_id = "marble_flint_hook",
     },
     {
         id = "geode_uncommon", name = "Split Geode", role = "fuse", rarity = "uncommon",
         core = "shrapnel_geode", shell_ids = { "obsidian_shard", "jade_lattice" },
-        draft_value = 101, tags = { "chain", "release" }, counter_tags = { "sustain" },
+        rarity_budget = 101, tags = { "chain", "release" }, counter_tags = { "sustain" },
         art_id = "marble_geode_uncommon", in_pool = true,
     },
     {
         id = "silver_seed_uncommon", name = "Silver Seed", role = "control", rarity = "uncommon",
         core = "shrapnel_geode", shell_ids = { "silver_veined", "chalk_plain" },
-        draft_value = 100, tags = { "guard", "release" }, counter_tags = { "chain" },
+        rarity_budget = 100, tags = { "guard", "release" }, counter_tags = { "chain" },
         art_id = "marble_silver_seed",
     },
     {
         id = "banded_guard_uncommon", name = "Banded Guard", role = "survivor",
         rarity = "uncommon", core = "dull_quartz",
-        shell_ids = { "quartz_banded", "jade_lattice" }, draft_value = 102,
+        shell_ids = { "quartz_banded", "jade_lattice" }, rarity_budget = 102,
         tags = { "durable", "guard" }, counter_tags = { "tempo" },
         art_id = "marble_banded_guard",
     },
@@ -134,28 +134,28 @@ local MARBLE_SPECS = {
         id = "warden_rare", name = "Warden", role = "survivor", rarity = "rare",
         core = "concussion_pearl",
         shell_ids = { "silver_veined", "granite_mottled", "jade_lattice" },
-        draft_value = 102, tags = { "durable", "control" }, counter_tags = { "burst" },
+        rarity_budget = 102, tags = { "durable", "control" }, counter_tags = { "burst" },
         art_id = "marble_warden_rare", in_pool = true,
     },
     {
         id = "shard_ram_rare", name = "Shard Ram", role = "breaker", rarity = "rare",
         core = "shrapnel_geode",
         shell_ids = { "granite_mottled", "obsidian_shard", "flint_spiral" },
-        draft_value = 101, tags = { "force", "burst" }, counter_tags = { "guard" },
+        rarity_budget = 101, tags = { "force", "burst" }, counter_tags = { "guard" },
         art_id = "marble_shard_ram",
     },
     {
         id = "lodestone_epic", name = "Lodestone", role = "control", rarity = "epic",
         core = "lodestone_heart",
         shell_ids = { "flint_spiral", "quartz_banded", "jade_lattice", "chalk_plain" },
-        draft_value = 100, tags = { "control", "field" }, counter_tags = { "sustain" },
+        rarity_budget = 100, tags = { "control", "field" }, counter_tags = { "sustain" },
         art_id = "marble_lodestone_epic", in_pool = true,
     },
     {
         id = "magnet_needle_epic", name = "Magnet Needle", role = "finisher", rarity = "epic",
         core = "lodestone_heart",
         shell_ids = { "silver_veined", "obsidian_shard", "flint_spiral", "chalk_plain" },
-        draft_value = 99, tags = { "release", "control" }, counter_tags = { "depth" },
+        rarity_budget = 99, tags = { "release", "control" }, counter_tags = { "depth" },
         art_id = "marble_magnet_needle",
     },
     {
@@ -165,7 +165,7 @@ local MARBLE_SPECS = {
             "obsidian_shard", "flint_spiral", "granite_mottled",
             "quartz_banded", "jade_lattice",
         },
-        draft_value = 102, tags = { "burst", "field" }, counter_tags = { "sustain" },
+        rarity_budget = 102, tags = { "burst", "field" }, counter_tags = { "sustain" },
         art_id = "marble_cinder_legendary", in_pool = true,
     },
 }
@@ -184,7 +184,7 @@ for _, spec in ipairs(MARBLE_SPECS) do
         name = spec.name,
         role = spec.role,
         synergy_tags = spec.tags,
-        rarity_budget = spec.draft_value,
+        rarity_budget = spec.rarity_budget,
         drawback = cores.by_id[spec.core].rule_set.drawback,
     }, sources)
     local item = decorate(spec, rule_set)
@@ -201,56 +201,56 @@ end
 local KIT_SPECS = {
     {
         id = "guard_pair", name = "Basalt Escort", role = "adjacent protection",
-        brick_ids = { "basalt_absorber", "granite_fortifier" }, draft_value = 101,
+        brick_ids = { "basalt_absorber", "granite_fortifier" }, rarity_budget = 101,
         tags = { "guard", "durable", "absorption" }, counter_tags = { "force" },
         suggested_placement = "Place side by side; the fortifier shelters the absorber.",
         art_id = "kit_guard_pair",
     },
     {
         id = "mirror_anchor", name = "Anchored Mirror", role = "rebound lane",
-        brick_ids = { "mirror_pane", "temporal_anchor" }, draft_value = 100,
+        brick_ids = { "mirror_pane", "temporal_anchor" }, rarity_budget = 100,
         tags = { "rebound", "depth", "mirror_lane" }, counter_tags = { "angle" },
         suggested_placement = "Set the mirror forward with the anchor one row behind.",
         art_id = "kit_mirror_anchor",
     },
     {
         id = "living_aegis", name = "Living Aegis", role = "sustain",
-        brick_ids = { "moss_regenerator", "aegis_keystone" }, draft_value = 102,
+        brick_ids = { "moss_regenerator", "aegis_keystone" }, rarity_budget = 102,
         tags = { "sustain", "guard", "renewal" }, counter_tags = { "burst" },
         suggested_placement = "Keep the regenerator adjacent to the keystone.",
         art_id = "kit_living_aegis",
     },
     {
         id = "venom_rime", name = "Cold Venom", role = "control field",
-        brick_ids = { "venom_glass", "rime_block" }, draft_value = 99,
+        brick_ids = { "venom_glass", "rime_block" }, rarity_budget = 99,
         tags = { "control", "field", "status_lock" }, counter_tags = { "durable" },
         suggested_placement = "Split them across approach lanes to layer statuses.",
         art_id = "kit_venom_rime",
     },
     {
         id = "lodestone_void", name = "Null Orbit", role = "cluster then strip",
-        brick_ids = { "lodestone_block", "void_prism" }, draft_value = 101,
+        brick_ids = { "lodestone_block", "void_prism" }, rarity_budget = 101,
         tags = { "control", "field", "gravity_well" }, counter_tags = { "rebound" },
         suggested_placement = "Offset the prism behind the magnetic approach lane.",
         art_id = "kit_lodestone_void",
     },
     {
         id = "shatter_keg", name = "Fault Line", role = "burst chain",
-        brick_ids = { "shatter_crystal", "powder_keg" }, draft_value = 98,
+        brick_ids = { "shatter_crystal", "powder_keg" }, rarity_budget = 98,
         tags = { "burst", "chain", "detonation" }, counter_tags = { "sustain" },
         suggested_placement = "Place adjacent where one break can reach the other.",
         art_id = "kit_shatter_keg",
     },
     {
         id = "splice_keg", name = "Spliced Fuse", role = "adjacency damage",
-        brick_ids = { "splice_node", "powder_keg" }, draft_value = 100,
+        brick_ids = { "splice_node", "powder_keg" }, rarity_budget = 100,
         tags = { "chain", "burst", "damage_link" }, counter_tags = { "guard" },
         suggested_placement = "Join the node directly to the keg and another kit.",
         art_id = "kit_splice_keg",
     },
     {
         id = "vault_temporal", name = "Deep Reserve", role = "protected depth",
-        brick_ids = { "vault_arch", "temporal_anchor" }, draft_value = 102,
+        brick_ids = { "vault_arch", "temporal_anchor" }, rarity_budget = 102,
         tags = { "depth", "sustain", "deep_reserve" }, counter_tags = { "tempo" },
         suggested_placement = "Place the vault in front of the deeper anchor.",
         art_id = "kit_vault_temporal",
@@ -268,7 +268,7 @@ for _, spec in ipairs(KIT_SPECS) do
         name = spec.name,
         role = spec.role,
         synergy_tags = spec.tags,
-        rarity_budget = spec.draft_value,
+        rarity_budget = spec.rarity_budget,
     }, sources)
     local item = decorate(spec, rule_set)
     item.brick_ids = ast.copy(spec.brick_ids)

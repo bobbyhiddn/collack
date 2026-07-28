@@ -170,11 +170,7 @@ local function clear_cell(formation, uid)
 end
 
 local function rule_ids(rule_set)
-    local out = {}
-    for _, rule in ipairs((rule_set and rule_set.rules) or {}) do
-        out[#out + 1] = rule.id
-    end
-    return out
+    return rule_ast.player_rule_ids(rule_set)
 end
 
 local function current_tag_set(state)
@@ -773,17 +769,25 @@ local function candidate_sling(state, seed)
     end)
 end
 
+local function canonical_rule_authority(item)
+    return rule_ast.player_authority(
+        assert(item and item.rule_set, "canonical item rule set is required")
+    )
+end
+
 local function weakest_marble(state)
-    local selected
+    local selected, selected_authority
     for _, marble in ipairs(state.player.marbles) do
+        local authority = canonical_rule_authority(marble)
         if not selected
-            or (marble.draft_value or 0) < (selected.draft_value or 0)
-            or ((marble.draft_value or 0) == (selected.draft_value or 0)
+            or authority.balance.spent < selected_authority.balance.spent
+            or (authority.balance.spent == selected_authority.balance.spent
                 and marble.uid < selected.uid) then
             selected = marble
+            selected_authority = authority
         end
     end
-    return selected
+    return selected, selected_authority
 end
 
 local function first_brick(state)
@@ -856,7 +860,7 @@ local function reward_choice(state, slot, operation, item, category, next_oppone
     local current = current_tag_set(state)
     local scout = util.set(next_opponent.scout_tags)
     local tags = item.tags or item.rule_set.synergy_tags
-    local compact = rule_ast.compact(item.rule_set)
+    local authority = canonical_rule_authority(item)
     local operation_text = operation_copy(operation, state, item)
     return {
         choice_id = string.format(
@@ -875,13 +879,13 @@ local function reward_choice(state, slot, operation, item, category, next_oppone
         name = item.name,
         role = operation.kind:gsub("_", " "),
         rarity = item.rarity,
-        draft_value = item.draft_value,
-        mechanics = rule_ast.compact_lines(item.rule_set),
-        compact_copy = compact,
-        inspection_copy = rule_ast.expanded_lines(item.rule_set),
+        draft_value = authority.rarity_budget,
+        mechanics = util.deep_copy(authority.compact_lines),
+        compact_copy = authority.compact_copy,
+        inspection_copy = util.deep_copy(authority.inspection_copy),
         rule_set = util.deep_copy(item.rule_set),
         compatibility = util.deep_copy(item.rule_set.compatibility),
-        balance = rule_ast.balance(item.rule_set),
+        balance = util.deep_copy(authority.balance),
         tags = util.deep_copy(tags),
         tag_metadata = tag_metadata(tags),
         synergy = {
@@ -897,9 +901,10 @@ local function reward_choice(state, slot, operation, item, category, next_oppone
             fight_index = state.fight.index,
             operation = operation.kind,
             target_uid = operation.target_uid,
-            source_rule_set_id = item.rule_set.id,
-            source_rule_ids = rule_ids(item.rule_set),
-            generated_compact_copy = compact,
+            target_authority = util.deep_copy(operation.target_authority),
+            source_rule_set_id = authority.rule_set_id,
+            source_rule_ids = util.deep_copy(authority.rule_ids),
+            generated_compact_copy = authority.compact_copy,
             generated_operation_copy = operation_text,
         },
     }
@@ -991,23 +996,25 @@ local function reward_operations(state)
                 category = "brick_kit",
             }
         elseif #state.player.marbles > LIMITS.START_MARBLES then
-            local target = weakest_marble(state)
+            local target, target_authority = weakest_marble(state)
             operations[#operations + 1] = {
                 operation = {
                     kind = "remove_marble",
                     target_uid = target.uid,
                     content_id = target.content_id,
+                    target_authority = target_authority,
                 },
                 item = util.deep_copy(target),
                 category = "marble",
             }
         elseif marble_id then
-            local target = weakest_marble(state)
+            local target, target_authority = weakest_marble(state)
             operations[#operations + 1] = {
                 operation = {
                     kind = "replace_marble",
                     target_uid = target.uid,
                     content_id = marble_id,
+                    target_authority = target_authority,
                 },
                 item = marble_item(marble_id),
                 category = "marble",
@@ -1019,12 +1026,13 @@ local function reward_operations(state)
     -- exact, legal replacement/removal operations rather than emitting a
     -- dead card.
     if #operations < LIMITS.OFFER_SIZE and marble_id and #state.player.marbles > 0 then
-        local target = weakest_marble(state)
+        local target, target_authority = weakest_marble(state)
         operations[#operations + 1] = {
             operation = {
                 kind = "replace_marble",
                 target_uid = target.uid,
                 content_id = marble_id,
+                target_authority = target_authority,
             },
             item = marble_item(marble_id),
             category = "marble",
@@ -1091,6 +1099,11 @@ local function make_reward_offer(state)
     }
 end
 
+local function target_authority_matches(target, expected)
+    return type(expected) == "table"
+        and util.deep_equal(canonical_rule_authority(target), expected)
+end
+
 local function apply_operation(state, operation)
     local kind = operation.kind
     if kind == "add_marble" then
@@ -1120,6 +1133,9 @@ local function apply_operation(state, operation)
     elseif kind == "replace_marble" then
         local target, index = find_by_uid(state.player.marbles, operation.target_uid)
         if not target then return nil, "target_missing" end
+        if not target_authority_matches(target, operation.target_authority) then
+            return nil, "target_authority_changed"
+        end
         local replacement = instantiate_marble(operation.content_id, 1, "replacement")
         replacement.uid = target.uid
         state.player.marbles[index] = replacement
@@ -1152,8 +1168,11 @@ local function apply_operation(state, operation)
         table.remove(state.workshop.broken_bricks, operation.broken_index or 1)
     elseif kind == "remove_marble" then
         if #state.player.marbles <= 1 then return nil, "last_marble" end
-        local _, index = find_by_uid(state.player.marbles, operation.target_uid)
+        local target, index = find_by_uid(state.player.marbles, operation.target_uid)
         if not index then return nil, "target_missing" end
+        if not target_authority_matches(target, operation.target_authority) then
+            return nil, "target_authority_changed"
+        end
         table.remove(state.player.marbles, index)
         local bag_index = util.index_of(state.setup.bag_order, operation.target_uid)
         if bag_index then table.remove(state.setup.bag_order, bag_index) end
