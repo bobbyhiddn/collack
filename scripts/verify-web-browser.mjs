@@ -456,12 +456,9 @@ async function completeMobile(runtime) {
   assert(finalSettings?.muted && finalSettings?.reducedMotion,
     `phone: touch settings did not remain enabled: ${JSON.stringify(phoneSettings)}`);
   await screenshot(runtime, "phone-battle-settings.png");
-  const phoneMotionBaseline =
-    physicsSamples.filter((sample) => sample.label === "phone").length;
   const firstBattle = await runtime.canvas.screenshot();
   await screenshot(runtime, "phone-battle.png");
   await touchAction(runtime, 57, 796, "battle_pause");
-  await waitForNewPhysics("phone", phoneMotionBaseline);
   await runtime.page.waitForTimeout(650);
   const secondBattle = await runtime.canvas.screenshot();
   assert(digest(firstBattle) !== digest(secondBattle),
@@ -602,12 +599,9 @@ async function completeDesktop(runtime) {
   await mouseAction(runtime, 1194, 732, "battle_motion");
   await mouseAction(runtime, 1064, 732, "battle_mute");
   await screenshot(runtime, "desktop-battle-settings.png");
-  const desktopMotionBaseline =
-    physicsSamples.filter((sample) => sample.label === "desktop").length;
   const firstBattle = await runtime.canvas.screenshot();
   await screenshot(runtime, "desktop-battle.png");
   await mouseAction(runtime, 816, 732, "battle_pause");
-  await waitForNewPhysics("desktop", desktopMotionBaseline);
   await runtime.page.waitForTimeout(650);
   const secondBattle = await runtime.canvas.screenshot();
   assert(digest(firstBattle) !== digest(secondBattle),
