@@ -1,8 +1,8 @@
 {
   "schemaVersion": 3,
-  "sourceDigest": "0b80265f23461c9467fd155a5c4b2a7d83ff0e954e12283e77d2a89b4230d662",
-  "sourceCommit": "8b3ad844d98254726792107ca6b07dc771ef34d8",
-  "sourceTree": "6bcc33b8b43e72d35c406293c1c45b8724664dd3",
+  "sourceDigest": "a341a179d59a7cda7bbaf58ff27847adb79ec6ae48a4c9743f9ead7289fa87ae",
+  "sourceCommit": "c533f9876a7809c459a15748f528f65e5c6dfc37",
+  "sourceTree": "362f6f1597d9b7aafffab6325ad539f592a9b23b",
   "viewports": {
     "phone": {
       "width": 390,
@@ -18,24 +18,24 @@
   "executableEvidence": {
     "archive": {
       "path": "dist/collack-spike.love",
-      "size": 131040,
-      "sha256": "ae4a304361e29c1fa781e52614ae14c5fa81eab403cac98222535a672a199f5c"
+      "size": 132678,
+      "sha256": "ed38d902c8eb6130f36a5583d36c6309190b58d46f116467066f46eb06b6ac9b"
     },
     "webFiles": [
       {
-        "path": "dist/web/game.ae4a304361e29c1f.data",
-        "size": 131040,
-        "sha256": "ae4a304361e29c1fa781e52614ae14c5fa81eab403cac98222535a672a199f5c"
+        "path": "dist/web/game.6a04e82a3bfa1407.js",
+        "size": 11516,
+        "sha256": "6a04e82a3bfa1407b4c0843862d10efded392845fd28b679604edfe553d8406a"
       },
       {
-        "path": "dist/web/game.efeaed57f34b7360.js",
-        "size": 11516,
-        "sha256": "efeaed57f34b73606c710a24875d7d61d25203ddcac6f850d61ddf8ed68e9c06"
+        "path": "dist/web/game.ed38d902c8eb6130.data",
+        "size": 132678,
+        "sha256": "ed38d902c8eb6130f36a5583d36c6309190b58d46f116467066f46eb06b6ac9b"
       },
       {
         "path": "dist/web/index.html",
         "size": 8558,
-        "sha256": "27b40b170b3d29e321aec9d83dde3d5cda3ffa7a27df8d6841388fe5e87ca904"
+        "sha256": "07eab9849d6c021692f1ac8fcc0d6849f05dcb8982e3f95098e5b407aff38b2e"
       },
       {
         "path": "dist/web/love.cc23a2a709781e03.js",
@@ -58,7 +58,7 @@
         "sha256": "b991b00f74b61804d52f8e5590337f4ef1311fa8bb4315337a1bbc7c8bd262cd"
       }
     ],
-    "aggregateDigest": "821a2c33ddc573ca0e693317472b31abb634bac10a25f498c010408340445eb6"
+    "aggregateDigest": "b71c1444509b036974f9ca146490a7851ba31aba27d3790ee7302e95c94ba94d"
   },
   "canonicalSweeps": [
     {
@@ -524,5 +524,5 @@
     "phone-setup.png": "8d38328122a34184a874e887160fcc03cb3f7efaa87aa2d64ec425357aa2f9e9",
     "phone-terminal-result.png": "c87662621cd42cf0072b40143127514144b85529455faa9f27d8d6d49d8db8b6"
   },
-  "evidenceDigest": "f670fbc102c40d81c769d8b89c5330e4da4d3e39c443cc1c32c1b71eeca9bbd7"
+  "evidenceDigest": "6065e861b4df711da26cab565bfdf63cef5df0c6778f0388cccfe6564dc23f7f"
 }
