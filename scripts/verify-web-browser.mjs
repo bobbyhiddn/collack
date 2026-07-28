@@ -456,10 +456,12 @@ async function completeMobile(runtime) {
   assert(finalSettings?.muted && finalSettings?.reducedMotion,
     `phone: touch settings did not remain enabled: ${JSON.stringify(phoneSettings)}`);
   await screenshot(runtime, "phone-battle-settings.png");
-  await touchAction(runtime, 57, 796, "battle_pause");
-  await waitForPhysics("phone", 2);
+  const phoneMotionBaseline =
+    physicsSamples.filter((sample) => sample.label === "phone").length;
   const firstBattle = await runtime.canvas.screenshot();
   await screenshot(runtime, "phone-battle.png");
+  await touchAction(runtime, 57, 796, "battle_pause");
+  await waitForNewPhysics("phone", phoneMotionBaseline);
   await runtime.page.waitForTimeout(650);
   const secondBattle = await runtime.canvas.screenshot();
   assert(digest(firstBattle) !== digest(secondBattle),
@@ -511,6 +513,7 @@ async function completeMobile(runtime) {
   );
   await touchAction(runtime, 287, 788, "replay_close");
   await replayResultReached;
+  await runtime.page.waitForTimeout(1_000);
   await screenshot(runtime, "phone-result-after-replay.png");
 }
 
@@ -599,10 +602,12 @@ async function completeDesktop(runtime) {
   await mouseAction(runtime, 1194, 732, "battle_motion");
   await mouseAction(runtime, 1064, 732, "battle_mute");
   await screenshot(runtime, "desktop-battle-settings.png");
-  await mouseAction(runtime, 816, 732, "battle_pause");
-  await waitForPhysics("desktop", 2);
+  const desktopMotionBaseline =
+    physicsSamples.filter((sample) => sample.label === "desktop").length;
   const firstBattle = await runtime.canvas.screenshot();
   await screenshot(runtime, "desktop-battle.png");
+  await mouseAction(runtime, 816, 732, "battle_pause");
+  await waitForNewPhysics("desktop", desktopMotionBaseline);
   await runtime.page.waitForTimeout(650);
   const secondBattle = await runtime.canvas.screenshot();
   assert(digest(firstBattle) !== digest(secondBattle),
@@ -651,6 +656,7 @@ async function completeDesktop(runtime) {
   );
   await mouseAction(runtime, 1194, 732, "replay_close");
   await replayResultReached;
+  await runtime.page.waitForTimeout(1_000);
   await screenshot(runtime, "desktop-result-after-replay.png");
 }
 
