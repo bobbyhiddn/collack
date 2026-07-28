@@ -352,6 +352,15 @@ async function waitForNewRuleCallout(label, priorCount, timeout = 30_000) {
   return callout;
 }
 
+async function advancePausedBattle(runtime, ticks) {
+  for (let tick = 0; tick < ticks; tick += 1) {
+    await runtime.page.keyboard.press("ArrowRight");
+  }
+  await runtime.page.evaluate(() => new Promise((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(resolve));
+  }));
+}
+
 function digest(buffer) {
   return createHash("sha256").update(buffer).digest("hex");
 }
@@ -391,7 +400,6 @@ async function completeMobile(runtime) {
   );
   await touchAction(runtime, 195, 800, "lock_setup");
   await battleReached;
-  await touchAction(runtime, 57, 796, "battle_pause");
   await touchAction(runtime, 147, 796, "battle_speed");
   await touchAction(runtime, 57, 796, "battle_pause");
   await firstRefitReached;
@@ -428,9 +436,9 @@ async function completeMobile(runtime) {
     ruleCallouts.filter((sample) => sample.label === "phone").length;
   await touchAction(runtime, 195, 800, "lock_setup");
   await secondBattleReached;
+  await advancePausedBattle(runtime, 192);
   await waitForNewPhysics("phone", secondPhysicsBaseline);
   await waitForNewRuleCallout("phone", secondRuleBaseline);
-  await touchAction(runtime, 57, 796, "battle_pause");
   await screenshot(runtime, "phone-battle-trigger.png");
   await inspectAction(
     runtime,
@@ -486,6 +494,7 @@ async function completeMobile(runtime) {
   );
   await touchAction(runtime, 195, 800, "lock_setup");
   await thirdBattleReached;
+  await touchAction(runtime, 57, 796, "battle_pause");
   await resultReached;
   await screenshot(runtime, "phone-result.png");
   await screenshot(runtime, "phone-terminal-result.png");
@@ -538,7 +547,6 @@ async function completeDesktop(runtime) {
   );
   await mouseAction(runtime, 1122, 732, "lock_setup");
   await battleReached;
-  await mouseAction(runtime, 816, 732, "battle_pause");
   await mouseAction(runtime, 940, 732, "battle_speed");
   await mouseAction(runtime, 816, 732, "battle_pause");
   await firstRefitReached;
@@ -575,9 +583,9 @@ async function completeDesktop(runtime) {
     ruleCallouts.filter((sample) => sample.label === "desktop").length;
   await mouseAction(runtime, 1122, 732, "lock_setup");
   await secondBattleReached;
+  await advancePausedBattle(runtime, 192);
   await waitForNewPhysics("desktop", secondPhysicsBaseline);
   await waitForNewRuleCallout("desktop", secondRuleBaseline);
-  await mouseAction(runtime, 816, 732, "battle_pause");
   await screenshot(runtime, "desktop-battle-trigger.png");
   await inspectAction(
     runtime,
@@ -626,6 +634,7 @@ async function completeDesktop(runtime) {
   );
   await mouseAction(runtime, 1122, 732, "lock_setup");
   await thirdBattleReached;
+  await mouseAction(runtime, 816, 732, "battle_pause");
   await resultReached;
   await screenshot(runtime, "desktop-result.png");
   await screenshot(runtime, "desktop-terminal-result.png");

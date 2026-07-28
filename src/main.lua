@@ -325,6 +325,7 @@ local function refresh_view()
         if view.screen == "battle" then
             last_rule_callout = nil
             battle_rule_telemetry_seen = {}
+            telemetry_tick = -100
         end
         update_title()
         report_action("phase_" .. view.screen)
@@ -370,6 +371,14 @@ local function activate(action_id, source)
         return false
     end
     focused_action_id = action_id
+    if verification_mode
+        and action_id == "lock_setup"
+        and app.model.run.phase == "battle" then
+        -- Browser evidence begins every battle at an exact tick. The verifier
+        -- resumes through the same visible control or uses canonical keyboard
+        -- single-step; ordinary packaged play is unchanged.
+        app.model.ui.paused = true
+    end
     refresh_view()
     local inspected_choice = action_id:match("^offer:")
         and view.draft and view.draft.inspected or nil
@@ -2410,7 +2419,12 @@ function love.load(args)
 end
 
 function love.update(dt)
-    update_effects(dt)
+    local effect_dt = verification_mode
+        and app.model.run.phase == "battle"
+        and app.model.ui.paused
+        and 0
+        or dt
+    update_effects(effect_dt)
     if verification_mode
         and app.model.run.phase == "battle"
         and not app.model.ui.paused then
