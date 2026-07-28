@@ -3,6 +3,8 @@
 -- The canonical engine owns movement and outcomes.  This module only
 -- interpolates two BattleFrame values and turns exact-tick events into cues.
 
+local rule_ast = require("battle.rule_ast")
+
 local M = {}
 
 M.SCHEMA_VERSION = 2
@@ -137,7 +139,8 @@ function M.project_battle(current, previous, alpha)
             if marble.alive and marble.render_x then
                 state.entities[#state.entities + 1] = {
                     type = "marble", owner = side_id, id = marble.body_id,
-                    uid = marble.uid, name = marble.name, rarity = marble.rarity,
+                    uid = marble.uid, content_id = marble.content_id,
+                    name = marble.name, rarity = marble.rarity,
                     core = marble.core, core_id = marble.core_id,
                     shell_count = #(marble.shells or {}),
                     shells = copy(marble.shells),
@@ -159,6 +162,8 @@ end
 function M.event_text(event, names)
     names = names or { A = "A", B = "B" }
     local actor = names[event.side] or "Arena"
+    local attributed = rule_ast.callout(event)
+    if attributed then return attributed end
     if event.type == "battle_start" then
         return string.format("Battle seeded %d", event.seed)
     elseif event.type == "exchange_start" or event.type == "volley_start" then

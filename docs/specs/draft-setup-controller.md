@@ -54,9 +54,10 @@ excluded from runtime archives.
 
 ## Offers and player choices
 
-Every offer has exactly three cards. A card contains mechanics copy, synergy
-tags with readable labels/descriptions, comparable `draft_value`, an art ID,
-and inspectable category details:
+Every offer has exactly three cards. A card contains a canonical `rule_set`,
+generated compact and expanded mechanics copy, compatibility and balance
+projections, synergy tags with readable labels/descriptions, comparable
+`draft_value`, an art ID, and inspectable category details:
 
 - sling cards expose the whole-bag physical modifier;
 - marble cards expose role, rarity, ordered shells, durability, collisions,
@@ -67,10 +68,17 @@ After the first pick, every generated offer includes a current-build match and
 a new direction. The generator excludes already selected marble blueprints and
 kits for the current run. Offer generation uses only `domain_seeds.draft`.
 
-The catalog contains 3 supported slings, 12 marble blueprints, 8 positional
-brick kits spanning all 18 existing brick archetypes, and 21 readable synergy
-identities. Individual picks become stable player instances (`player-m01…04`,
-`player-b01…08`); there is no whole-army choice.
+The comprehension catalog is deliberately fixed at 17 items: 3 supported
+slings, 6 marble blueprints, and 8 positional brick kits spanning the existing
+brick vocabulary. Six additional marble blueprints remain quarantined for
+legacy CPU recipes and cannot enter player offers. Individual picks become
+stable player instances (`player-m01…04`, `player-b01…08`); there is no
+whole-army choice.
+
+Mechanical meaning follows the grammar-first contract in
+[`rules-grammar-core.md`](rules-grammar-core.md). Names, art IDs, tag glossary
+text, and placement advice remain presentation metadata; they cannot add or
+override a mechanic.
 
 ## Opponent boundary
 

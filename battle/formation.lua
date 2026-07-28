@@ -46,18 +46,26 @@ function M.build(layout, roster)
             if cell and cell ~= "." then
                 local roster_item = roster_by_uid[cell]
                 local content_id = roster_item and roster_item.content_id or cell
-                local def = bricks.by_id[content_id]
-                if not def then
+                if not bricks.has(content_id) then
                     error("unknown brick: " .. tostring(content_id))
                 end
+                if roster_item and not roster_item.rule_set then
+                    error("formation roster brick is missing its canonical RuleSet")
+                end
+                local profile = bricks.runtime(
+                    content_id,
+                    roster_item and roster_item.rule_set or nil,
+                    roster_item
+                )
                 grid[row][col] = {
-                    id = def.id,
+                    id = profile.id,
                     uid = roster_item and roster_item.uid or nil,
-                    name = def.name,
-                    family = def.family or "basic",
-                    behaviour = def.behaviour,
-                    hp = def.hp,
-                    max_hp = def.hp,
+                    name = profile.name,
+                    family = profile.family or "basic",
+                    behaviour = profile.behaviour,
+                    hp = profile.hp,
+                    max_hp = profile.hp,
+                    rule_set = profile.rule_set,
                     aegis_spent = false,
                     row = row,
                     col = col,

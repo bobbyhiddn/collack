@@ -64,6 +64,7 @@ M.palette = {
     chalk = colour("#FFF4DE"),
     muted = colour("#CBB995"),
     brass_600 = colour("#B88636"),
+    brass_ink = colour("#6D4B17"),
     brass_300 = colour("#E3C06B"),
     brass_100 = colour("#F7E3A2"),
     damage = colour("#DF684F"),
@@ -165,71 +166,54 @@ M.rarity = {
 M.behaviour = {
     inert = {
         family = "basic", label = "BASE", sigil = "centre_dot",
-        description = "A sturdy body with no triggered effect.",
     },
     absorb = {
         family = "defensive", label = "ABS", sigil = "inward_brackets",
-        description = "Prevents one impact damage and wears the striking shell.",
     },
     reflect = {
         family = "defensive", label = "REF", sigil = "opposed_chevrons",
-        description = "Returns a surviving impact along a stronger rebound.",
     },
     regenerate = {
         family = "defensive", label = "REG", sigil = "broken_ring_leaf",
-        description = "Repairs one integrity after surviving a hit.",
     },
     fortify = {
         family = "defensive", label = "FORT", sigil = "three_block_wall",
-        description = "Protects orthogonally adjacent bricks from one damage.",
     },
     poison = {
         family = "effect", label = "PSN", sigil = "droplet_dot",
-        description = "Poisons the striking marble for later shell wear.",
     },
     freeze = {
         family = "effect", label = "FRZ", sigil = "six_spoke_flake",
-        description = "Freezes and slows the striking marble.",
     },
     magnetic = {
         family = "effect", label = "MAG", sigil = "horseshoe",
-        description = "Pulls nearby moving marbles toward its field.",
     },
     shatter = {
         family = "effect", label = "SHT", sigil = "broken_diamond",
-        description = "Deals two extra wear to the striking shell.",
     },
     chain = {
         family = "utility", label = "CHN", sigil = "linked_ovals",
-        description = "Damages adjacent bricks when it is destroyed.",
     },
     vault = {
         family = "utility", label = "VLT", sigil = "stone_arch",
-        description = "Adds forward momentum after contact.",
     },
     splice = {
         family = "utility", label = "SPL", sigil = "branch_y",
-        description = "Splashes one damage to adjacent bricks on every hit.",
     },
     dummy = {
         family = "utility", label = "DMY", sigil = "crosshair_x",
-        description = "Makes contact without wearing the striking shell.",
     },
     aegis = {
         family = "rare", label = "AEG", sigil = "pointed_shield",
-        description = "Negates its first damaging collision.",
     },
     void = {
         family = "rare", label = "VOID", sigil = "hollow_disc",
-        description = "Breaks the current shell after it deals damage.",
     },
     mirror = {
         family = "rare", label = "MIR", sigil = "split_vertical",
-        description = "Rebounds the marble and wears its shell.",
     },
     temporal = {
         family = "rare", label = "TMP", sigil = "hourglass",
-        description = "Rewinds damage when it survives the collision.",
     },
 }
 
@@ -258,6 +242,39 @@ M.status = {
         label = "FREEZE", colour = "status_freeze",
         mark = "three_edge_ticks", anchor = "upper_right",
     },
+}
+
+-- A compact mark and canonical verb label shared by card inspection and live
+-- battle attribution. These tokens carry identity only; rule meaning remains
+-- in battle/rule_ast.lua.
+M.rule_operation = {
+    accelerate = { label = "ACCELERATE", mark = "ACC" },
+    aim = { label = "AIM", mark = "AIM" },
+    amplify = { label = "AMPLIFY", mark = "AMP" },
+    apply_status = { label = "APPLY STATUS", mark = "STS" },
+    ["break"] = { label = "BREAK", mark = "BRK" },
+    cover = { label = "COVER", mark = "COV" },
+    deal = { label = "DEAL", mark = "DMG" },
+    heal = { label = "RESTORE", mark = "RST" },
+    hold = { label = "HOLD", mark = "HLD" },
+    launch = { label = "LAUNCH", mark = "LCH" },
+    negate = { label = "NEGATE", mark = "NEG" },
+    persist = { label = "PERSIST", mark = "DUR" },
+    pierce = { label = "PIERCE", mark = "PRC" },
+    prevent = { label = "PREVENT", mark = "PRV" },
+    protect = { label = "PROTECT", mark = "GRD" },
+    pull = { label = "PULL", mark = "PUL" },
+    push = { label = "PUSH", mark = "PSH" },
+    rebound = { label = "REBOUND", mark = "RBD" },
+    redirect = { label = "REDIRECT", mark = "DIR" },
+    rewind = { label = "REWIND", mark = "RWD" },
+    scatter = { label = "SCATTER", mark = "SCT" },
+    scorch = { label = "SCORCH", mark = "FIR" },
+    set = { label = "SET", mark = "SET" },
+    slow = { label = "SLOW", mark = "SLW" },
+    splash = { label = "SPLASH", mark = "SPL" },
+    target = { label = "TARGET", mark = "TGT" },
+    wear = { label = "WEAR", mark = "WER" },
 }
 
 M.sling = {

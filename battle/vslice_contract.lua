@@ -2,6 +2,8 @@
 -- slice. Draft/setup work and the continuous battle import these values rather
 -- than silently choosing different counts, phases, timing, or seed coupling.
 
+local rule_ast = require("battle.rule_ast")
+
 local M = {}
 
 M.VERSION = 1
@@ -19,6 +21,18 @@ M.DRAFT = {
     MARBLE_PICKS = 4,
     BRICK_KIT_PICKS = 4,
     BRICKS_PER_KIT = 2,
+}
+
+-- Deliberately smaller than the later five- or seven-fight designs.  The
+-- proof run starts below both caps so every acquisition creates a visible
+-- roster tradeoff.
+M.SHORT_RUN = {
+    FIGHTS = 3,
+    OFFER_SIZE = 3,
+    START_MARBLES = 2,
+    START_BRICKS = 3,
+    MARBLE_CAP = 4,
+    BRICK_CAP = 6,
 }
 
 M.FORMATION = {
@@ -111,6 +125,13 @@ function M.validate_offer(offer)
         end
         if sequence_length(choice.tags) == 0 then
             return fail("every choice needs synergy tags")
+        end
+        local rules_valid, rule_errors = rule_ast.validate(choice.rule_set)
+        if not rules_valid then
+            return fail("choice rule_set is invalid: " .. tostring(rule_errors[1]))
+        end
+        if choice.compact_copy ~= rule_ast.compact(choice.rule_set) then
+            return fail("choice compact copy must derive from rule_set")
         end
         if offer.category == "brick_kit"
             and sequence_length(choice.content_ids) ~= M.DRAFT.BRICKS_PER_KIT then

@@ -2,8 +2,7 @@
 --
 -- The tests that check a specific mechanic use these rather than the demo
 -- matchup, so each one exercises exactly one thing with no randomness in the
--- way. TIGHT_SLING has scatter 0 on purpose: a scatter roll would move the
--- entry column and make "the marble hits this brick" a probabilistic claim.
+-- way. Tests use canonical sling RuleSets instead of hand-authored stat tables.
 
 local here = (arg and arg[0] and arg[0]:match("^(.*)[/\\][^/\\]*$")) or "."
 package.path = table.concat({
@@ -14,16 +13,6 @@ package.path = table.concat({
 }, ";")
 
 local F = {}
-
-F.TIGHT_SLING = {
-    id = "test_tight_sling",
-    name = "Test Tight Sling",
-    damage_bonus = 0,
-    durability_bonus = 0,
-    momentum_bonus = 0,
-    aim = 0,
-    scatter = 0,
-}
 
 -- Constructed continuous-engine matchups live under battle/tests so product
 -- archives never ship a fixed matchup or bypass the draft/setup handoff.

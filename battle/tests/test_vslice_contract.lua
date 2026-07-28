@@ -10,14 +10,19 @@ package.path = table.concat({
 
 local harness = require("battle.tests.harness")
 local contract = require("battle.vslice_contract")
+local content = require("battle.content.draft")
+local rule_ast = require("battle.rule_ast")
 
 local M = { name = "vslice_contract" }
 
 local function choice(id, content_ids)
+    local source = content.BRICK_KITS[1]
     return {
         choice_id = id,
         content_ids = content_ids,
-        mechanics = { "A visible mechanical tradeoff" },
+        mechanics = rule_ast.compact_lines(source.rule_set),
+        compact_copy = rule_ast.compact(source.rule_set),
+        rule_set = rule_ast.copy(source.rule_set),
         tags = { "example" },
     }
 end

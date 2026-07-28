@@ -13,6 +13,7 @@ local controller = require("run_controller")
 local engine = require("battle.engine")
 local presentation = require("run_presentation")
 local legacy_boundary = require("presentation")
+local rule_ast = require("battle.rule_ast")
 local util = require("battle.run_util")
 local fixtures = require("battle.tests.run_fixtures")
 
@@ -78,6 +79,12 @@ function M.run(t)
         t:eq(type(card.name), "string", card.choice_id .. " has a readable name")
         t:eq(type(card.role), "string", card.choice_id .. " has a physical role")
         t:eq(#card.mechanics > 0, true, card.choice_id .. " has mechanics copy")
+        t:eq(card.compact_copy, rule_ast.compact(card.rule_set),
+            card.choice_id .. " presents canonical compact copy")
+        t:ok(#card.inspection_copy > #card.mechanics,
+            card.choice_id .. " carries expanded canonical inspection copy")
+        t:eq(card.balance.rule_set_id, card.rule_set.id,
+            card.choice_id .. " carries canonical balance attribution")
         t:eq(#card.tags > 0, true, card.choice_id .. " has readable synergy metadata")
         local synergy_tags = #card.synergy.matched
             + #card.synergy.introduced
@@ -113,6 +120,9 @@ function M.run(t)
     projected = controller.project(model)
     t:eq(projected.draft.inspected.choice_id, choice.choice_id,
         "tap card opens an inspectable bottom-sheet payload")
+    t:eq(projected.draft.inspected.compact_copy,
+        rule_ast.compact(projected.draft.inspected.rule_set),
+        "inspected card retains its canonical copy source")
     t:ok(action_by_id(projected, "select:" .. choice.choice_id) ~= nil,
         "inspect sheet has an explicit Select action")
     model = activate(model, "select:" .. choice.choice_id)
@@ -160,6 +170,8 @@ function M.run(t)
         "selecting a setup brick exposes its readable inspection payload")
     t:ok(#projected.setup.selected_detail.mechanic_description > 20,
         "setup brick inspection explains the mechanic")
+    t:ok(#projected.setup.selected_detail.inspection_copy > 2,
+        "setup brick exposes expanded canonical rules")
 
     for index, brick in ipairs(model.run.player.bricks) do
         model = activate(model, "brick:" .. brick.uid)
@@ -231,6 +243,8 @@ function M.run(t)
     t:ok(#projected.battle.inspected.name > 2, "inspector names the physical entity")
     t:ok(#projected.battle.inspected.mechanic_description > 20,
         "brick inspector explains its canonical mechanic")
+    t:ok(#projected.battle.inspected.inspection_copy > 2,
+        "brick inspector exposes expanded canonical rules")
     model = activate(model, inspect_action.id)
     projected = controller.project(model, battle_frame, battle_frame, 1)
     t:eq(projected.battle.inspected, nil, "activating the inspected entity closes the inspector")
@@ -251,6 +265,8 @@ function M.run(t)
         "marble inspector exposes remaining material layers")
     t:eq(type(projected.battle.inspected.core), "string",
         "marble inspector names its release core")
+    t:ok(#projected.battle.inspected.inspection_copy > 2,
+        "marble inspector exposes expanded canonical rules")
 
     model = assert(controller.complete_battle(model, completion)).model
     projected = controller.project(model)

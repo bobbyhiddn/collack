@@ -3,7 +3,9 @@
 -- calculates combat outcomes.
 
 local draft_content = require("battle.content.draft")
+local brick_content = require("battle.content.bricks")
 local shell_content = require("battle.content.shells")
+local rule_ast = require("battle.rule_ast")
 local util = require("battle.run_util")
 local battle_projection = require("presentation")
 local art = require("ui.art_tokens")
@@ -85,9 +87,262 @@ local function synergy_projection(synergy)
     }
 end
 
+local SHORT_TRIGGER = {
+    build = "BUILD",
+    collision = "CONTACT",
+    core_release = "CORE RELEASE",
+    damaging_collision = "DAMAGE HIT",
+    destroyed = "DESTROYED",
+    field_contact = "FIELD CONTACT",
+    launch = "LAUNCH",
+    non_chip_collision = "NON-CHIP HIT",
+    passive = "PASSIVE",
+    status_tick = "STATUS TICK",
+    survives_collision = "SURVIVE HIT",
+    wall_or_brick_contact = "WALL/BRICK HIT",
+}
+
+local SHORT_TARGET = {
+    all_owned_marbles = "ALL OWN MARBLES",
+    current_shell = "CURRENT SHELL",
+    launch = "LAUNCH",
+    nearby_marbles = "NEARBY MARBLES",
+    orthogonal_neighbours = "ADJACENT BRICKS",
+    release_area = "RELEASE AREA",
+    self = "SELF",
+    striking_marble = "STRIKING MARBLE",
+    struck_brick = "STRUCK BRICK",
+    target_column = "TARGET COLUMN",
+}
+
+local SHORT_UNIT = {
+    count = "",
+    damage = "DMG",
+    durability = "DURABILITY",
+    flag = "",
+    hp = "HP",
+    id = "",
+    launch_force = "FORCE",
+    multiplier = "×",
+    percent = "%",
+    radius = "RADIUS",
+    shots = "SHOTS",
+    strength = "STRENGTH",
+    ticks = "TICKS",
+    cells = "CELLS",
+}
+
+local function readable_identifier(value)
+    return tostring(value or "none"):gsub("_", " "):upper()
+end
+
+local function quantity_projection(quantity, kind)
+    if not quantity then
+        return {
+            kind = kind or "none",
+            value = nil,
+            unit = "none",
+            label = "NONE",
+        }
+    end
+    local value = quantity.value
+    local value_copy
+    if type(value) == "boolean" then
+        value_copy = value and "TRUE" or "FALSE"
+    else
+        value_copy = tostring(value):upper():gsub("_", " ")
+    end
+    local unit = SHORT_UNIT[quantity.unit] or readable_identifier(quantity.unit)
+    local label
+    if unit == "×" or unit == "%" then
+        label = value_copy .. unit
+    elseif unit == "" then
+        label = value_copy
+    else
+        label = value_copy .. " " .. unit
+    end
+    return {
+        kind = kind or "magnitude",
+        value = value,
+        unit = quantity.unit,
+        label = label,
+    }
+end
+
+local function cadence_projection(cadence)
+    cadence = cadence or { unit = "trigger", interval = 1 }
+    local interval = tonumber(cadence.interval) or 1
+    local label
+    local short_label
+    if cadence.charges then
+        label = string.format("%d CHARGE%s TOTAL", cadence.charges,
+            cadence.charges == 1 and "" or "S")
+        short_label = string.format("%d CHARGE%s", cadence.charges,
+            cadence.charges == 1 and "" or "S")
+    elseif cadence.limit then
+        label = string.format("CHAIN LIMIT %d", cadence.limit)
+        short_label = string.format("CHAIN %d", cadence.limit)
+    elseif interval > 1 then
+        label = string.format(
+            "EVERY %d %s · NO RULE CAP",
+            interval,
+            readable_identifier(cadence.unit)
+        )
+        short_label = string.format("EVERY %d %s", interval,
+            readable_identifier(cadence.unit))
+    else
+        label = "EVERY " .. readable_identifier(cadence.unit) .. " · NO RULE CAP"
+        short_label = "EACH " .. readable_identifier(cadence.unit)
+    end
+    return {
+        unit = cadence.unit,
+        interval = interval,
+        charges = cadence.charges,
+        limit = cadence.limit,
+        label = label,
+        short_label = short_label,
+    }
+end
+
+local function drawback_projection(drawback)
+    drawback = drawback or { kind = "none" }
+    if drawback.kind == "none" then
+        return {
+            kind = "none",
+            stat = nil,
+            magnitude = nil,
+            unit = nil,
+            label = "NONE",
+        }
+    end
+    local amount = quantity_projection({
+        value = drawback.magnitude,
+        unit = drawback.unit,
+    }, "drawback")
+    return {
+        kind = drawback.kind,
+        stat = drawback.stat,
+        magnitude = drawback.magnitude,
+        unit = drawback.unit,
+        label = string.format(
+            "%s · %s · %s",
+            readable_identifier(drawback.kind),
+            readable_identifier(drawback.stat),
+            amount.label
+        ),
+    }
+end
+
+local function rule_identity(rule)
+    local operation_token = art.rule_operation[rule.operation.verb] or {
+        label = readable_identifier(rule.operation.verb),
+        mark = readable_identifier(rule.operation.verb):sub(1, 3),
+    }
+    local quantity = rule.magnitude
+        and quantity_projection(rule.magnitude, "magnitude")
+        or quantity_projection(rule.duration, "duration")
+    local cadence = cadence_projection(rule.cadence)
+    local trigger_label = SHORT_TRIGGER[rule.trigger.event]
+        or readable_identifier(rule.trigger.event)
+    local target_label = SHORT_TARGET[rule.target.selector]
+        or readable_identifier(rule.target.selector)
+    return {
+        id = rule.id,
+        visibility = rule.visibility,
+        icon = operation_token.mark,
+        verb = rule.operation.verb,
+        verb_label = operation_token.label,
+        stat = rule.operation.stat,
+        mode = rule.operation.mode,
+        trigger = {
+            event = rule.trigger.event,
+            phase = rule.trigger.phase,
+            condition = rule.condition.predicate,
+            condition_value = rule.condition.value,
+            label = readable_identifier(rule.trigger.phase)
+                .. " " .. readable_identifier(rule.trigger.event),
+            short_label = trigger_label,
+        },
+        target = {
+            selector = rule.target.selector,
+            relation = rule.target.relation,
+            label = readable_identifier(rule.target.selector),
+            short_label = target_label,
+        },
+        magnitude = quantity,
+        cadence = cadence,
+        cost = util.deep_copy(rule.cost),
+        sentence = rule_ast.rule_sentence(rule),
+        comparison_lines = {
+            "ON " .. trigger_label .. " · " .. operation_token.label
+                .. (quantity.label ~= "NONE" and (" " .. quantity.label) or ""),
+            "TO " .. target_label .. " · " .. cadence.short_label,
+        },
+    }
+end
+
+local function visible_rules(rule_set)
+    return rule_ast.player_rules(rule_set)
+end
+
+local function rule_inspection(rule_set, requested_index)
+    if not rule_set then return nil end
+    local rules = visible_rules(rule_set)
+    if #rules == 0 then return nil end
+    local index = math.max(1, math.min(#rules, math.floor(
+        tonumber(requested_index) or 1
+    )))
+    return {
+        rule_set_id = rule_set.id,
+        source_name = rule_set.name,
+        role = rule_set.role,
+        index = index,
+        count = #rules,
+        rule = rule_identity(rules[index]),
+        drawback = drawback_projection(rule_set.drawback),
+        compatibility = util.deep_copy(rule_set.compatibility),
+    }
+end
+
+-- Pure projection used by both the UI and exact cross-consumer consistency
+-- tests. It follows the RuleSet's canonical ordered player-rule authority.
+M.inspect_rule_set = rule_inspection
+
+local function comparison_rule(rule_set)
+    local inspection = rule_inspection(rule_set, 1)
+    if not inspection then return nil end
+    for _, rule in ipairs(rule_set.rules or {}) do
+        if rule.visibility == "compact" then
+            inspection.rule = rule_identity(rule)
+            return inspection
+        end
+    end
+    return inspection
+end
+
+local function pressure_projection(canonical_scout)
+    local out = {}
+    if not canonical_scout then return out end
+    local function append(item, kind)
+        if not item then return end
+        out[#out + 1] = {
+            kind = kind,
+            name = item.name,
+            compact_copy = item.compact_copy,
+            rule_set_id = item.rule_set_id,
+            rule_ids = util.deep_copy(item.rule_ids),
+        }
+    end
+    append(canonical_scout.sling, "sling")
+    for _, item in ipairs(canonical_scout.bricks or {}) do append(item, "brick") end
+    for _, item in ipairs(canonical_scout.marbles or {}) do append(item, "marble") end
+    return out
+end
+
 local function opponent_projection(opponent)
     return {
         recipe_id = opponent.recipe_id,
+        encounter_index = opponent.encounter_index,
         name = opponent.name,
         description = opponent.description,
         scout_tags = tag_projection(opponent.scout_tags),
@@ -95,23 +350,70 @@ local function opponent_projection(opponent)
         marble_count = #(opponent.marbles or {}),
         brick_count = #(opponent.bricks or {}),
         art_id = "opponent_" .. opponent.recipe_id,
+        canonical_scout = util.deep_copy(opponent.canonical_scout),
+        pressure = pressure_projection(opponent.canonical_scout),
+        pool_items = util.deep_copy(opponent.pool_items),
     }
 end
 
-local function choice_card(choice, ui, index)
+local function operation_comparison(choice, state)
+    local operation = choice.operation or {}
+    local kind = operation.kind
+    if kind == "add_marble" then
+        return string.format("ADD · BAG %d>%d / CAP %d",
+            #state.player.marbles, #state.player.marbles + 1, state.limits.marbles)
+    elseif kind == "add_brick" then
+        return string.format("ADD · FORMATION %d>%d / CAP %d",
+            #state.player.bricks, #state.player.bricks + 1, state.limits.bricks)
+    elseif kind == "replace_marble" then
+        return "REPLACE · BAG COUNT HOLDS"
+    elseif kind == "replace_brick" then
+        return "RESHAPE · CELL HOLDS"
+    elseif kind == "repair_brick" then
+        return "REPAIR · RESTORE CASUALTY"
+    elseif kind == "remove_marble" then
+        return string.format("REMOVE · BAG %d>%d",
+            #state.player.marbles, #state.player.marbles - 1)
+    elseif kind == "remove_brick" then
+        return string.format("REMOVE · FORMATION %d>%d",
+            #state.player.bricks, #state.player.bricks - 1)
+    elseif kind == "reshape_sling" then
+        return "RESHAPE · SLING RULE CHANGES"
+    end
+    return "ROLE · " .. readable_identifier(choice.role)
+end
+
+local function choice_card(choice, ui, index, state)
+    local first_rule = comparison_rule(choice.rule_set)
     return {
         choice_id = choice.choice_id,
         content_id = choice.content_id,
+        category = choice.category,
         name = choice.name,
         role = choice.role,
         rarity = choice.rarity,
         draft_value = choice.draft_value,
         mechanics = util.deep_copy(choice.mechanics),
+        compact_copy = choice.compact_copy,
+        inspection_copy = util.deep_copy(choice.inspection_copy),
+        rule_set = util.deep_copy(choice.rule_set),
+        compatibility = util.deep_copy(choice.compatibility),
+        balance = util.deep_copy(choice.balance),
         tags = tag_projection(choice.tags),
         synergy = synergy_projection(choice.synergy),
         details = util.deep_copy(choice.details),
         suggested_placement = choice.suggested_placement,
         art_id = choice.art_id,
+        operation = util.deep_copy(choice.operation),
+        operation_verb = choice.operation_verb,
+        operation_copy = choice.operation_copy,
+        causal_attribution = util.deep_copy(choice.causal_attribution),
+        comparison = {
+            operation = operation_comparison(choice, state),
+            rule_count = first_rule and first_rule.count or 0,
+            primary_rule = first_rule and first_rule.rule or nil,
+            no_ellipsis = true,
+        },
         inspected = ui.inspected_choice_id == choice.choice_id,
         selected = ui.selected_choice_id == choice.choice_id,
         action_id = "offer:" .. choice.choice_id,
@@ -121,26 +423,63 @@ end
 
 local function project_draft(presentation, state, ui)
     local offer = state.draft.offer
-    presentation.title = "Choose your " ..
-        (offer.category == "brick_kit" and "brick kit" or offer.category)
-    presentation.subtitle = string.format(
-        "Offer %d of %d · %s %d",
-        state.draft.offer_index,
-        1 + 4 + 4,
-        offer.category == "brick_kit" and "kit" or offer.category,
-        offer.round
-    )
-    presentation.opponent = opponent_projection(state.opponent)
+    local short = state.mode == "comprehension_first_three_fight"
+    if short then
+        presentation.title = string.format("Refit after fight %d", state.fight.index)
+        presentation.subtitle = string.format(
+            "Choose one change, then set up for %s.",
+            offer.next_encounter.name
+        )
+        presentation.opponent = {
+            recipe_id = offer.next_encounter.recipe_id,
+            encounter_index = offer.next_encounter.index,
+            name = offer.next_encounter.name,
+            description = offer.next_encounter.description,
+            scout_tags = tag_projection(offer.scout_tags),
+            sling = offer.next_encounter.canonical_scout
+                and offer.next_encounter.canonical_scout.sling.name
+                or nil,
+            marble_count = offer.next_encounter.marble_count,
+            brick_count = offer.next_encounter.brick_count,
+            art_id = "opponent_" .. tostring(offer.next_encounter.recipe_id),
+            canonical_scout = util.deep_copy(offer.next_encounter.canonical_scout),
+            pressure = pressure_projection(offer.next_encounter.canonical_scout),
+        }
+    else
+        presentation.title = "Choose your " ..
+            (offer.category == "brick_kit" and "brick kit" or offer.category)
+        presentation.subtitle = string.format(
+            "Offer %d of %d · %s %d",
+            state.draft.offer_index,
+            1 + 4 + 4,
+            offer.category == "brick_kit" and "kit" or offer.category,
+            offer.round
+        )
+        presentation.opponent = opponent_projection(state.opponent)
+    end
     presentation.draft = {
         offer_id = offer.offer_id,
         category = offer.category,
+        refit = short,
         round = offer.round,
         cards = {},
         build_tags = tag_projection(offer.build_tags),
         scout_tags = tag_projection(offer.scout_tags),
         inspected = nil,
         selected_choice_id = ui.selected_choice_id,
-        progress = {
+        next_encounter = util.deep_copy(offer.next_encounter),
+        progress = short and {
+            fight = state.fight.index,
+            fights_cleared = state.fight.victories,
+            total = state.fight.victories,
+            required = state.fight.total,
+            sling = 1,
+            marbles = #state.player.marbles,
+            marble_cap = state.limits.marbles,
+            bricks = #state.player.bricks,
+            brick_cap = state.limits.bricks,
+            broken = #state.workshop.broken_bricks,
+        } or {
             sling = state.draft.picks.sling and 1 or 0,
             marbles = #state.draft.picks.marbles,
             brick_kits = #state.draft.picks.brick_kits,
@@ -149,13 +488,19 @@ local function project_draft(presentation, state, ui)
         },
     }
     for index, choice in ipairs(offer.choices) do
-        local card = choice_card(choice, ui, index)
+        local card = choice_card(choice, ui, index, state)
+        if card.inspected then
+            card.rule_inspection = rule_inspection(
+                card.rule_set,
+                ui.inspection_rule_index
+            )
+        end
         presentation.draft.cards[#presentation.draft.cards + 1] = card
         add_action(presentation, action(
             card.action_id,
             "inspect_offer",
             "Inspect " .. choice.name,
-            true,
+            ui.inspected_choice_id == nil,
             token_bounds(art.layout.phone.draft.offers[index])
         ))
         if card.inspected then
@@ -166,6 +511,28 @@ local function project_draft(presentation, state, ui)
                 "Select " .. choice.name,
                 true,
                 { x = 16, y = 708, width = 358, height = 48 }
+            ))
+            local inspection = card.rule_inspection
+            add_action(presentation, action(
+                "inspection_prev",
+                "page_inspection",
+                "Previous canonical rule",
+                inspection and inspection.index > 1,
+                { x = 28, y = 640, width = 104, height = 48 }
+            ))
+            add_action(presentation, action(
+                "inspection_close",
+                "close_inspection",
+                "Close expanded rules",
+                true,
+                { x = 143, y = 640, width = 104, height = 48 }
+            ))
+            add_action(presentation, action(
+                "inspection_next",
+                "page_inspection",
+                "Next canonical rule",
+                inspection and inspection.index < inspection.count,
+                { x = 258, y = 640, width = 104, height = 48 }
             ))
         end
     end
@@ -205,8 +572,18 @@ local function shell_projection(shell_ids)
 end
 
 local function project_setup(presentation, state, ui)
-    presentation.title = "Arrange your collection"
-    presentation.subtitle = "Tap a brick, then a legal cell. Bag index 1 launches first."
+    local short = state.mode == "comprehension_first_three_fight"
+    presentation.title = short
+        and string.format("Fight %d of %d · %s",
+            state.fight.index, state.fight.total, state.opponent.name)
+        or "Arrange your collection"
+    presentation.subtitle = short
+        and string.format(
+            "Scout %d marbles / %d bricks. Place every active brick; bag index 1 launches first.",
+            #state.opponent.marbles,
+            #state.opponent.bricks
+        )
+        or "Tap a brick, then a legal cell. Bag index 1 launches first."
     presentation.opponent = opponent_projection(state.opponent)
     local brick_by_uid = map_bricks(state.player.bricks)
     local marble_by_uid = map_marbles(state.player.marbles)
@@ -218,6 +595,12 @@ local function project_setup(presentation, state, ui)
         end
     end
     presentation.setup = {
+        short_run = short,
+        fight_index = short and state.fight.index or nil,
+        fight_total = short and state.fight.total or nil,
+        route = short and util.deep_copy(state.fight.route) or nil,
+        limits = short and util.deep_copy(state.limits) or nil,
+        broken_bricks = short and util.deep_copy(state.workshop.broken_bricks) or nil,
         valid = state.setup.valid,
         errors = util.deep_copy(state.setup.errors),
         build_tags = counted_tag_projection(state.setup.build_tags),
@@ -227,6 +610,11 @@ local function project_setup(presentation, state, ui)
             name = state.player.sling.name,
             archetype = state.player.sling.archetype,
             mechanics = util.deep_copy(state.player.sling.mechanics),
+            compact_copy = state.player.sling.compact_copy,
+            inspection_copy = util.deep_copy(state.player.sling.inspection_copy),
+            rule_set = util.deep_copy(state.player.sling.rule_set),
+            compatibility = util.deep_copy(state.player.sling.compatibility),
+            balance = util.deep_copy(state.player.sling.balance),
             tags = tag_projection(state.player.sling.tags),
         } or nil,
         selected_brick_uid = ui.selected_brick_uid,
@@ -236,17 +624,35 @@ local function project_setup(presentation, state, ui)
         bag = {},
         insertion_slots = {},
         selected_detail = nil,
+        recent_reward = state.workshop
+            and state.workshop.reward_history
+            and util.deep_copy(state.workshop.reward_history[
+                #state.workshop.reward_history
+            ])
+            or nil,
     }
 
     for index, brick in ipairs(state.player.bricks) do
         local behaviour = art.behaviour[brick.behaviour] or art.behaviour.inert
+        local definition = brick_content.by_id[brick.content_id]
         local projected_brick = {
             uid = brick.uid,
             content_id = brick.content_id,
             name = brick.name,
             behaviour = brick.behaviour,
             mechanic_label = behaviour.label,
-            mechanic_description = behaviour.description,
+            mechanic_description = brick.compact_copy
+                or (definition and definition.compact_copy)
+                or "",
+            inspection_copy = util.deep_copy(
+                brick.inspection_copy or (definition and definition.inspection_copy)
+            ),
+            rule_set = util.deep_copy(brick.rule_set or (definition and definition.rule_set)),
+            compatibility = util.deep_copy(
+                brick.compatibility
+                    or (definition and definition.rule_set.compatibility)
+            ),
+            balance = util.deep_copy(brick.balance or (definition and definition.balance)),
             family = brick.family,
             hp = brick.hp,
             max_hp = brick.max_hp,
@@ -260,6 +666,8 @@ local function project_setup(presentation, state, ui)
         if projected_brick.selected then
             presentation.setup.selected_detail = util.deep_copy(projected_brick)
             presentation.setup.selected_detail.type = "brick"
+            presentation.setup.selected_detail.rule_inspection =
+                rule_inspection(projected_brick.rule_set, ui.inspection_rule_index)
         end
         add_action(presentation, action(
             "brick:" .. brick.uid,
@@ -313,6 +721,11 @@ local function project_setup(presentation, state, ui)
             core = marble.core,
             shells = shell_projection(marble.shells),
             mechanics = util.deep_copy(marble.mechanics),
+            compact_copy = marble.compact_copy,
+            inspection_copy = util.deep_copy(marble.inspection_copy),
+            rule_set = util.deep_copy(marble.rule_set),
+            compatibility = util.deep_copy(marble.compatibility),
+            balance = util.deep_copy(marble.balance),
             tags = tag_projection(marble.tags),
             art_id = marble.art_id,
             selected = ui.selected_marble_uid == uid,
@@ -322,6 +735,8 @@ local function project_setup(presentation, state, ui)
         if projected_marble.selected then
             presentation.setup.selected_detail = util.deep_copy(projected_marble)
             presentation.setup.selected_detail.type = "marble"
+            presentation.setup.selected_detail.rule_inspection =
+                rule_inspection(projected_marble.rule_set, ui.inspection_rule_index)
         end
         add_action(presentation, action(
             "marble:" .. uid,
@@ -419,7 +834,7 @@ local function readable_title(value)
     end))
 end
 
-local function entity_inspection(frame, inspected_id)
+local function entity_inspection(frame, inspected_id, requested_rule_index)
     if not frame or inspected_id == nil then return nil end
     for _, entity in ipairs(frame.entities or {}) do
         local id = entity.id or entity.uid
@@ -436,14 +851,23 @@ local function entity_inspection(frame, inspected_id)
                     or (entity.owner and tostring(entity.owner) or "Arena"),
             }
             if entity.type == "brick" then
-                local behaviour = art.behaviour[entity.behaviour] or art.behaviour.inert
+                local definition = brick_content.by_id[entity.content_id]
                 inspected.family = readable_title(entity.family)
                 inspected.mechanic = readable_title(entity.behaviour)
-                inspected.mechanic_description = behaviour.description
+                inspected.mechanic_description = definition and definition.compact_copy or ""
+                inspected.inspection_copy = definition
+                    and util.deep_copy(definition.inspection_copy)
+                    or nil
+                inspected.rule_set = definition and util.deep_copy(definition.rule_set) or nil
+                inspected.balance = definition and util.deep_copy(definition.balance) or nil
+                inspected.rule_inspection = definition
+                    and rule_inspection(definition.rule_set, requested_rule_index)
+                    or nil
                 inspected.hp = entity.hp
                 inspected.max_hp = entity.max_hp
                 inspected.integrity = math.floor(clamp((entity.hp_ratio or 0) * 100, 0, 100) + 0.5)
             elseif entity.type == "marble" then
+                local definition = draft_content.marble_by_id[entity.content_id]
                 inspected.rarity = readable_title(entity.rarity)
                 inspected.core = entity.core
                 inspected.shell_count = entity.shell_count or #(entity.shells or {})
@@ -454,6 +878,15 @@ local function entity_inspection(frame, inspected_id)
                 for _, status in ipairs(util.sorted_keys(entity.statuses or {})) do
                     inspected.statuses[#inspected.statuses + 1] = readable_title(status)
                 end
+                inspected.mechanic_description = definition and definition.compact_copy or ""
+                inspected.inspection_copy = definition
+                    and util.deep_copy(definition.inspection_copy)
+                    or nil
+                inspected.rule_set = definition and util.deep_copy(definition.rule_set) or nil
+                inspected.balance = definition and util.deep_copy(definition.balance) or nil
+                inspected.rule_inspection = definition
+                    and rule_inspection(definition.rule_set, requested_rule_index)
+                    or nil
             end
             return inspected
         end
@@ -462,8 +895,15 @@ local function entity_inspection(frame, inspected_id)
 end
 
 local function project_battle(presentation, state, ui, previous_frame, current_frame, alpha)
-    presentation.title = "Automatic battle"
-    presentation.subtitle = "Both bags commit together. No reflex input changes combat."
+    local short = state.mode == "comprehension_first_three_fight"
+    presentation.title = short
+        and string.format("Fight %d of %d · Automatic battle",
+            state.fight.index, state.fight.total)
+        or "Automatic battle"
+    presentation.subtitle = short
+        and (state.opponent.name
+            .. " was fully scouted. Both ordered bags now resolve canonically.")
+        or "Both bags commit together. No reflex input changes combat."
     presentation.opponent = opponent_projection(state.opponent)
     local frame = projected_frame(
         previous_frame,
@@ -471,13 +911,19 @@ local function project_battle(presentation, state, ui, previous_frame, current_f
         ui.reduced_motion and 1 or alpha
     )
     presentation.battle = {
+        fight_index = short and state.fight.index or nil,
+        fight_total = short and state.fight.total or nil,
         status = frame and (frame.finished and "finished" or "running")
             or (state.battle and state.battle.status or "handoff"),
         exchange = frame and frame.exchange or (state.battle and state.battle.exchange or 0),
         tick = frame and frame.tick or (state.battle and state.battle.tick or 0),
         frame = frame,
         inspected_entity_id = ui.inspected_entity_id,
-        inspected = entity_inspection(frame, ui.inspected_entity_id),
+        inspected = entity_inspection(
+            frame,
+            ui.inspected_entity_id,
+            ui.inspection_rule_index
+        ),
         view = {
             paused = ui.paused == true,
             speed = ui.speed or 1,
@@ -539,6 +985,24 @@ local function project_battle(presentation, state, ui, previous_frame, current_f
         true,
         { x = 286, y = 768, width = 88, height = 56 }
     ))
+    if presentation.battle.inspected
+        and presentation.battle.inspected.rule_inspection then
+        local inspection = presentation.battle.inspected.rule_inspection
+        add_action(presentation, action(
+            "inspection_prev",
+            "page_inspection",
+            "Previous canonical rule",
+            inspection.index > 1,
+            { x = 28, y = 426, width = 64, height = 48 }
+        ))
+        add_action(presentation, action(
+            "inspection_next",
+            "page_inspection",
+            "Next canonical rule",
+            inspection.index < inspection.count,
+            { x = 298, y = 426, width = 64, height = 48 }
+        ))
+    end
 end
 
 local function recent_events(events, count)
@@ -550,12 +1014,53 @@ local function recent_events(events, count)
     return out
 end
 
+local function fight_history_projection(history)
+    local out = {}
+    for _, fight in ipairs(history or {}) do
+        local callouts = {}
+        local ledger = fight.causal_ledger or {}
+        local first = math.max(1, #ledger - 4)
+        for index = first, #ledger do
+            callouts[#callouts + 1] = ledger[index].generated_callout
+        end
+        local casualties = {}
+        for _, casualty in ipairs(fight.casualties or {}) do
+            casualties[#casualties + 1] = {
+                uid = casualty.brick and casualty.brick.uid,
+                name = casualty.brick and casualty.brick.name,
+                kit_id = casualty.brick and casualty.brick.kit_id,
+            }
+        end
+        out[#out + 1] = {
+            fight_index = fight.fight_index,
+            encounter_id = fight.encounter_id,
+            opponent_name = fight.opponent and fight.opponent.name,
+            result = util.deep_copy(fight.result),
+            casualties = casualties,
+            attributed_trigger_count = #ledger,
+            recent_generated_callouts = callouts,
+        }
+    end
+    return out
+end
+
 local function project_result(presentation, state, ui, previous_frame, current_frame)
     presentation.title = state.result.outcome == "draw" and "Draw" or
         (state.result.winner == "player" and "Victory" or "Defeat")
     presentation.subtitle = tostring(state.result.reason):gsub("_", " ")
     presentation.opponent = opponent_projection(state.opponent)
     presentation.result = {
+        short_run = state.mode == "comprehension_first_three_fight",
+        terminal = state.result.terminal == true,
+        fights_cleared = state.result.fights_cleared,
+        fight_total = state.fight and state.fight.total,
+        fight_history = state.fight and fight_history_projection(state.fight.history) or nil,
+        reward_history = state.workshop
+            and util.deep_copy(state.workshop.reward_history)
+            or nil,
+        broken_bricks = state.workshop
+            and util.deep_copy(state.workshop.broken_bricks)
+            or nil,
         outcome = state.result.outcome,
         winner = state.result.winner,
         reason = state.result.reason,
@@ -569,7 +1074,7 @@ local function project_result(presentation, state, ui, previous_frame, current_f
     add_action(presentation, action(
         "new_run",
         "new_run",
-        "Draft Again",
+        state.mode == "comprehension_first_three_fight" and "Run Again" or "Draft Again",
         true,
         { x = 16, y = 692, width = 358, height = 56 }
     ))
@@ -647,6 +1152,17 @@ function M.project(run_snapshot, previous_frame, current_frame, alpha, view_stat
             phase = string.upper(state.phase),
         },
         art_direction = "warm_handcrafted_tabletop",
+        short_run = state.mode == "comprehension_first_three_fight" and {
+            fight_index = state.fight.index,
+            fight_total = state.fight.total,
+            victories = state.fight.victories,
+            route = util.deep_copy(state.fight.route),
+            marble_count = #state.player.marbles,
+            brick_count = #state.player.bricks,
+            marble_cap = state.limits.marbles,
+            brick_cap = state.limits.bricks,
+            casualties = #state.workshop.broken_bricks,
+        } or nil,
         actions = {},
         enabled_actions = {},
     }
@@ -660,6 +1176,24 @@ function M.project(run_snapshot, previous_frame, current_frame, alpha, view_stat
         project_battle(presentation, state, ui, previous_frame, current_frame, alpha)
     elseif state.phase == "result" then
         project_result(presentation, state, ui, previous_frame, current_frame)
+    end
+    if presentation.short_run then
+        if state.phase == "draft" then
+            presentation.labels.phase = string.format(
+                "REFIT %d/%d",
+                state.fight.index,
+                state.fight.total
+            )
+        elseif state.phase == "result" then
+            presentation.labels.phase = "RUN COMPLETE"
+        else
+            presentation.labels.phase = string.format(
+                "FIGHT %d/%d · %s",
+                state.fight.index,
+                state.fight.total,
+                string.upper(state.phase)
+            )
+        end
     end
     return presentation
 end

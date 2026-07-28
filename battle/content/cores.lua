@@ -1,82 +1,75 @@
--- battle/content/cores.lua — hardcoded core definitions.
---
--- A core is the centre of a marble. It supplies:
---   * trajectory — the marble's continuous launch-angle bias.
---                  negative = left, positive = right, 0 = straight.
---   * release    — the effect fired when the marble's last shell breaks and the
---                  core is exposed. nil means "baseline blowback only", which
---                  is what every common core gets. Uncommon and above add one
---                  release effect ON TOP of baseline blowback; baseline
---                  blowback is never replaced or skipped.
---
--- min_rarity is the lowest marble rarity this core may appear in. It exists so
--- the "common cores get baseline blowback only" rule is checked by data, not
--- by trusting whoever writes a marble definition.
+-- Core identities projected from trajectory and release RuleSets.
 
-local CORES = {
-    {
-        id = "dull_quartz",
-        name = "Dull Quartz",
-        min_rarity = "common",
-        trajectory = 0,
-        release = nil,
-    },
-    {
-        id = "cant_pebble",
-        name = "Cant Pebble",
-        min_rarity = "common",
-        trajectory = -1,
-        release = nil,
-    },
-    {
-        id = "skew_flint",
-        name = "Skew Flint",
-        min_rarity = "common",
-        trajectory = 1,
-        release = nil,
-    },
-    {
-        id = "shrapnel_geode",
-        name = "Shrapnel Geode",
-        min_rarity = "uncommon",
-        trajectory = 0,
-        -- Sprays the bricks orthogonally adjacent to the release point.
-        release = "shrapnel",
-    },
-    {
-        id = "concussion_pearl",
-        name = "Concussion Pearl",
-        min_rarity = "rare",
-        trajectory = 1,
-        -- Doubles the blowback radius. Hits more of your own rack too.
-        release = "concussion",
-    },
-    {
-        id = "lodestone_heart",
-        name = "Lodestone Heart",
-        min_rarity = "epic",
-        trajectory = -1,
-        -- Inverts blowback: marbles are pulled toward the epicentre instead of
-        -- shoved away. Still a displacement, still hits both racks — it just
-        -- makes clusters tighter rather than looser.
-        release = "magnetize",
-    },
-    {
-        id = "cinder_nucleus",
-        name = "Cinder Nucleus",
-        min_rarity = "legendary",
-        trajectory = 0,
-        -- Everything the blowback displaces is also scorched for 1 durability.
-        release = "scorch",
-    },
+local ast = require("battle.rule_ast")
+local rulebook = require("battle.content.rules")
+
+local SPECS = {
+    { id = "dull_quartz", name = "Dull Quartz", min_rarity = "common" },
+    { id = "cant_pebble", name = "Cant Pebble", min_rarity = "common" },
+    { id = "skew_flint", name = "Skew Flint", min_rarity = "common" },
+    { id = "shrapnel_geode", name = "Shrapnel Geode", min_rarity = "uncommon" },
+    { id = "concussion_pearl", name = "Concussion Pearl", min_rarity = "rare" },
+    { id = "lodestone_heart", name = "Lodestone Heart", min_rarity = "epic" },
+    { id = "cinder_nucleus", name = "Cinder Nucleus", min_rarity = "legendary" },
 }
 
+local CORES = {}
 local by_id = {}
-for _, core in ipairs(CORES) do
+local spec_by_id = {}
+for _, spec in ipairs(SPECS) do spec_by_id[spec.id] = spec end
+
+local function compile(spec, rule_set)
+    local release = ast.rule_value(rule_set, "core." .. spec.id .. ".release")
+    if release == "baseline" then release = nil end
+    return {
+        id = spec.id,
+        name = spec.name,
+        min_rarity = spec.min_rarity,
+        trajectory = ast.rule_value(rule_set, "core." .. spec.id .. ".trajectory"),
+        release = release,
+        rule_set = ast.copy(rule_set),
+    }
+end
+
+local function runtime(id, rule_set, shadow)
+    local spec = spec_by_id[id]
+    if not spec then error("unknown core: " .. tostring(id)) end
+    rule_set = rule_set or rulebook.cores[id]
+    ast.assert_runtime_source("core", id, rule_set, shadow)
+    local canonical = compile(spec, rule_set)
+    for _, field in ipairs({ "trajectory", "release", "min_rarity" }) do
+        if shadow and shadow[field] ~= nil and shadow[field] ~= canonical[field] then
+            error(string.format(
+                "core %s compiled %s diverges from canonical RuleSet",
+                tostring(id),
+                field
+            ))
+        end
+    end
+    return canonical
+end
+
+local function canonical_rule_set(id)
+    local rule_set = rulebook.cores[id]
+    if not rule_set then error("unknown core: " .. tostring(id)) end
+    return ast.copy(rule_set)
+end
+
+local function has(id)
+    return spec_by_id[id] ~= nil and rulebook.cores[id] ~= nil
+end
+
+for _, spec in ipairs(SPECS) do
+    local rule_set = rulebook.cores[spec.id]
+    local core = compile(spec, rule_set)
+    CORES[#CORES + 1] = core
     by_id[core.id] = core
 end
 
 return {
     list = CORES,
     by_id = by_id,
+    runtime = runtime,
+    canonical_rule_set = canonical_rule_set,
+    has = has,
 }

@@ -2,6 +2,11 @@
 
 local contract = require("battle.vslice_contract")
 local util = require("battle.run_util")
+local rule_ast = require("battle.rule_ast")
+local draft = require("battle.draft")
+local draft_content = require("battle.content.draft")
+local brick_content = require("battle.content.bricks")
+local sling_content = require("battle.content.slings")
 
 local M = {}
 
@@ -28,27 +33,114 @@ local function contract_shape(loadout)
     }
 end
 
-function M.validate(loadout)
+local function same_rule_set(left, right)
+    return rule_ast.same(left, right)
+end
+
+function M.validate(loadout, options)
+    options = options or {}
     local errors = {}
     if type(loadout) ~= "table" then
         return false, { error_item("setup_required", "Setup must be a table.", "setup") }
     end
 
-    local valid, message = contract.validate_setup(contract_shape(loadout))
-    if not valid then
-        errors[#errors + 1] = error_item("contract_invalid", message, "setup")
+    if not options.skip_contract then
+        local valid, message = contract.validate_setup(contract_shape(loadout))
+        if not valid then
+            errors[#errors + 1] = error_item("contract_invalid", message, "setup")
+        end
+    end
+
+    local canonical_rules = {}
+    local sling_id = loadout.sling_id or (loadout.sling and loadout.sling.id)
+    local sling_known = sling_content.has(sling_id)
+    local sling_canonical = sling_known
+        and sling_content.canonical_rule_set(sling_id)
+    local sling_rules = loadout.sling and loadout.sling.rule_set
+        or sling_canonical
+    if not sling_known or not sling_rules then
+        errors[#errors + 1] = error_item(
+            "sling_rules_missing",
+            "The drafted sling needs a known canonical rule set.",
+            "sling"
+        )
+    else
+        canonical_rules[#canonical_rules + 1] = sling_rules
+        if not same_rule_set(sling_rules, sling_canonical) then
+            errors[#errors + 1] = error_item(
+                "sling_rules_mismatch",
+                "The drafted sling rules do not match its content identity.",
+                "sling"
+            )
+        else
+            local runtime_valid, runtime_error = pcall(
+                sling_content.runtime,
+                sling_id,
+                sling_rules,
+                loadout.sling
+            )
+            if not runtime_valid then
+                errors[#errors + 1] = error_item(
+                    "sling_runtime_mismatch",
+                    tostring(runtime_error),
+                    "sling"
+                )
+            end
+        end
     end
 
     local marble_ids = {}
     for _, marble in ipairs(loadout.marbles or {}) do
-        if marble.content_id == nil then
+        if type(marble) ~= "table" then
+            errors[#errors + 1] = error_item(
+                "marble_invalid",
+                "Every drafted marble must be a canonical value.",
+                "marbles"
+            )
+        elseif marble.content_id == nil then
             errors[#errors + 1] = error_item(
                 "marble_content_missing",
                 "Every drafted marble needs a content identity.",
                 "marbles"
             )
         end
-        marble_ids[marble.uid] = true
+        local definition = type(marble) == "table"
+            and draft_content.marble_by_id[marble.content_id]
+            or nil
+        local rules = type(marble) == "table"
+            and (marble.rule_set or (definition and definition.rule_set))
+            or nil
+        if definition and rules then
+            if not same_rule_set(rules, definition.rule_set) then
+                errors[#errors + 1] = error_item(
+                    "marble_rules_mismatch",
+                    "A drafted marble's rules do not match its content identity.",
+                    "marbles"
+                )
+            end
+        else
+            errors[#errors + 1] = error_item(
+                "marble_rules_missing",
+                "Every drafted marble needs canonical rules.",
+                "marbles"
+            )
+        end
+        if type(marble) == "table" then
+            local authority_valid, canonical_or_error = pcall(
+                draft.canonical_marble,
+                marble
+            )
+            if authority_valid then
+                canonical_rules[#canonical_rules + 1] = canonical_or_error.rule_set
+            else
+                errors[#errors + 1] = error_item(
+                    "marble_authority_mismatch",
+                    tostring(canonical_or_error),
+                    "marbles"
+                )
+            end
+            marble_ids[marble.uid] = true
+        end
     end
 
     local brick_ids = {}
@@ -60,7 +152,52 @@ function M.validate(loadout)
                 "bricks"
             )
         end
+        local brick_known = brick_content.has(brick.content_id)
+        local canonical = brick_known
+            and brick_content.canonical_rule_set(brick.content_id)
+        local rules = brick.rule_set or canonical
+        if brick_known and rules then
+            canonical_rules[#canonical_rules + 1] = rules
+            if not same_rule_set(rules, canonical) then
+                errors[#errors + 1] = error_item(
+                    "brick_rules_mismatch",
+                    "A drafted brick's rules do not match its content identity.",
+                    "bricks"
+                )
+            else
+                local runtime_valid, runtime_error = pcall(
+                    brick_content.runtime,
+                    brick.content_id,
+                    rules,
+                    brick
+                )
+                if not runtime_valid then
+                    errors[#errors + 1] = error_item(
+                        "brick_runtime_mismatch",
+                        tostring(runtime_error),
+                        "bricks"
+                    )
+                end
+            end
+        else
+            errors[#errors + 1] = error_item(
+                "brick_rules_missing",
+                "Every drafted brick needs canonical rules.",
+                "bricks"
+            )
+        end
         brick_ids[brick.uid] = true
+    end
+
+    local compatible, compatibility_errors = rule_ast.validate_collection(canonical_rules)
+    if not compatible then
+        for _, message in ipairs(compatibility_errors) do
+            errors[#errors + 1] = error_item(
+                "rules_incompatible",
+                message,
+                "loadout"
+            )
+        end
     end
 
     for _, uid in ipairs(loadout.bag_order or {}) do
@@ -251,13 +388,26 @@ function M.build_tags(loadout)
 end
 
 function M.player_spec(loadout, name)
+    local valid, errors = M.validate(loadout, { skip_contract = true })
+    if not valid then
+        local first = errors[1] or {}
+        error(string.format(
+            "cannot hand off invalid canonical setup%s%s",
+            first.code and " (" .. tostring(first.code) .. ")" or "",
+            first.message and ": " .. tostring(first.message) or ""
+        ))
+    end
+    local marbles = {}
+    for _, marble in ipairs(loadout.marbles or {}) do
+        marbles[#marbles + 1] = draft.canonical_marble(marble)
+    end
     return {
         schema_version = 1,
         id = "player",
         name = name or "Collector",
         sling_id = loadout.sling_id or (loadout.sling and loadout.sling.id),
         sling = util.deep_copy(loadout.sling),
-        marbles = util.deep_copy(loadout.marbles),
+        marbles = marbles,
         bricks = util.deep_copy(loadout.bricks),
         formation = util.deep_copy(loadout.formation),
         bag_order = util.deep_copy(loadout.bag_order),

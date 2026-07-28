@@ -34,8 +34,10 @@ end
 function M.run(t)
     local summary = draft.catalog_summary()
     t:eq(summary.slings, 3, "the slice exposes exactly three supported slings")
-    t:ok(summary.marbles >= 12, "the marble pool supports varied four-round drafts")
+    t:eq(summary.marbles, 6, "the comprehension pool exposes six approved marbles")
     t:eq(summary.brick_kits, 8, "all eight initial positional kit ideas ship")
+    t:eq(summary.comprehension_pool, 17, "the approved pool remains exactly seventeen items")
+    t:eq(summary.legacy_marbles, 6, "six CPU recipe marbles stay quarantined from offers")
     t:ok(summary.brick_archetypes >= 18, "kits draw from the complete brick vocabulary")
     t:ok(summary.tags >= 10, "synergy vocabulary is broad enough to describe builds")
 
