@@ -340,26 +340,175 @@ function M.instantiate_sling(choice)
     return out
 end
 
+local function plain_value(value, seen)
+    local kind = type(value)
+    if kind == "nil" or kind == "boolean" or kind == "number" or kind == "string" then
+        return true
+    end
+    if kind ~= "table" or getmetatable(value) ~= nil then return false end
+    seen = seen or {}
+    if seen[value] then return false end
+    seen[value] = true
+    for key, item in pairs(value) do
+        if not plain_value(key, seen) or not plain_value(item, seen) then return false end
+    end
+    seen[value] = nil
+    return true
+end
+
+local RARITY_BY_SHELL_COUNT = {
+    "common",
+    "uncommon",
+    "rare",
+    "epic",
+    "legendary",
+}
+local RARITY_RANK = {}
+for rank, rarity in ipairs(RARITY_BY_SHELL_COUNT) do
+    RARITY_RANK[rarity] = rank
+end
+
+-- Component identity and exact shell order already live in the composed
+-- RuleSet: the core trajectory node and each shell durability node appear in
+-- source order. Derive selectors from those canonical nodes, then require the
+-- catalog's compatibility projections to agree. This prevents the catalog
+-- table itself from becoming a second mutable mechanics source.
+local function marble_selectors(item)
+    local expected_rule_set_id = "card.marble." .. tostring(item.id)
+    if item.rule_set.id ~= expected_rule_set_id then
+        error(string.format(
+            "marble %s RuleSet identity diverges: %s",
+            tostring(item.id),
+            tostring(item.rule_set.id)
+        ))
+    end
+    if item.name ~= item.rule_set.name then
+        error("catalog name projection diverges from canonical RuleSet identity")
+    end
+    local core_id
+    local shell_ids = {}
+    local seen_shells = {}
+    for _, rule in ipairs(item.rule_set.rules) do
+        local candidate_core = rule.id:match("^core%.([%w_]+)%.trajectory$")
+        if candidate_core then
+            if core_id and core_id ~= candidate_core then
+                error("canonical marble contains multiple core identities")
+            end
+            core_id = candidate_core
+        end
+        local shell_id = rule.id:match("^shell%.([%w_]+)%.durability$")
+        if shell_id then
+            if seen_shells[shell_id] then
+                error("canonical marble repeats shell identity: " .. tostring(shell_id))
+            end
+            seen_shells[shell_id] = true
+            shell_ids[#shell_ids + 1] = shell_id
+        end
+    end
+    if not core_id then error("canonical marble RuleSet has no core identity") end
+    if #shell_ids < 1 then error("canonical marble RuleSet has no shell identity") end
+    local rarity = RARITY_BY_SHELL_COUNT[#shell_ids]
+    if not rarity then
+        error("canonical marble RuleSet exceeds legendary shell cardinality")
+    end
+    if item.core ~= core_id then
+        error("catalog core projection diverges from canonical RuleSet identity")
+    end
+    if not util.deep_equal(item.shells, shell_ids) then
+        error("catalog ordered shell projection diverges from canonical RuleSet identity")
+    end
+    if item.rarity ~= rarity then
+        error("catalog rarity projection diverges from canonical RuleSet cardinality")
+    end
+    return {
+        core = core_id,
+        shells = shell_ids,
+        rarity = rarity,
+    }
+end
+
+-- Materialize every setup/execution field from the same catalog item and
+-- RuleSet used by inspection, copy, validation, and balance. Recomputing the
+-- projections here also means an intentional valid RuleSet edit is observed
+-- everywhere, while a stale draft copy cannot remain a mechanical authority.
+local function materialize_marble(item, uid)
+    rule_ast.assert_valid(item.rule_set)
+    local selectors = marble_selectors(item)
+    local core = cores.runtime(selectors.core, item.rule_set)
+    if RARITY_RANK[core.min_rarity] > RARITY_RANK[selectors.rarity] then
+        error(string.format(
+            "canonical core %s needs rarity %s or better",
+            tostring(core.id),
+            tostring(core.min_rarity)
+        ))
+    end
+    if selectors.rarity == "common" and core.release ~= nil then
+        error("canonical common marble cannot carry a release effect")
+    end
+    for _, shell_id in ipairs(selectors.shells) do
+        shells.runtime(shell_id, item.rule_set)
+    end
+    local authority = rule_ast.player_authority(item.rule_set)
+    return {
+        uid = uid,
+        content_id = item.id,
+        name = item.rule_set.name,
+        role = item.rule_set.role,
+        rarity = selectors.rarity,
+        core = selectors.core,
+        shells = util.deep_copy(selectors.shells),
+        mechanics = util.deep_copy(authority.compact_lines),
+        compact_copy = authority.compact_copy,
+        inspection_copy = util.deep_copy(authority.inspection_copy),
+        rule_set = util.deep_copy(item.rule_set),
+        compatibility = util.deep_copy(item.rule_set.compatibility),
+        balance = util.deep_copy(authority.balance),
+        tags = util.deep_copy(item.rule_set.synergy_tags),
+        art_id = item.art_id,
+    }
+end
+
 function M.instantiate_marble(choice, index, owner)
     local item = catalog_item("marble", choice.content_id)
     if not item then error("unknown marble draft choice: " .. tostring(choice.content_id)) end
-    return {
-        uid = string.format("%s-m%02d", owner or "player", index),
-        content_id = item.id,
-        name = item.name,
-        role = item.role,
-        rarity = item.rarity,
-        core = item.core,
-        shells = util.deep_copy(item.shells),
-        mechanics = util.deep_copy(item.mechanics),
-        compact_copy = item.compact_copy,
-        inspection_copy = util.deep_copy(item.inspection_copy),
-        rule_set = util.deep_copy(item.rule_set),
-        compatibility = util.deep_copy(item.compatibility),
-        balance = util.deep_copy(item.balance),
-        tags = util.deep_copy(item.tags),
-        art_id = item.art_id,
-    }
+    return materialize_marble(
+        item,
+        string.format("%s-m%02d", owner or "player", index)
+    )
+end
+
+-- Verify a mutable setup or handoff value, then return a fresh canonical value.
+-- Exact table shape is intentional: aliases and unknown adjacent selectors must
+-- not acquire meaning merely because a later consumer starts reading them.
+function M.canonical_marble(instance)
+    if type(instance) ~= "table" or not plain_value(instance) then
+        error("live marble must be a plain canonical value")
+    end
+    if instance.uid == nil then error("live marble is missing uid") end
+    local item = catalog_item("marble", instance.content_id)
+    if not item then
+        error("unknown marble content identity: " .. tostring(instance.content_id))
+    end
+    local canonical = materialize_marble(item, instance.uid)
+    for field, value in pairs(canonical) do
+        if not util.deep_equal(instance[field], value) then
+            error(string.format(
+                "marble %s %s diverges from canonical content/RuleSet authority",
+                tostring(instance.content_id),
+                field
+            ))
+        end
+    end
+    for field in pairs(instance) do
+        if canonical[field] == nil then
+            error(string.format(
+                "marble %s contains unknown selector or field %s",
+                tostring(instance.content_id),
+                tostring(field)
+            ))
+        end
+    end
+    return canonical
 end
 
 function M.instantiate_kit(choice, first_brick_index, owner)

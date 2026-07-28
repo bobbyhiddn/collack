@@ -14,6 +14,7 @@ local cores = require("battle.content.cores")
 local shells = require("battle.content.shells")
 local slings = require("battle.content.slings")
 local rule_ast = require("battle.rule_ast")
+local draft = require("battle.draft")
 
 local M = {}
 
@@ -56,7 +57,12 @@ end
 ---   { name, rarity, core = "<core id>", shells = { "<shell id>", ... } }
 --- shells are listed OUTERMOST FIRST.
 --- sling is applied at build time and baked into the resulting stats.
-function M.build(def, sling, owner_id)
+function M.build(def, sling, owner_id, require_canonical)
+    if def.content_id ~= nil then
+        def = draft.canonical_marble(def)
+    elseif require_canonical then
+        error("product battle marble is missing canonical content identity")
+    end
     local cap = M.SHELL_CAP[def.rarity]
     if not cap then
         error("unknown rarity: " .. tostring(def.rarity))

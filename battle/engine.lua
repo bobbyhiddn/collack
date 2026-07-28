@@ -174,7 +174,7 @@ local function ordered_marble_defs(def)
     return ordered
 end
 
-local function build_player(id, def, cols)
+local function build_player(id, def, cols, canonical_handoff)
     local sling = resolve_sling(def.sling or def.sling_id)
     local player = {
         id = id,
@@ -194,8 +194,14 @@ local function build_player(id, def, cols)
         error(string.format("player %s has %d marbles but only %d lanes", id, #defs, cols))
     end
     for index, marble_def in ipairs(defs) do
-        local marble = marble_mod.build(marble_def, sling, id)
-        local lane = marble_def.lane or default_lane(index, #defs, cols)
+        if canonical_handoff and marble_def.lane ~= nil then
+            error("product battle marble lane must derive from canonical bag order")
+        end
+        local marble = marble_mod.build(marble_def, sling, id, canonical_handoff)
+        local lane = canonical_handoff
+            and default_lane(index, #defs, cols)
+            or marble_def.lane
+            or default_lane(index, #defs, cols)
         if lane < 1 or lane > cols then error("marble lane is outside formation width") end
         if player.rack[lane] then error("two marbles assigned to lane " .. lane) end
         marble.lane = lane
@@ -414,8 +420,8 @@ function M.new(opts)
             result = nil,
         },
     }
-    battle.sides.A = build_player("A", sides.A, a_cols)
-    battle.sides.B = build_player("B", sides.B, b_cols)
+    battle.sides.A = build_player("A", sides.A, a_cols, product_handoff)
+    battle.sides.B = build_player("B", sides.B, b_cols, product_handoff)
     battle.world = create_world(battle)
 
     for _, side_id in ipairs(battle.order) do

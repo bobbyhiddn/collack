@@ -3,10 +3,9 @@
 local contract = require("battle.vslice_contract")
 local util = require("battle.run_util")
 local rule_ast = require("battle.rule_ast")
+local draft = require("battle.draft")
 local draft_content = require("battle.content.draft")
 local brick_content = require("battle.content.bricks")
-local core_content = require("battle.content.cores")
-local shell_content = require("battle.content.shells")
 local sling_content = require("battle.content.slings")
 
 local M = {}
@@ -92,37 +91,32 @@ function M.validate(loadout, options)
 
     local marble_ids = {}
     for _, marble in ipairs(loadout.marbles or {}) do
-        if marble.content_id == nil then
+        if type(marble) ~= "table" then
+            errors[#errors + 1] = error_item(
+                "marble_invalid",
+                "Every drafted marble must be a canonical value.",
+                "marbles"
+            )
+        elseif marble.content_id == nil then
             errors[#errors + 1] = error_item(
                 "marble_content_missing",
                 "Every drafted marble needs a content identity.",
                 "marbles"
             )
         end
-        local definition = draft_content.marble_by_id[marble.content_id]
-        local rules = marble.rule_set or (definition and definition.rule_set)
+        local definition = type(marble) == "table"
+            and draft_content.marble_by_id[marble.content_id]
+            or nil
+        local rules = type(marble) == "table"
+            and (marble.rule_set or (definition and definition.rule_set))
+            or nil
         if definition and rules then
-            canonical_rules[#canonical_rules + 1] = rules
             if not same_rule_set(rules, definition.rule_set) then
                 errors[#errors + 1] = error_item(
                     "marble_rules_mismatch",
                     "A drafted marble's rules do not match its content identity.",
                     "marbles"
                 )
-            else
-                local runtime_valid, runtime_error = pcall(function()
-                    core_content.runtime(definition.core, rules)
-                    for _, shell_id in ipairs(definition.shells) do
-                        shell_content.runtime(shell_id, rules)
-                    end
-                end)
-                if not runtime_valid then
-                    errors[#errors + 1] = error_item(
-                        "marble_runtime_mismatch",
-                        tostring(runtime_error),
-                        "marbles"
-                    )
-                end
             end
         else
             errors[#errors + 1] = error_item(
@@ -131,7 +125,22 @@ function M.validate(loadout, options)
                 "marbles"
             )
         end
-        marble_ids[marble.uid] = true
+        if type(marble) == "table" then
+            local authority_valid, canonical_or_error = pcall(
+                draft.canonical_marble,
+                marble
+            )
+            if authority_valid then
+                canonical_rules[#canonical_rules + 1] = canonical_or_error.rule_set
+            else
+                errors[#errors + 1] = error_item(
+                    "marble_authority_mismatch",
+                    tostring(canonical_or_error),
+                    "marbles"
+                )
+            end
+            marble_ids[marble.uid] = true
+        end
     end
 
     local brick_ids = {}
@@ -379,13 +388,26 @@ function M.build_tags(loadout)
 end
 
 function M.player_spec(loadout, name)
+    local valid, errors = M.validate(loadout, { skip_contract = true })
+    if not valid then
+        local first = errors[1] or {}
+        error(string.format(
+            "cannot hand off invalid canonical setup%s%s",
+            first.code and " (" .. tostring(first.code) .. ")" or "",
+            first.message and ": " .. tostring(first.message) or ""
+        ))
+    end
+    local marbles = {}
+    for _, marble in ipairs(loadout.marbles or {}) do
+        marbles[#marbles + 1] = draft.canonical_marble(marble)
+    end
     return {
         schema_version = 1,
         id = "player",
         name = name or "Collector",
         sling_id = loadout.sling_id or (loadout.sling and loadout.sling.id),
         sling = util.deep_copy(loadout.sling),
-        marbles = util.deep_copy(loadout.marbles),
+        marbles = marbles,
         bricks = util.deep_copy(loadout.bricks),
         formation = util.deep_copy(loadout.formation),
         bag_order = util.deep_copy(loadout.bag_order),

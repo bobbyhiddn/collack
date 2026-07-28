@@ -6,9 +6,6 @@ local contract = require("battle.vslice_contract")
 local draft = require("battle.draft")
 local draft_content = require("battle.content.draft")
 local brick_content = require("battle.content.bricks")
-local core_content = require("battle.content.cores")
-local shell_content = require("battle.content.shells")
-local marble_rules = require("battle.marble")
 local util = require("battle.run_util")
 
 local M = {}
@@ -215,23 +212,15 @@ function M.validate(spec)
     local marble_ids = {}
     for _, marble in ipairs(spec.marbles) do
         if marble_ids[marble.uid] then return fail("opponent marble uids must be unique") end
-        local definition = draft_content.marble_by_id[marble.content_id]
-        if not definition then return fail("opponent contains an unknown marble") end
-        local cap = marble_rules.SHELL_CAP[definition.rarity]
-        if #(definition.shells or {}) < 1 or #(definition.shells or {}) > cap then
-            return fail("opponent marble violates its shell cap")
-        end
-        if not core_content.has(definition.core) then
-            return fail("opponent marble has an unknown core")
-        end
-        local core = core_content.runtime(definition.core, definition.rule_set)
-        if marble_rules.rarity_rank(core.min_rarity) > marble_rules.rarity_rank(definition.rarity) then
-            return fail("opponent marble core exceeds its rarity")
-        end
-        for _, shell_id in ipairs(definition.shells) do
-            if not shell_content.has(shell_id) then
-                return fail("opponent marble has an unknown shell")
-            end
+        local authority_valid, canonical_or_error = pcall(
+            draft.canonical_marble,
+            marble
+        )
+        if not authority_valid then
+            return fail(
+                "opponent marble diverges from canonical authority: "
+                .. tostring(canonical_or_error)
+            )
         end
         marble_ids[marble.uid] = true
     end
