@@ -367,8 +367,11 @@ async function waitForNewRuleCallout(label, priorCount, timeout = 30_000) {
 async function advancePausedBattle(runtime, ticks) {
   for (let tick = 0; tick < ticks; tick += 1) {
     await runtime.page.keyboard.press("ArrowRight");
+    // Let LÖVE consume each exact step before sending the next one. This keeps
+    // trails, particles, and camera cues derived from the same tick sequence
+    // instead of from host-dependent keyboard-event batching.
+    await settleRuntime(runtime);
   }
-  await settleRuntime(runtime);
 }
 
 function digest(buffer) {
