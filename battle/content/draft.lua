@@ -83,7 +83,7 @@ local SLING_SPECS = {
 
 M.SLINGS = {}
 for _, spec in ipairs(SLING_SPECS) do
-    M.SLINGS[#M.SLINGS + 1] = decorate(spec, slings.by_id[spec.id].rule_set)
+    M.SLINGS[#M.SLINGS + 1] = decorate(spec, slings.canonical_rule_set(spec.id))
 end
 
 local MARBLE_SPECS = {
@@ -175,9 +175,10 @@ M.LEGACY_MARBLES = {}
 M.ALL_MARBLES = {}
 
 for _, spec in ipairs(MARBLE_SPECS) do
-    local sources = { cores.by_id[spec.core].rule_set }
+    local core_rules = cores.canonical_rule_set(spec.core)
+    local sources = { core_rules }
     for _, shell_id in ipairs(spec.shell_ids) do
-        sources[#sources + 1] = shells.by_id[shell_id].rule_set
+        sources[#sources + 1] = shells.canonical_rule_set(shell_id)
     end
     local rule_set = ast.compose({
         id = "card.marble." .. spec.id,
@@ -185,7 +186,7 @@ for _, spec in ipairs(MARBLE_SPECS) do
         role = spec.role,
         synergy_tags = spec.tags,
         rarity_budget = spec.rarity_budget,
-        drawback = cores.by_id[spec.core].rule_set.drawback,
+        drawback = core_rules.drawback,
     }, sources)
     ast.register(rule_set)
     local item = decorate(spec, rule_set)
@@ -262,7 +263,7 @@ M.BRICK_KITS = {}
 for _, spec in ipairs(KIT_SPECS) do
     local sources = {}
     for _, brick_id in ipairs(spec.brick_ids) do
-        sources[#sources + 1] = bricks.by_id[brick_id].rule_set
+        sources[#sources + 1] = bricks.canonical_rule_set(brick_id)
     end
     local rule_set = ast.compose({
         id = "card.brick_kit." .. spec.id,

@@ -807,7 +807,7 @@ local function projection_value(rule)
     return rule.duration and rule.duration.value
 end
 
-function M.project(item)
+local function project_rules(item, include)
     M.assert_valid(item)
     local profile = {
         _rule_set_id = item.id,
@@ -816,20 +816,66 @@ function M.project(item)
         _cadence = {},
     }
     for _, rule in ipairs(item.rules) do
-        local stat = rule.operation.stat
-        local value = projection_value(rule)
-        if rule.operation.mode == "add" then
-            profile[stat] = (profile[stat] or 0) + value
-        else
-            profile[stat] = value
+        if include == nil or include(rule) then
+            local stat = rule.operation.stat
+            local value = projection_value(rule)
+            if rule.operation.mode == "add" then
+                profile[stat] = (profile[stat] or 0) + value
+            else
+                profile[stat] = value
+            end
+            if is_player_rule(rule) then
+                profile._rule_ids[stat] = profile._rule_ids[stat] or {}
+                profile._rule_ids[stat][#profile._rule_ids[stat] + 1] = rule.id
+            end
+            profile._cadence[stat] = deep_copy(rule.cadence)
         end
-        if is_player_rule(rule) then
-            profile._rule_ids[stat] = profile._rule_ids[stat] or {}
-            profile._rule_ids[stat][#profile._rule_ids[stat] + 1] = rule.id
-        end
-        profile._cadence[stat] = deep_copy(rule.cadence)
     end
     return profile
+end
+
+function M.project(item)
+    return project_rules(item)
+end
+
+-- Compile a runtime view directly from a selected portion of one canonical
+-- RuleSet. This is used when an entity RuleSet contains several shells or
+-- effects with overlapping stat names: selection is by canonical rule ID, not
+-- by a separately authored profile table.
+function M.project_matching(item, include)
+    if type(include) ~= "function" then
+        error("project_matching needs a rule predicate", 2)
+    end
+    return project_rules(item, include)
+end
+
+function M.project_prefix(item, prefix)
+    if type(prefix) ~= "string" or prefix == "" then
+        error("project_prefix needs a non-empty canonical rule prefix", 2)
+    end
+    return project_rules(item, function(rule)
+        return rule.id:sub(1, #prefix) == prefix
+    end)
+end
+
+function M.rule(item, rule_id)
+    M.assert_valid(item)
+    for _, rule in ipairs(item.rules) do
+        if rule.id == rule_id then return deep_copy(rule) end
+    end
+    return nil
+end
+
+function M.rule_value(item, rule_id)
+    local rule = M.rule(item, rule_id)
+    if not rule then
+        error(string.format(
+            "canonical RuleSet %s is missing required rule %s",
+            tostring(type(item) == "table" and item.id or "?"),
+            tostring(rule_id)
+        ), 2)
+    end
+    return deep_copy(projection_value(rule))
 end
 
 local function matches_token(item, token)
@@ -1128,6 +1174,30 @@ end
 function M.canonical(item)
     M.assert_valid(item)
     return canonical_value(item)
+end
+
+function M.same(left, right)
+    if not left or not right then return false end
+    local left_valid, left_canonical = pcall(M.canonical, left)
+    local right_valid, right_canonical = pcall(M.canonical, right)
+    return left_valid and right_valid and left_canonical == right_canonical
+end
+
+-- A compatibility projection may cross a boundary only when any RuleSet it
+-- claims to represent is byte-identical to the structured authority being
+-- compiled. Scalar checks in each content module then catch stale projected
+-- fields without making those fields authoritative.
+function M.assert_runtime_source(kind, id, source_rule_set, shadow)
+    M.assert_valid(source_rule_set)
+    if shadow and shadow.rule_set
+        and not M.same(source_rule_set, shadow.rule_set) then
+        error(string.format(
+            "%s %s compiled RuleSet diverges from canonical RuleSet",
+            tostring(kind),
+            tostring(id)
+        ), 2)
+    end
+    return source_rule_set
 end
 
 function M.register(item)

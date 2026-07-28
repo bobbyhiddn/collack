@@ -5,6 +5,8 @@ local util = require("battle.run_util")
 local rule_ast = require("battle.rule_ast")
 local draft_content = require("battle.content.draft")
 local brick_content = require("battle.content.bricks")
+local core_content = require("battle.content.cores")
+local shell_content = require("battle.content.shells")
 local sling_content = require("battle.content.slings")
 
 local M = {}
@@ -33,30 +35,31 @@ local function contract_shape(loadout)
 end
 
 local function same_rule_set(left, right)
-    local left_valid = left and rule_ast.validate(left)
-    local right_valid = right and rule_ast.validate(right)
-    return left_valid == true
-        and right_valid == true
-        and rule_ast.canonical(left) == rule_ast.canonical(right)
+    return rule_ast.same(left, right)
 end
 
-function M.validate(loadout)
+function M.validate(loadout, options)
+    options = options or {}
     local errors = {}
     if type(loadout) ~= "table" then
         return false, { error_item("setup_required", "Setup must be a table.", "setup") }
     end
 
-    local valid, message = contract.validate_setup(contract_shape(loadout))
-    if not valid then
-        errors[#errors + 1] = error_item("contract_invalid", message, "setup")
+    if not options.skip_contract then
+        local valid, message = contract.validate_setup(contract_shape(loadout))
+        if not valid then
+            errors[#errors + 1] = error_item("contract_invalid", message, "setup")
+        end
     end
 
     local canonical_rules = {}
     local sling_id = loadout.sling_id or (loadout.sling and loadout.sling.id)
-    local sling_definition = sling_content.by_id[sling_id]
+    local sling_known = sling_content.has(sling_id)
+    local sling_canonical = sling_known
+        and sling_content.canonical_rule_set(sling_id)
     local sling_rules = loadout.sling and loadout.sling.rule_set
-        or (sling_definition and sling_definition.rule_set)
-    if not sling_definition or not sling_rules then
+        or sling_canonical
+    if not sling_known or not sling_rules then
         errors[#errors + 1] = error_item(
             "sling_rules_missing",
             "The drafted sling needs a known canonical rule set.",
@@ -64,12 +67,26 @@ function M.validate(loadout)
         )
     else
         canonical_rules[#canonical_rules + 1] = sling_rules
-        if not same_rule_set(sling_rules, sling_definition.rule_set) then
+        if not same_rule_set(sling_rules, sling_canonical) then
             errors[#errors + 1] = error_item(
                 "sling_rules_mismatch",
                 "The drafted sling rules do not match its content identity.",
                 "sling"
             )
+        else
+            local runtime_valid, runtime_error = pcall(
+                sling_content.runtime,
+                sling_id,
+                sling_rules,
+                loadout.sling
+            )
+            if not runtime_valid then
+                errors[#errors + 1] = error_item(
+                    "sling_runtime_mismatch",
+                    tostring(runtime_error),
+                    "sling"
+                )
+            end
         end
     end
 
@@ -92,6 +109,20 @@ function M.validate(loadout)
                     "A drafted marble's rules do not match its content identity.",
                     "marbles"
                 )
+            else
+                local runtime_valid, runtime_error = pcall(function()
+                    core_content.runtime(definition.core, rules)
+                    for _, shell_id in ipairs(definition.shells) do
+                        shell_content.runtime(shell_id, rules)
+                    end
+                end)
+                if not runtime_valid then
+                    errors[#errors + 1] = error_item(
+                        "marble_runtime_mismatch",
+                        tostring(runtime_error),
+                        "marbles"
+                    )
+                end
             end
         else
             errors[#errors + 1] = error_item(
@@ -112,16 +143,32 @@ function M.validate(loadout)
                 "bricks"
             )
         end
-        local definition = brick_content.by_id[brick.content_id]
-        local rules = brick.rule_set or (definition and definition.rule_set)
-        if definition and rules then
+        local brick_known = brick_content.has(brick.content_id)
+        local canonical = brick_known
+            and brick_content.canonical_rule_set(brick.content_id)
+        local rules = brick.rule_set or canonical
+        if brick_known and rules then
             canonical_rules[#canonical_rules + 1] = rules
-            if not same_rule_set(rules, definition.rule_set) then
+            if not same_rule_set(rules, canonical) then
                 errors[#errors + 1] = error_item(
                     "brick_rules_mismatch",
                     "A drafted brick's rules do not match its content identity.",
                     "bricks"
                 )
+            else
+                local runtime_valid, runtime_error = pcall(
+                    brick_content.runtime,
+                    brick.content_id,
+                    rules,
+                    brick
+                )
+                if not runtime_valid then
+                    errors[#errors + 1] = error_item(
+                        "brick_runtime_mismatch",
+                        tostring(runtime_error),
+                        "bricks"
+                    )
+                end
             end
         else
             errors[#errors + 1] = error_item(

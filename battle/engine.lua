@@ -83,10 +83,15 @@ local function contains(list, item)
 end
 
 local function resolve_sling(spec)
-    if type(spec) == "table" then return spec end
-    local sling = slings.by_id[spec or "training_sling"]
-    if not sling then error("unknown sling: " .. tostring(spec)) end
-    return sling
+    if type(spec) == "table" then
+        if not spec.rule_set then
+            error("battle sling is missing its canonical RuleSet")
+        end
+        return slings.runtime(spec.id or spec.content_id, spec.rule_set, spec)
+    end
+    local id = spec or "training_sling"
+    if not slings.has(id) then error("unknown sling: " .. tostring(spec)) end
+    return slings.runtime(id)
 end
 
 local function sling_attribution_stat(sling)
@@ -307,7 +312,7 @@ local function create_world(battle)
                 local brick = player.formation.grid[row][col]
                 if brick then
                     local x, y = brick_position(side_id, row, col, player.formation.cols)
-                    local profile = effects.brick_profile(brick.behaviour)
+                    local profile = effects.brick_profile(brick.behaviour, brick.rule_set)
                     brick.body_id = box_id(side_id, row, col, brick)
                     brick.x, brick.y = x, y
                     world:add_box({
@@ -450,7 +455,7 @@ local function adjacent_protection(owner, brick)
     local reduction = 0
     local first
     for _, neighbour in ipairs(formation_mod.neighbours(owner.formation, brick.row, brick.col)) do
-        local profile = effects.brick_profile(neighbour.behaviour)
+        local profile = effects.brick_profile(neighbour.behaviour, neighbour.rule_set)
         local amount = profile.protect_adjacent or 0
         reduction = reduction + amount
         if amount > 0 and not first then first = { brick = neighbour, profile = profile } end
@@ -471,7 +476,7 @@ local function destroy_brick(battle, owner, brick, source, depth)
         source = source, bricks_left = owner.formation.alive,
         x = brick.x, y = brick.y,
     })
-    local profile = effects.brick_profile(brick.behaviour)
+    local profile = effects.brick_profile(brick.behaviour, brick.rule_set)
     if (profile.death_splash or 0) > 0 then
         local cadence = profile._cadence and profile._cadence.death_splash or {}
         local chain_limit = cadence.limit or M.MAX_CHAIN_DEPTH
@@ -565,7 +570,7 @@ release_core = function(battle, owner, other, marble, x, y, depth)
         destroy_marble(battle, owner, marble, "release_depth_cap", x, y)
         return
     end
-    local base = effects.release_profile(marble.core.release)
+    local base = effects.release_profile(marble.core.release, marble.core.rule_set)
     local amplification = marble.effect_power or 0
     local radius = 7 + (base.radius + amplification) * 5
     local strength = 36 + (base.radius + amplification) * 12
@@ -712,7 +717,11 @@ local function start_marble(battle, player, marble, shot)
     local freeze = marble.statuses.freeze and marble.statuses.freeze.expires > battle.tick
     local speed = 62 + (marble.momentum or 0) * 7
     if freeze then
-        speed = speed * (effects.status_profile("freeze").launch_speed_multiplier or 1)
+        speed = speed * (
+            effects.status_profile("freeze", marble.statuses.freeze.rule_set)
+                .launch_speed_multiplier
+            or 1
+        )
     end
     local body = battle.world:get_body(marble.body_id)
     battle.world:set_position(marble.body_id, start_x, start_y)
@@ -781,8 +790,15 @@ local function apply_status_from_field(battle, field_event)
     local field = battle.world:get_field(field_event.field)
     if not entry or not field or entry.marble.state == "destroyed" then return end
     local behaviour = field.data.behaviour
+    local source_entry = battle.brick_by_body[field.data.brick]
+    local source_rule_set = source_entry
+        and source_entry.brick
+        and source_entry.brick.rule_set
+    if behaviour ~= "release" and not source_rule_set then
+        error("live effect field lost its canonical brick RuleSet")
+    end
     if behaviour == "magnetic" then
-        local profile = effects.brick_profile(behaviour)
+        local profile = effects.brick_profile(behaviour, source_rule_set)
         local key = "field|" .. field.id .. "|" .. entry.marble.body_id
         if (battle.contact_cooldown[key] or -1000) + 30 <= battle.tick then
             battle.contact_cooldown[key] = battle.tick
@@ -800,8 +816,8 @@ local function apply_status_from_field(battle, field_event)
     if field.owner == entry.owner.id then return end
     local marble = entry.marble
     local status = marble.statuses[behaviour]
-    local status_profile = effects.status_profile(behaviour)
-    local brick_profile = effects.brick_profile(behaviour)
+    local status_profile = effects.status_profile(behaviour, source_rule_set)
+    local brick_profile = effects.brick_profile(behaviour, source_rule_set)
     local tick_cadence = status_profile._cadence and status_profile._cadence.shell_wear
     local expiry = battle.tick + status_profile.duration_ticks
     if not status or status.expires < expiry then
@@ -810,6 +826,7 @@ local function apply_status_from_field(battle, field_event)
             next_tick = tick_cadence
                 and battle.tick + tick_cadence.interval
                 or nil,
+            rule_set = rule_ast.copy(source_rule_set),
         }
         append_rule_event(battle, entry.owner.id, "status_applied", {
             marble = marble.uid, status = behaviour,
@@ -831,7 +848,7 @@ local function handle_wall_contact(battle, event)
         nx = event.nx, ny = event.ny, impulse = event.impulse,
     })
     if entry.marble.ricochet then
-        local sling = slings.by_id[entry.marble.sling_id]
+        local sling = entry.owner.sling
         append_rule_event(battle, entry.owner.id, "ricochet", {
             marble = entry.marble.uid, surface = "wall",
             nx = event.nx, ny = event.ny,
@@ -858,8 +875,8 @@ local function collision_damage(battle, attacker, defender, marble, brick, event
     battle.contact_cooldown[key] = battle.tick
     local shell = marble.shells[1]
     if not shell then return end
-    local collision = effects.collision_profile(shell.collision)
-    local profile = effects.brick_profile(brick.behaviour)
+    local collision = effects.collision_profile(shell.collision, shell.rule_set)
+    local profile = effects.brick_profile(brick.behaviour, brick.rule_set)
     local impact_bonus = min(2, floor((event.impulse or 0) / 95))
     local damage = collision.damage + (marble.damage_bonus or 0) + impact_bonus
     if marble.effect_power > 0 and collision.id ~= "chip" then
@@ -958,7 +975,7 @@ local function collision_damage(battle, attacker, defender, marble, brick, event
         )
     end
     if marble.ricochet then
-        local sling = slings.by_id[marble.sling_id]
+        local sling = attacker.sling
         append_rule_event(battle, attacker.id, "ricochet", {
             marble = marble.uid, row = brick.row, col = brick.col,
             nx = event.nx, ny = event.ny,
@@ -1050,7 +1067,7 @@ local function tick_statuses(battle)
                 })
             elseif poison and poison.next_tick and poison.next_tick <= battle.tick then
                 local body = battle.world:get_body(marble.body_id)
-                local profile = effects.status_profile("poison")
+                local profile = effects.status_profile("poison", poison.rule_set)
                 append_rule_event(battle, owner.id, "status_tick", {
                     marble = marble.uid, status = "poison",
                 }, profile, "shell_wear", "Poison")

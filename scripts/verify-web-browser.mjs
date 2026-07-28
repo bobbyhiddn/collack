@@ -1,13 +1,24 @@
 #!/usr/bin/env node
 
 import { createReadStream } from "node:fs";
-import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { createHash } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
 import { evidenceSourceDigest } from "./evidence-source-digest.mjs";
+import {
+  assertSourceWorkingTreeClean,
+  checksumLine,
+  checksumName,
+  evidenceSchemaVersion,
+  executableEvidence,
+  expectedEvidenceProvenance,
+  manifestName,
+  sealEvidence,
+  serializeEvidence,
+} from "./evidence-integrity.mjs";
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(scriptDirectory, "..");
@@ -744,42 +755,41 @@ try {
     );
     motionEvidence[label] = { first, moved };
   }
-  const screenshotNames = [
-    "phone-draft-scout.png",
-    "phone-refit-inspection.png",
-    "phone-reward.png",
-    "phone-battle-trigger.png",
-    "phone-terminal-result.png",
-    "desktop-draft-scout.png",
-    "desktop-refit-inspection.png",
-    "desktop-reward.png",
-    "desktop-battle-trigger.png",
-    "desktop-terminal-result.png",
-  ];
+  const screenshotNames = (await readdir(verificationRoot))
+    .filter((name) => name.endsWith(".png"))
+    .sort();
+  assert(screenshotNames.length === 38,
+    `evidence must bind all 38 generated screenshots, got ${screenshotNames.length}`);
   const screenshotHashes = {};
   for (const name of screenshotNames) {
     screenshotHashes[name] = digest(await readFile(path.join(verificationRoot, name)));
   }
+  assertSourceWorkingTreeClean(root);
   const sourceDigest = await evidenceSourceDigest(root);
-  await writeFile(
-    path.join(verificationRoot, "packaged-runtime-evidence.json"),
-    `${JSON.stringify({
-      schemaVersion: 2,
-      sourceDigest,
-      viewports: {
-        phone: { width: 390, height: 844, touch: true },
-        desktop: { width: 1280, height: 800, touch: false },
-      },
-      canonicalSweeps,
-      canonicalBlowbacks,
-      motionEvidence,
-      guidance: guidanceSamples,
-      inspections: inspectionSamples,
-      ruleCallouts,
-      settings: settingSamples,
-      screenshotHashes,
-    }, null, 2)}\n`
-  );
+  const provenance = expectedEvidenceProvenance(root);
+  const executables = await executableEvidence(root);
+  const evidence = sealEvidence({
+    schemaVersion: evidenceSchemaVersion,
+    sourceDigest,
+    sourceCommit: provenance.sourceCommit,
+    sourceTree: provenance.sourceTree,
+    viewports: {
+      phone: { width: 390, height: 844, touch: true },
+      desktop: { width: 1280, height: 800, touch: false },
+    },
+    executableEvidence: executables,
+    canonicalSweeps,
+    canonicalBlowbacks,
+    motionEvidence,
+    guidance: guidanceSamples,
+    inspections: inspectionSamples,
+    ruleCallouts,
+    settings: settingSamples,
+    screenshotHashes,
+  });
+  const manifestBytes = serializeEvidence(evidence);
+  await writeFile(path.join(root, manifestName), manifestBytes);
+  await writeFile(path.join(root, checksumName), checksumLine(manifestBytes));
 
   console.log(
     `[web-browser] OK: phone + desktop scout/draft, exact refit inspection, reward, `

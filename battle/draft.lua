@@ -180,7 +180,7 @@ local function new_tags(tags, current)
 end
 
 local function sling_details(item)
-    local rules = slings.by_id[item.id] or {}
+    local rules = slings.runtime(item.id, item.rule_set)
     return {
         archetype = rules.archetype,
         launch_impulse_bonus = rules.momentum_bonus or 0,
@@ -191,10 +191,10 @@ local function sling_details(item)
 end
 
 local function marble_details(item)
-    local core = cores.by_id[item.core]
+    local core = cores.runtime(item.core, item.rule_set)
     local shell_details = {}
     for order, shell_id in ipairs(item.shells) do
-        local shell = shells.by_id[shell_id]
+        local shell = shells.runtime(shell_id, item.rule_set)
         shell_details[#shell_details + 1] = {
             order = order,
             id = shell.id,
@@ -221,7 +221,7 @@ end
 local function kit_details(item)
     local brick_details = {}
     for _, brick_id in ipairs(item.brick_ids) do
-        local brick = bricks.by_id[brick_id]
+        local brick = bricks.runtime(brick_id)
         brick_details[#brick_details + 1] = {
             id = brick.id,
             name = brick.name,
@@ -328,15 +328,14 @@ function M.instantiate_sling(choice)
     local item = catalog_item("sling", choice.content_id)
     if not item then error("unknown sling draft choice: " .. tostring(choice.content_id)) end
     local out = util.deep_copy(item)
-    local rules = slings.by_id[item.id]
-    for key, value in pairs(rules or {}) do
-        if out[key] == nil then out[key] = util.deep_copy(value) end
-    end
+    local rules = slings.runtime(item.id, item.rule_set)
+    for key, value in pairs(rules) do out[key] = util.deep_copy(value) end
     out.content_id = item.id
     out.rule_set = util.deep_copy(item.rule_set)
-    out.compact_copy = item.compact_copy
-    out.inspection_copy = util.deep_copy(item.inspection_copy)
-    out.balance = util.deep_copy(item.balance)
+    local authority = rule_ast.player_authority(out.rule_set)
+    out.compact_copy = authority.compact_copy
+    out.inspection_copy = util.deep_copy(authority.inspection_copy)
+    out.balance = util.deep_copy(authority.balance)
     out.compatibility = util.deep_copy(item.compatibility)
     return out
 end
@@ -409,25 +408,25 @@ function M.instantiate_brick(kit_id, brick_id, index, owner)
             tostring(kit_id)
         ))
     end
-    local definition = bricks.by_id[brick_id]
-    if not definition then error("unknown brick: " .. tostring(brick_id)) end
+    if not bricks.has(brick_id) then error("unknown brick: " .. tostring(brick_id)) end
+    local profile = bricks.runtime(brick_id)
     return {
         uid = string.format("%s-b%02d", owner or "player", index),
-        content_id = definition.id,
+        content_id = profile.id,
         kit_id = item.id,
-        name = definition.name,
-        family = definition.family or "basic",
-        behaviour = definition.behaviour,
-        hp = definition.hp,
-        max_hp = definition.hp,
+        name = profile.name,
+        family = profile.family or "basic",
+        behaviour = profile.behaviour,
+        hp = profile.hp,
+        max_hp = profile.hp,
         tags = util.deep_copy(item.tags),
-        art_id = "brick_" .. definition.id,
-        mechanics = rule_ast.compact_lines(definition.rule_set, 1),
-        compact_copy = definition.compact_copy,
-        inspection_copy = util.deep_copy(definition.inspection_copy),
-        rule_set = util.deep_copy(definition.rule_set),
-        compatibility = util.deep_copy(definition.rule_set.compatibility),
-        balance = util.deep_copy(definition.balance),
+        art_id = "brick_" .. profile.id,
+        mechanics = rule_ast.compact_lines(profile.rule_set, 1),
+        compact_copy = profile.compact_copy,
+        inspection_copy = util.deep_copy(profile.inspection_copy),
+        rule_set = util.deep_copy(profile.rule_set),
+        compatibility = util.deep_copy(profile.rule_set.compatibility),
+        balance = util.deep_copy(profile.balance),
     }
 end
 

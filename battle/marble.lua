@@ -12,6 +12,8 @@
 
 local cores = require("battle.content.cores")
 local shells = require("battle.content.shells")
+local slings = require("battle.content.slings")
+local rule_ast = require("battle.rule_ast")
 
 local M = {}
 
@@ -70,10 +72,15 @@ function M.build(def, sling, owner_id)
             tostring(def.name), def.rarity, cap, #shell_ids))
     end
 
-    local core_def = cores.by_id[def.core]
-    if not core_def then
+    if not cores.has(def.core) then
         error("unknown core: " .. tostring(def.core))
     end
+    local entity_rule_set = def.rule_set
+    if entity_rule_set then rule_ast.assert_valid(entity_rule_set) end
+    local core_def = cores.runtime(
+        def.core,
+        entity_rule_set
+    )
     if rarity_rank[core_def.min_rarity] > rarity_rank[def.rarity] then
         error(string.format(
             "core %q needs rarity %s or better, marble %q is %s",
@@ -85,13 +92,19 @@ function M.build(def, sling, owner_id)
         error(string.format("common marble %q may not carry a release effect", tostring(def.name)))
     end
 
-    sling = sling or {}
+    if type(sling) ~= "table" or not sling.rule_set then
+        error("live marble construction needs a canonical sling RuleSet")
+    end
+    sling = slings.runtime(sling.id, sling.rule_set, sling)
     local built_shells = {}
     for index, shell_id in ipairs(shell_ids) do
-        local shell_def = shells.by_id[shell_id]
-        if not shell_def then
+        if not shells.has(shell_id) then
             error("unknown shell: " .. tostring(shell_id))
         end
+        local shell_def = shells.runtime(
+            shell_id,
+            entity_rule_set
+        )
         built_shells[index] = {
             id = shell_def.id,
             mineral = shell_def.mineral,
@@ -99,6 +112,7 @@ function M.build(def, sling, owner_id)
             collision = shell_def.collision,
             durability = shell_def.durability + (sling.durability_bonus or 0),
             max_durability = shell_def.durability + (sling.durability_bonus or 0),
+            rule_set = rule_ast.copy(shell_def.rule_set),
         }
     end
 
@@ -113,6 +127,7 @@ function M.build(def, sling, owner_id)
             name = core_def.name,
             trajectory = core_def.trajectory + (sling.aim or 0),
             release = core_def.release,
+            rule_set = rule_ast.copy(core_def.rule_set),
         },
         shells = built_shells,
         -- Momentum contributes to canonical launch speed and physical mass.
@@ -124,7 +139,8 @@ function M.build(def, sling, owner_id)
         precision = sling.precision == true,
         effect_power = sling.effect_power or 0,
         sling_id = sling.id,
-        rule_set = def.rule_set,
+        sling_rule_set = rule_ast.copy(sling.rule_set),
+        rule_set = entity_rule_set and rule_ast.copy(entity_rule_set) or nil,
         compact_copy = def.compact_copy,
         inspection_copy = def.inspection_copy,
         balance = def.balance,

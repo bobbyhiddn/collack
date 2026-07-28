@@ -13,6 +13,7 @@ local marble_mod = require("battle.marble")
 local formation_mod = require("battle.formation")
 local cores = require("battle.content.cores")
 local bricks = require("battle.content.bricks")
+local slings = require("battle.content.slings")
 local fixtures = require("battle.tests.fixtures")
 
 local M = { name = "data_model" }
@@ -26,7 +27,7 @@ function M.run(t)
     t:eq(marble_mod.SHELL_CAP.legendary, 5, "legendary cap")
 
     -- Shells are ordered, outermost first.
-    local built = marble_mod.build(fixtures.sturdy(1), fixtures.TIGHT_SLING, "A")
+    local built = marble_mod.build(fixtures.sturdy(1), slings.by_id.precision, "A")
     t:eq(#built.shells, 3, "rare marble carries 3 shells")
     t:eq(built.shells[1].mineral, "granite", "shells[1] is the outermost shell")
     t:eq(marble_mod.outer_shell(built).mineral, "granite", "outer_shell agrees")
@@ -37,13 +38,13 @@ function M.run(t)
         marble_mod.build({
             name = "Overstuffed", rarity = "common",
             core = "dull_quartz", shells = { "chalk_plain", "jade_lattice" },
-        }, fixtures.TIGHT_SLING, "A")
+        }, slings.by_id.precision, "A")
     end, "at most 1 shell", "a common marble may not carry two shells")
 
     -- Every marble has at least one shell; a bare core is not a marble.
     t:raises(function()
         marble_mod.build({ name = "Naked", rarity = "rare", core = "dull_quartz", shells = {} },
-            fixtures.TIGHT_SLING, "A")
+            slings.by_id.precision, "A")
     end, "no shells", "a marble with no shells is rejected")
 
     -- Common cores get baseline blowback only — no release effect.
@@ -56,7 +57,7 @@ function M.run(t)
     end
     t:raises(function()
         marble_mod.build({ name = "Cheat", rarity = "common", core = "shrapnel_geode", shells = { "chalk_plain" } },
-            fixtures.TIGHT_SLING, "A")
+            slings.by_id.precision, "A")
     end, "needs rarity uncommon", "a common marble may not carry an uncommon core")
 
     -- Trajectory sign convention: negative left, positive right, zero straight.
@@ -65,13 +66,14 @@ function M.run(t)
     t:eq(cores.by_id.dull_quartz.trajectory, 0, "dull_quartz flies straight")
 
     -- The sling modifies every marble in hand.
-    local buffed = marble_mod.build(fixtures.sturdy(1),
-        { id = "buff", damage_bonus = 1, durability_bonus = 2, momentum_bonus = 1, aim = 1, scatter = 0 }, "A")
-    t:eq(buffed.shells[1].durability, 5, "sling adds durability to every shell")
-    t:eq(buffed.shells[3].durability, 4, "including the innermost")
-    t:eq(buffed.damage_bonus, 1, "sling adds damage")
-    t:eq(buffed.momentum, 4, "sling adds momentum")
-    t:eq(buffed.core.trajectory, 1, "sling aim shifts the core's trajectory")
+    local durable = marble_mod.build(fixtures.sturdy(1), slings.by_id.tuned_sling, "A")
+    t:eq(durable.shells[1].durability, 4, "sling adds durability to every shell")
+    t:eq(durable.shells[3].durability, 3, "including the innermost")
+    local heavy = marble_mod.build(fixtures.sturdy(1), slings.by_id.heavy_sling, "A")
+    t:eq(heavy.damage_bonus, 1, "sling adds damage")
+    local raker = marble_mod.build(fixtures.sturdy(1), slings.by_id.raker_sling, "A")
+    t:eq(raker.momentum, 5, "sling adds momentum")
+    t:eq(raker.core.trajectory, 1, "sling aim shifts the core's trajectory")
 
     -- Brick archetypes: behaviour, not just hit points, and a do-nothing control.
     local seen = {}

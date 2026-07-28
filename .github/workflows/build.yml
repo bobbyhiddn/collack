@@ -111,7 +111,9 @@ jobs:
         if: matrix.target == 'web'
         env:
           PLAYWRIGHT_BROWSERS_PATH: .playwright-browsers
-        run: npm run verify:web
+        run: |
+          npm run verify:web
+          npm run verify:evidence -- --working-tree --compare-tracked
 
       - name: Build desktop (Linux + Windows)
         if: matrix.target == 'desktop'

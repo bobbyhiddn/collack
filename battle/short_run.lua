@@ -9,6 +9,7 @@
 local contract = require("battle.vslice_contract")
 local draft = require("battle.draft")
 local catalog = require("battle.content.draft")
+local brick_content = require("battle.content.bricks")
 local rule_ast = require("battle.rule_ast")
 local setup_rules = require("battle.setup_rules")
 local util = require("battle.run_util")
@@ -466,15 +467,16 @@ local function validate_setup(state)
         end
     end
 
-    local rule_sets = { state.player.sling and state.player.sling.rule_set }
-    for _, marble in ipairs(marbles) do rule_sets[#rule_sets + 1] = marble.rule_set end
-    for _, brick in ipairs(bricks) do rule_sets[#rule_sets + 1] = brick.rule_set end
-    local compatible, compatibility_errors = rule_ast.validate_collection(rule_sets)
-    if not compatible then
-        for _, message in ipairs(compatibility_errors) do
-            errors[#errors + 1] = setup_error(
-                "rules_incompatible", message, "loadout"
-            )
+    -- The short run owns its sparse-count and complete-placement constraints,
+    -- while canonical identity/runtime validation stays centralized here with
+    -- every other setup path.
+    local canonical, canonical_errors = setup_rules.validate(
+        setup_loadout(state),
+        { skip_contract = true }
+    )
+    if not canonical then
+        for _, item in ipairs(canonical_errors) do
+            errors[#errors + 1] = setup_error(item.code, item.message, item.field)
         end
     end
     return #errors == 0, errors
@@ -769,7 +771,7 @@ local function candidate_sling(state, seed)
     end)
 end
 
-local function canonical_rule_set(item)
+local function canonical_item_rule_set(item)
     assert(item, "canonical item is required")
     if item.kit_id then
         local kit = assert(
@@ -781,19 +783,58 @@ local function canonical_rule_set(item)
             if brick_id == item.content_id then member = true break end
         end
         assert(member, "reward brick must belong to its canonical kit")
-        return kit.rule_set
+        -- Every current brick reward applies one entity, so its authority is
+        -- the exact individual RuleSet carried by that entity. The kit remains
+        -- provenance and synergy metadata; it is not an applied mechanic.
+        local rule_set = assert(item.rule_set, "reward brick needs canonical rules")
+        local canonical = brick_content.canonical_rule_set(item.content_id)
+        assert(
+            rule_set.id == "brick." .. tostring(item.content_id)
+                and rule_ast.same(rule_set, canonical),
+            "reward brick RuleSet must match the applied entity"
+        )
+        return canonical
     end
     return assert(item.rule_set, "canonical item rule set is required")
 end
 
-local function canonical_rule_authority(item)
-    return rule_ast.player_authority(canonical_rule_set(item))
+local function canonical_item_rule_authority(item)
+    return rule_ast.player_authority(canonical_item_rule_set(item))
+end
+
+local BRICK_OPERATIONS = {
+    add_brick = true,
+    remove_brick = true,
+    repair_brick = true,
+    replace_brick = true,
+}
+
+local function canonical_operation_rule_set(operation, item)
+    assert(type(operation) == "table", "canonical reward operation is required")
+    local rule_set = canonical_item_rule_set(item)
+    if BRICK_OPERATIONS[operation.kind] then
+        assert(item.kit_id == operation.kit_id,
+            "reward brick kit provenance must match the applied operation")
+        assert(item.content_id == operation.content_id,
+            "reward brick identity must match the applied operation")
+        assert(rule_set.id == "brick." .. tostring(operation.content_id),
+            "single-brick operation must attribute only its applied entity")
+    elseif item.kit_id then
+        error("brick reward cannot attribute a kit through a non-brick operation")
+    end
+    return rule_set
+end
+
+function M.reward_rule_authority(operation, item)
+    return util.deep_copy(
+        rule_ast.player_authority(canonical_operation_rule_set(operation, item))
+    )
 end
 
 local function weakest_marble(state)
     local selected, selected_authority
     for _, marble in ipairs(state.player.marbles) do
-        local authority = canonical_rule_authority(marble)
+        local authority = canonical_item_rule_authority(marble)
         if not selected
             or authority.balance.spent < selected_authority.balance.spent
             or (authority.balance.spent == selected_authority.balance.spent
@@ -875,7 +916,7 @@ local function reward_choice(state, slot, operation, item, category, next_oppone
     local current = current_tag_set(state)
     local scout = util.set(next_opponent.scout_tags)
     local tags = item.tags or item.rule_set.synergy_tags
-    local source_rule_set = canonical_rule_set(item)
+    local source_rule_set = canonical_operation_rule_set(operation, item)
     local authority = rule_ast.player_authority(source_rule_set)
     local operation_text = operation_copy(operation, state, item)
     return {
@@ -918,6 +959,7 @@ local function reward_choice(state, slot, operation, item, category, next_oppone
             operation = operation.kind,
             target_uid = operation.target_uid,
             target_authority = util.deep_copy(operation.target_authority),
+            applied_content_ids = { item.content_id or item.id },
             source_rule_set_id = authority.rule_set_id,
             source_rule_ids = util.deep_copy(authority.rule_ids),
             generated_compact_copy = authority.compact_copy,
@@ -1117,7 +1159,7 @@ end
 
 local function target_authority_matches(target, expected)
     return type(expected) == "table"
-        and util.deep_equal(canonical_rule_authority(target), expected)
+        and util.deep_equal(canonical_item_rule_authority(target), expected)
 end
 
 local function apply_operation(state, operation)
@@ -1225,6 +1267,33 @@ local function choose_reward(state, command)
             "choice_unknown",
             "Choose one of the three visible refit cards.",
             { offer_id = offer.offer_id }
+        )
+    end
+    local operation = choice.operation or {}
+    local attribution = choice.causal_attribution or {}
+    local authority_ok, authority = pcall(M.reward_rule_authority, operation, {
+        kit_id = operation.kit_id,
+        content_id = choice.content_id,
+        rule_set = choice.rule_set,
+    })
+    local attribution_valid = authority_ok
+        and choice.content_id == operation.content_id
+        and attribution.operation == operation.kind
+        and attribution.source_rule_set_id == authority.rule_set_id
+        and util.deep_equal(attribution.source_rule_ids, authority.rule_ids)
+        and util.deep_equal(
+            attribution.applied_content_ids,
+            { operation.content_id }
+        )
+        and attribution.generated_compact_copy == authority.compact_copy
+        and attribution.generated_operation_copy == choice.operation_copy
+    if not attribution_valid then
+        return nil, error_result(
+            state,
+            command,
+            "reward_authority_changed",
+            "That refit's applied operation no longer matches its canonical attribution.",
+            { choice_id = choice.choice_id }
         )
     end
     local next_state = util.deep_copy(state)

@@ -19,10 +19,21 @@ local ORDER = {
 local SLINGS = {}
 local by_id = {}
 
-for _, id in ipairs(ORDER) do
-    local rule_set = rulebook.slings[id]
+local RUNTIME_FIELDS = {
+    "shots_per_volley",
+    "damage_bonus",
+    "durability_bonus",
+    "momentum_bonus",
+    "aim",
+    "scatter",
+    "ricochet",
+    "precision",
+    "effect_power",
+}
+
+local function compile(id, rule_set)
     local profile = ast.project(rule_set)
-    local sling = {
+    return {
         id = id,
         name = rule_set.name,
         archetype = id,
@@ -42,7 +53,47 @@ for _, id in ipairs(ORDER) do
         _rule_set_id = profile._rule_set_id,
         _rule_source = profile._rule_source,
         _rule_ids = ast.copy(profile._rule_ids),
+        _cadence = ast.copy(profile._cadence),
     }
+end
+
+local function runtime(id, rule_set, shadow)
+    rule_set = rule_set or rulebook.slings[id]
+    if not rule_set then error("unknown sling: " .. tostring(id)) end
+    if rule_set.id ~= "sling." .. tostring(id) then
+        error(string.format(
+            "sling %s RuleSet identity diverges: %s",
+            tostring(id),
+            tostring(rule_set.id)
+        ))
+    end
+    ast.assert_runtime_source("sling", id, rule_set, shadow)
+    local canonical = compile(id, rule_set)
+    for _, field in ipairs(RUNTIME_FIELDS) do
+        if shadow and shadow[field] ~= nil and shadow[field] ~= canonical[field] then
+            error(string.format(
+                "sling %s compiled %s diverges from canonical RuleSet",
+                tostring(id),
+                field
+            ))
+        end
+    end
+    return canonical
+end
+
+local function canonical_rule_set(id)
+    local rule_set = rulebook.slings[id]
+    if not rule_set then error("unknown sling: " .. tostring(id)) end
+    return ast.copy(rule_set)
+end
+
+local function has(id)
+    return rulebook.slings[id] ~= nil
+end
+
+for _, id in ipairs(ORDER) do
+    local rule_set = rulebook.slings[id]
+    local sling = compile(id, rule_set)
     SLINGS[#SLINGS + 1] = sling
     by_id[id] = sling
 end
@@ -50,4 +101,7 @@ end
 return {
     list = SLINGS,
     by_id = by_id,
+    runtime = runtime,
+    canonical_rule_set = canonical_rule_set,
+    has = has,
 }

@@ -26,21 +26,62 @@ local SPECS = {
 
 local BRICKS = {}
 local by_id = {}
+local spec_by_id = {}
+for _, spec in ipairs(SPECS) do spec_by_id[spec.id] = spec end
 
-for _, spec in ipairs(SPECS) do
-    local rule_set = rulebook.bricks[spec.id]
-    local profile = ast.project(rule_set)
-    local brick = {
+local function compile(spec, rule_set)
+    local authority = ast.player_authority(rule_set)
+    return {
         id = spec.id,
         name = spec.name,
         family = spec.family,
-        behaviour = profile.behaviour,
-        hp = profile.hp,
+        behaviour = ast.rule_value(rule_set, "brick." .. spec.id .. ".behaviour"),
+        hp = ast.rule_value(rule_set, "brick." .. spec.id .. ".hp"),
         rule_set = ast.copy(rule_set),
-        compact_copy = ast.compact(rule_set, 1),
-        inspection_copy = ast.expanded_lines(rule_set),
-        balance = ast.balance(rule_set),
+        compact_copy = authority.compact_copy,
+        inspection_copy = ast.copy(authority.inspection_copy),
+        balance = ast.copy(authority.balance),
     }
+end
+
+local function runtime(id, rule_set, shadow)
+    local spec = spec_by_id[id]
+    if not spec then error("unknown brick: " .. tostring(id)) end
+    rule_set = rule_set or rulebook.bricks[id]
+    ast.assert_runtime_source("brick", id, rule_set, shadow)
+    local canonical = compile(spec, rule_set)
+    for _, field in ipairs({ "behaviour", "hp" }) do
+        if shadow and shadow[field] ~= nil and shadow[field] ~= canonical[field] then
+            error(string.format(
+                "brick %s compiled %s diverges from canonical RuleSet",
+                tostring(id),
+                field
+            ))
+        end
+    end
+    if shadow and shadow.max_hp ~= nil and shadow.max_hp ~= canonical.hp then
+        error(string.format(
+            "brick %s compiled max_hp diverges from canonical RuleSet",
+            tostring(id)
+        ))
+    end
+    return canonical
+end
+
+local function canonical_rule_set(id)
+    local rule_set = rulebook.bricks[id]
+    if not rule_set then error("unknown brick: " .. tostring(id)) end
+    return ast.copy(rule_set)
+end
+
+local function has(id)
+    return spec_by_id[id] ~= nil and rulebook.bricks[id] ~= nil
+end
+
+for _, spec in ipairs(SPECS) do
+    local rule_set = rulebook.bricks[spec.id]
+    local brick = compile(spec, rule_set)
+    brick.compact_copy = ast.compact(rule_set, 1)
     BRICKS[#BRICKS + 1] = brick
     by_id[brick.id] = brick
 end
@@ -48,4 +89,7 @@ end
 return {
     list = BRICKS,
     by_id = by_id,
+    runtime = runtime,
+    canonical_rule_set = canonical_rule_set,
+    has = has,
 }

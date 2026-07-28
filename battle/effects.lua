@@ -5,67 +5,66 @@ local rulebook = require("battle.content.rules")
 
 local M = {}
 
-M.brick = {}
-for id, rule_set in pairs(rulebook.brick_behaviours) do
-    M.brick[id] = ast.project(rule_set)
+local function assert_identity(kind, id, profile, stat)
+    if profile[stat] ~= id then
+        error(string.format(
+            "%s profile %s is absent from canonical RuleSet %s",
+            kind,
+            tostring(id),
+            tostring(profile._rule_set_id)
+        ))
+    end
+    return profile
 end
 
-M.collision = {}
-for id, rule_set in pairs(rulebook.collisions) do
-    local profile = ast.project(rule_set)
-    profile.id = profile.collision
+local function normalize_collision(id, rule_set)
+    local profile = ast.project_prefix(rule_set, "collision." .. id .. ".")
+    assert_identity("collision", id, profile, "collision")
+    profile.id = id
     profile.pierces_absorb = profile.pierces_absorb == true
     profile.splash_behind = profile.splash_behind or 0
     profile.durability_cost = profile.durability_cost or 0
-    M.collision[id] = profile
-end
-
-M.BASELINE_RELEASE = ast.project(rulebook.releases.baseline)
-M.BASELINE_RELEASE.id = "baseline"
-M.BASELINE_RELEASE.invert = M.BASELINE_RELEASE.invert == true
-M.BASELINE_RELEASE.scorch = M.BASELINE_RELEASE.scorch or 0
-M.BASELINE_RELEASE.shrapnel = M.BASELINE_RELEASE.shrapnel or 0
-
-M.release = {}
-for id, rule_set in pairs(rulebook.releases) do
-    if id ~= "baseline" then
-        local profile = ast.project(rule_set)
-        profile.id = id
-        profile.invert = profile.invert == true
-        profile.scorch = profile.scorch or 0
-        profile.shrapnel = profile.shrapnel or 0
-        M.release[id] = profile
-    end
-end
-
-M.status = {}
-for id, rule_set in pairs(rulebook.statuses) do
-    M.status[id] = ast.project(rule_set)
-end
-
-function M.release_profile(release_id)
-    if release_id == nil or release_id == "baseline" then return M.BASELINE_RELEASE end
-    local profile = M.release[release_id]
-    if not profile then error("unknown release effect: " .. tostring(release_id)) end
     return profile
 end
 
-function M.collision_profile(collision_id)
-    local profile = M.collision[collision_id]
-    if not profile then error("unknown collision effect: " .. tostring(collision_id)) end
+local function normalize_release(id, rule_set)
+    local profile = ast.project_prefix(rule_set, "release.")
+    assert_identity("release", id, profile, "release")
+    profile.id = id
+    profile.invert = profile.invert == true
+    profile.scorch = profile.scorch or 0
+    profile.shrapnel = profile.shrapnel or 0
     return profile
 end
 
-function M.brick_profile(behaviour)
-    local profile = M.brick[behaviour]
-    if not profile then error("unknown brick behaviour: " .. tostring(behaviour)) end
-    return profile
+local function normalize_status(id, rule_set)
+    local profile = ast.project_prefix(rule_set, "status." .. id .. ".")
+    return assert_identity("status", id, profile, "status")
 end
 
-function M.status_profile(status_id)
-    local profile = M.status[status_id]
-    if not profile then error("unknown marble status: " .. tostring(status_id)) end
-    return profile
+function M.release_profile(release_id, source_rule_set)
+    local id = release_id or "baseline"
+    local rule_set = source_rule_set or rulebook.releases[id]
+    if not rule_set then error("unknown release effect: " .. tostring(release_id)) end
+    return normalize_release(id, rule_set)
+end
+
+function M.collision_profile(collision_id, source_rule_set)
+    local rule_set = source_rule_set or rulebook.collisions[collision_id]
+    if not rule_set then error("unknown collision effect: " .. tostring(collision_id)) end
+    return normalize_collision(collision_id, rule_set)
+end
+
+function M.brick_profile(behaviour, source_rule_set)
+    local rule_set = source_rule_set or rulebook.brick_behaviours[behaviour]
+    if not rule_set then error("unknown brick behaviour: " .. tostring(behaviour)) end
+    return assert_identity("brick", behaviour, ast.project(rule_set), "behaviour")
+end
+
+function M.status_profile(status_id, source_rule_set)
+    local rule_set = source_rule_set or rulebook.statuses[status_id]
+    if not rule_set then error("unknown marble status: " .. tostring(status_id)) end
+    return normalize_status(status_id, rule_set)
 end
 
 return M

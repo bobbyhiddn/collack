@@ -120,18 +120,22 @@ local function build_recipe(recipe, seed)
     local brick_roster = {}
     for index, slot in ipairs(recipe.bricks) do
         local brick_id = pick(rng, slot[3])
-        local definition = brick_content.by_id[brick_id]
+        local profile = brick_content.runtime(brick_id)
         local uid = string.format("opponent-b%02d", index)
         brick_roster[#brick_roster + 1] = {
             uid = uid,
-            content_id = definition.id,
-            name = definition.name,
-            family = definition.family or "basic",
-            behaviour = definition.behaviour,
-            hp = definition.hp,
-            max_hp = definition.hp,
+            content_id = profile.id,
+            name = profile.name,
+            family = profile.family or "basic",
+            behaviour = profile.behaviour,
+            hp = profile.hp,
+            max_hp = profile.hp,
+            rule_set = util.deep_copy(profile.rule_set),
+            compact_copy = profile.compact_copy,
+            inspection_copy = util.deep_copy(profile.inspection_copy),
+            balance = util.deep_copy(profile.balance),
             tags = util.deep_copy(recipe.scout_tags),
-            art_id = "brick_" .. definition.id,
+            art_id = "brick_" .. profile.id,
         }
         formation[slot[1]][slot[2]] = uid
     end
@@ -181,7 +185,7 @@ function M.validate(spec)
     local brick_ids = {}
     for _, brick in ipairs(spec.bricks) do
         if brick_ids[brick.uid] then return fail("opponent brick uids must be unique") end
-        if not brick_content.by_id[brick.content_id] then return fail("opponent contains an unknown brick") end
+        if not brick_content.has(brick.content_id) then return fail("opponent contains an unknown brick") end
         brick_ids[brick.uid] = true
     end
 
@@ -217,13 +221,15 @@ function M.validate(spec)
         if #(definition.shells or {}) < 1 or #(definition.shells or {}) > cap then
             return fail("opponent marble violates its shell cap")
         end
-        local core = core_content.by_id[definition.core]
-        if not core then return fail("opponent marble has an unknown core") end
+        if not core_content.has(definition.core) then
+            return fail("opponent marble has an unknown core")
+        end
+        local core = core_content.runtime(definition.core, definition.rule_set)
         if marble_rules.rarity_rank(core.min_rarity) > marble_rules.rarity_rank(definition.rarity) then
             return fail("opponent marble core exceeds its rarity")
         end
         for _, shell_id in ipairs(definition.shells) do
-            if not shell_content.by_id[shell_id] then
+            if not shell_content.has(shell_id) then
                 return fail("opponent marble has an unknown shell")
             end
         end
