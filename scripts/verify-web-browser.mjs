@@ -250,10 +250,17 @@ async function bootPage(context, url, expected, label) {
   return { page, canvas, bounds, label };
 }
 
+async function settleRuntime(runtime) {
+  await runtime.page.evaluate(() => new Promise((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(resolve));
+  }));
+}
+
 async function touchAction(runtime, x, y, action, timeout = 20_000) {
   await waitForEnabled(runtime, action, timeout);
   const handled = waitForConsole(runtime.page, `CALLACK_ACTION ${action}`, timeout);
   await runtime.page.touchscreen.tap(runtime.bounds.x + x, runtime.bounds.y + y);
+  await settleRuntime(runtime);
   await handled;
 }
 
@@ -261,6 +268,7 @@ async function mouseAction(runtime, x, y, action, timeout = 20_000) {
   await waitForEnabled(runtime, action, timeout);
   const handled = waitForConsole(runtime.page, `CALLACK_ACTION ${action}`, timeout);
   await runtime.page.mouse.click(runtime.bounds.x + x, runtime.bounds.y + y);
+  await settleRuntime(runtime);
   await handled;
 }
 
@@ -277,6 +285,7 @@ async function inspectAction(runtime, pointer, x, y, action, type, timeout = 20_
   } else {
     await runtime.page.mouse.click(runtime.bounds.x + x, runtime.bounds.y + y);
   }
+  await settleRuntime(runtime);
   const detail = (await inspected).text();
   await handled;
   assert(detail.includes(`source=${pointer}`),
@@ -359,9 +368,7 @@ async function advancePausedBattle(runtime, ticks) {
   for (let tick = 0; tick < ticks; tick += 1) {
     await runtime.page.keyboard.press("ArrowRight");
   }
-  await runtime.page.evaluate(() => new Promise((resolve) => {
-    requestAnimationFrame(() => requestAnimationFrame(resolve));
-  }));
+  await settleRuntime(runtime);
 }
 
 function digest(buffer) {
