@@ -59,9 +59,9 @@ local ENCOUNTERS = {
         marbles = { "chalk_common", "quartz_common", "chalk_common" },
         bricks = {
             { "venom_rime", "venom_glass", 1, 2 },
-            { "venom_rime", "rime_block", 2, 2 },
-            { "guard_pair", "training_dummy", 1, 5 },
-            { "shatter_keg", "powder_keg", 2, 5 },
+            { "lodestone_void", "void_prism", 2, 4 },
+            { "venom_rime", "rime_block", 1, 4 },
+            { "shatter_keg", "powder_keg", 1, 5 },
         },
     },
     {
@@ -743,7 +743,7 @@ local function candidate_marble(state, seed)
     local selected, journal = rule_ast.sample_rarity(
         candidates,
         acquisition,
-        (seed % 100) + 1,
+        (contract.derive_seed(seed, "draft") % 100) + 1,
         seed + 101
     )
     return selected.id, journal

@@ -136,9 +136,11 @@ function M.run(t)
             choice.causal_attribution.source_rule_ids,
             authority.rule_ids
         ), "reward causality exposes exactly the inspectable executable rules")
-        t:eq(#choice.causal_attribution.source_rule_ids,
+        t:eq(
             #authority.balance.lines,
-            "reward attribution and accounting expose the same rule count")
+            #choice.causal_attribution.source_rule_ids + #authority.ability_summary.groups,
+            "reward accounting covers every causal rule and explicit ability group"
+        )
         t:ok(util.deep_equal(choice.inspection_copy, authority.inspection_copy),
             "reward inspection shares the exact causal rule authority")
     end
