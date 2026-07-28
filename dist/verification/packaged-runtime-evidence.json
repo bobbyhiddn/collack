@@ -1,8 +1,8 @@
 {
-  "schemaVersion": 3,
-  "sourceDigest": "033154d62a5bea1842acad94a92aee3c22d9f0aaf7acb9a209dfe47e699b9699",
-  "sourceCommit": "c2dd02ef2d4586777d350a1639e79c4312855591",
-  "sourceTree": "041106ed7d38339fb7a230948d41811e7ee5a395",
+  "schemaVersion": 4,
+  "sourceDigest": "b8afb73e233c604cf7e8f43dc9bb420d4e2db9ffd329cc6ed0a5109a17652bd9",
+  "sourceCommit": "39021a1941eed446d9b7e9e460e6d18b55d2cdc4",
+  "sourceTree": "2bf379aeb515d2983820a56177892af1f7691b0b",
   "viewports": {
     "phone": {
       "width": 390,
@@ -18,24 +18,24 @@
   "executableEvidence": {
     "archive": {
       "path": "dist/collack-spike.love",
-      "size": 155036,
-      "sha256": "b03ff0dbce701f66f7ab95fbc02cc61ec23545d0837f13146d6ac43f790458e0"
+      "size": 160689,
+      "sha256": "2cd05a7b9c68b18fb1906b503c187817b9f0c2c101c38e0017af3784cc8dfb95"
     },
     "webFiles": [
       {
-        "path": "dist/web/game.0be0e8995004114d.js",
-        "size": 11516,
-        "sha256": "0be0e8995004114d824cb212d47e4243e098679bbf2c081ec2d3e098ff5b368b"
+        "path": "dist/web/game.2cd05a7b9c68b18f.data",
+        "size": 160689,
+        "sha256": "2cd05a7b9c68b18fb1906b503c187817b9f0c2c101c38e0017af3784cc8dfb95"
       },
       {
-        "path": "dist/web/game.b03ff0dbce701f66.data",
-        "size": 155036,
-        "sha256": "b03ff0dbce701f66f7ab95fbc02cc61ec23545d0837f13146d6ac43f790458e0"
+        "path": "dist/web/game.f30f2d716d61fe69.js",
+        "size": 11516,
+        "sha256": "f30f2d716d61fe6900e2f5e1090138e79203b1f367a6e59a937832ce69ac1e44"
       },
       {
         "path": "dist/web/index.html",
         "size": 8558,
-        "sha256": "816d4dddaa5d1cd4ec7a683f3d68991c60b17e6fb8d6e794e92c16cbdac6c4cf"
+        "sha256": "a1aebc31c844a125f73431038faa27ae1a7743880491d4c64058be425cb9d86f"
       },
       {
         "path": "dist/web/love.cc23a2a709781e03.js",
@@ -58,7 +58,7 @@
         "sha256": "b991b00f74b61804d52f8e5590337f4ef1311fa8bb4315337a1bbc7c8bd262cd"
       }
     ],
-    "aggregateDigest": "1ef0c9c523ad5020c0c319fe875c0246fa1626f8989e372a45e6392f495711cb"
+    "aggregateDigest": "f17a96ec124f1778139cca9676b511683e16222661cebbfa08f565342d64d1a0"
   },
   "canonicalSweeps": [
     {
@@ -185,7 +185,7 @@
   "inspections": [
     {
       "label": "phone",
-      "text": "CALLACK_INSPECTION type=choice source=touch name=Split_Geode mechanics=2 operation=add_marble cause=post_battle_choice counters=none links=release adds=chain rarity=uncommon beads=2 shells=0 passives=1/1 mcu=2/2 balance=35.120/100 copy_cap=2 rule=core.shrapnel_geode.trajectory page=1/18 trigger=launch target=launch icon=AIM verb=aim magnitude=0_count limit=EVERY_LAUNCH__NO_RULE_CAP drawback=RISK__CORE_RELEASE__1"
+      "text": "CALLACK_INSPECTION type=choice source=touch name=Split_Geode mechanics=2 operation=add_marble cause=post_battle_choice counters=none links=release adds=chain rarity=uncommon beads=2 shells=2 passives=1/1 mcu=2/2 balance=35.120/100 copy_cap=2 rule=core.shrapnel_geode.trajectory page=1/18 trigger=launch target=launch icon=AIM verb=aim magnitude=0_count limit=EVERY_LAUNCH__NO_RULE_CAP drawback=RISK__CORE_RELEASE__1"
     },
     {
       "label": "phone",
@@ -197,7 +197,7 @@
     },
     {
       "label": "desktop",
-      "text": "CALLACK_INSPECTION type=choice source=mouse name=Split_Geode mechanics=2 operation=add_marble cause=post_battle_choice counters=none links=release adds=chain rarity=uncommon beads=2 shells=0 passives=1/1 mcu=2/2 balance=35.120/100 copy_cap=2 rule=core.shrapnel_geode.trajectory page=1/18 trigger=launch target=launch icon=AIM verb=aim magnitude=0_count limit=EVERY_LAUNCH__NO_RULE_CAP drawback=RISK__CORE_RELEASE__1"
+      "text": "CALLACK_INSPECTION type=choice source=mouse name=Split_Geode mechanics=2 operation=add_marble cause=post_battle_choice counters=none links=release adds=chain rarity=uncommon beads=2 shells=2 passives=1/1 mcu=2/2 balance=35.120/100 copy_cap=2 rule=core.shrapnel_geode.trajectory page=1/18 trigger=launch target=launch icon=AIM verb=aim magnitude=0_count limit=EVERY_LAUNCH__NO_RULE_CAP drawback=RISK__CORE_RELEASE__1"
     },
     {
       "label": "desktop",
@@ -458,6 +458,16 @@
       "text": "CALLACK_RULE_CALLOUT rule=release.shrapnel.damage source=Shrapnel icon=SPL verb=splash target=nearest_enemy_brick_cluster magnitude=1 unit=damage"
     }
   ],
+  "linkedCostEvidence": [
+    {
+      "label": "phone",
+      "text": "CALLACK_LINKED_COST source=brick.plain_block ability=bloodstone_relay activation=activation:A:relay:000001 cost_rule=fixture.relay.cost cost=1 cost_unit=damage target=setup_linked_allied_brick relation=allied target_uid=ally cadence_index=1 charges=2_to_1 payoff_rule=fixture.relay.payoff payoff=2 payoff_unit=durability ordered=true copy=COST_1_linked_allied_integrity_once_per_exchange_2_charges__wear_the_striking_shell_by_2_durability."
+    },
+    {
+      "label": "desktop",
+      "text": "CALLACK_LINKED_COST source=brick.plain_block ability=bloodstone_relay activation=activation:A:relay:000001 cost_rule=fixture.relay.cost cost=1 cost_unit=damage target=setup_linked_allied_brick relation=allied target_uid=ally cadence_index=1 charges=2_to_1 payoff_rule=fixture.relay.payoff payoff=2 payoff_unit=durability ordered=true copy=COST_1_linked_allied_integrity_once_per_exchange_2_charges__wear_the_striking_shell_by_2_durability."
+    }
+  ],
   "settings": [
     {
       "label": "phone",
@@ -489,11 +499,11 @@
     "desktop-battle-settings.png": "57c458b67d53bb87e7860389ed1463287226136059f73de241d9df76b68ed351",
     "desktop-battle-trigger.png": "bb3de26788d30c1ea14a53a0fc7d672f971c831581dccf037e739ed8cfde81cc",
     "desktop-battle.png": "57c458b67d53bb87e7860389ed1463287226136059f73de241d9df76b68ed351",
-    "desktop-draft-inspection.png": "4b7d802fcca1d7941e41710768af27c6729feb80c6831d2879a4bc79aff57535",
-    "desktop-draft-scout.png": "c32a06edbc1024484022dd19319797a8389a9719f43cacfc34b2edf7b549afb8",
-    "desktop-draft.png": "f27ac2fb1804707643126e9bebe5f9b13190a5b51194bc982ac757a4927b94a7",
-    "desktop-refit-1.png": "c32a06edbc1024484022dd19319797a8389a9719f43cacfc34b2edf7b549afb8",
-    "desktop-refit-2.png": "cba63f56ff16621259db6c8daed9363d794714b4954ffd8c4c0d7588ac0b0414",
+    "desktop-draft-inspection.png": "5028f2f41d67994a37138864643a0c014c5159c6bdaa3fb5c401a08cd9f8c10e",
+    "desktop-draft-scout.png": "ac9550cf2a3e7f6068745c14b3ac404d0e5e792646fbe714056fe769ff8c1f7a",
+    "desktop-draft.png": "ac9550cf2a3e7f6068745c14b3ac404d0e5e792646fbe714056fe769ff8c1f7a",
+    "desktop-refit-1.png": "ac9550cf2a3e7f6068745c14b3ac404d0e5e792646fbe714056fe769ff8c1f7a",
+    "desktop-refit-2.png": "9997fb03b026314b48416503e2adfd1b49d625f40b926459be08998c32c90159",
     "desktop-refit-inspection.png": "5028f2f41d67994a37138864643a0c014c5159c6bdaa3fb5c401a08cd9f8c10e",
     "desktop-refit-rule-2.png": "588b5ef3e88de8849b7532182f07f0c3c878cdea2d30cbe3bce4d540c508c5ae",
     "desktop-result-after-replay.png": "d08ed375811933ff89cf84c988ef80fc6338eddb6377d51e768e23a526a366c6",
@@ -508,11 +518,11 @@
     "phone-battle-settings.png": "6a08bfd5dc4bbbb729481e977917eefa56a0cce3068e8c9e78e3187dd9ce1901",
     "phone-battle-trigger.png": "1801d812ecd6997d0125f86c77505d0773165a0248641d797cd0e87425066346",
     "phone-battle.png": "6a08bfd5dc4bbbb729481e977917eefa56a0cce3068e8c9e78e3187dd9ce1901",
-    "phone-draft-inspection.png": "cf5b93fe563d1427234eb43da1b4ee1a761a238ab5973a145d6c7d19721be9b3",
-    "phone-draft-scout.png": "7976b1da9398a7bfdc4c4f06a4fa5887a87c35ea4757569906fa571fe35860d9",
-    "phone-draft.png": "4bfd68ef8d8072b8fe40f023765320b38526f08605d99947c23d02e87429ff25",
-    "phone-refit-1.png": "7976b1da9398a7bfdc4c4f06a4fa5887a87c35ea4757569906fa571fe35860d9",
-    "phone-refit-2.png": "0de308bf23d52225faed5f8e732da5d2d496b954f27093e5e1d7ee8ee0f57209",
+    "phone-draft-inspection.png": "08d382911b4e6d5ded0c6edae8889d21cc8acc89fd7c531a960d62e46c4ef447",
+    "phone-draft-scout.png": "910d357b9475c0ad1d4da5174120a6086191dfa52061c8574f236fd82675cc3f",
+    "phone-draft.png": "910d357b9475c0ad1d4da5174120a6086191dfa52061c8574f236fd82675cc3f",
+    "phone-refit-1.png": "910d357b9475c0ad1d4da5174120a6086191dfa52061c8574f236fd82675cc3f",
+    "phone-refit-2.png": "4efc8a80b7badbf42ef568f13fbca549ba080507196bce75724e8eb2f70bc75a",
     "phone-refit-inspection.png": "08d382911b4e6d5ded0c6edae8889d21cc8acc89fd7c531a960d62e46c4ef447",
     "phone-refit-rule-2.png": "f06e2799a0cab2980f71068eb3ddd75968852fe77d7cbf956d20df06de857481",
     "phone-result-after-replay.png": "6aff585bfadf27690e8ad481b43511b942669b60fc3374642d53d43e9399fc42",
@@ -524,5 +534,311 @@
     "phone-setup.png": "492fe44b93edd6c499456a6906d19c5ca7be38c7774ae30bfd44172245ab1987",
     "phone-terminal-result.png": "d90f2d4fe40d0ef01e71e7e374ad27529ea3241fba24557a2d676c912cdb82bd"
   },
-  "evidenceDigest": "31b4ae7effc2f991e4e47fbb9523028473fd8275337efeb9e5a94e227417b3f4"
+  "screenshotRecords": [
+    {
+      "name": "desktop-battle-inspection.png",
+      "label": "desktop",
+      "surface": "battle-inspection",
+      "width": 1280,
+      "height": 800,
+      "sha256": "584ef6215835f5ba09f736705bac4d6752dfbf91f2c6cf102e1691437738fe29"
+    },
+    {
+      "name": "desktop-battle-settings.png",
+      "label": "desktop",
+      "surface": "battle-settings",
+      "width": 1280,
+      "height": 800,
+      "sha256": "57c458b67d53bb87e7860389ed1463287226136059f73de241d9df76b68ed351"
+    },
+    {
+      "name": "desktop-battle-trigger.png",
+      "label": "desktop",
+      "surface": "battle-trigger",
+      "width": 1280,
+      "height": 800,
+      "sha256": "bb3de26788d30c1ea14a53a0fc7d672f971c831581dccf037e739ed8cfde81cc"
+    },
+    {
+      "name": "desktop-battle.png",
+      "label": "desktop",
+      "surface": "battle",
+      "width": 1280,
+      "height": 800,
+      "sha256": "57c458b67d53bb87e7860389ed1463287226136059f73de241d9df76b68ed351"
+    },
+    {
+      "name": "desktop-draft-inspection.png",
+      "label": "desktop",
+      "surface": "draft-inspection",
+      "width": 1280,
+      "height": 800,
+      "sha256": "5028f2f41d67994a37138864643a0c014c5159c6bdaa3fb5c401a08cd9f8c10e"
+    },
+    {
+      "name": "desktop-draft-scout.png",
+      "label": "desktop",
+      "surface": "draft-scout",
+      "width": 1280,
+      "height": 800,
+      "sha256": "ac9550cf2a3e7f6068745c14b3ac404d0e5e792646fbe714056fe769ff8c1f7a"
+    },
+    {
+      "name": "desktop-draft.png",
+      "label": "desktop",
+      "surface": "draft",
+      "width": 1280,
+      "height": 800,
+      "sha256": "ac9550cf2a3e7f6068745c14b3ac404d0e5e792646fbe714056fe769ff8c1f7a"
+    },
+    {
+      "name": "desktop-refit-1.png",
+      "label": "desktop",
+      "surface": "refit-1",
+      "width": 1280,
+      "height": 800,
+      "sha256": "ac9550cf2a3e7f6068745c14b3ac404d0e5e792646fbe714056fe769ff8c1f7a"
+    },
+    {
+      "name": "desktop-refit-2.png",
+      "label": "desktop",
+      "surface": "refit-2",
+      "width": 1280,
+      "height": 800,
+      "sha256": "9997fb03b026314b48416503e2adfd1b49d625f40b926459be08998c32c90159"
+    },
+    {
+      "name": "desktop-refit-inspection.png",
+      "label": "desktop",
+      "surface": "refit-inspection",
+      "width": 1280,
+      "height": 800,
+      "sha256": "5028f2f41d67994a37138864643a0c014c5159c6bdaa3fb5c401a08cd9f8c10e"
+    },
+    {
+      "name": "desktop-refit-rule-2.png",
+      "label": "desktop",
+      "surface": "refit-rule-2",
+      "width": 1280,
+      "height": 800,
+      "sha256": "588b5ef3e88de8849b7532182f07f0c3c878cdea2d30cbe3bce4d540c508c5ae"
+    },
+    {
+      "name": "desktop-result-after-replay.png",
+      "label": "desktop",
+      "surface": "result-after-replay",
+      "width": 1280,
+      "height": 800,
+      "sha256": "d08ed375811933ff89cf84c988ef80fc6338eddb6377d51e768e23a526a366c6"
+    },
+    {
+      "name": "desktop-result.png",
+      "label": "desktop",
+      "surface": "result",
+      "width": 1280,
+      "height": 800,
+      "sha256": "d6fbec47fca3ff0b9ff8265932273844cceab2b302c2b357b561975b4f751459"
+    },
+    {
+      "name": "desktop-reward.png",
+      "label": "desktop",
+      "surface": "reward",
+      "width": 1280,
+      "height": 800,
+      "sha256": "17aecc2c6429e29dd5ad0fc7966a09e06b678e168353bf98a864362a8f84af6f"
+    },
+    {
+      "name": "desktop-scout.png",
+      "label": "desktop",
+      "surface": "scout",
+      "width": 1280,
+      "height": 800,
+      "sha256": "bc9fd45aa508d7691e7b0a7794f75806db8ab497871e8d00c4f8c04eacabc0c7"
+    },
+    {
+      "name": "desktop-setup-start.png",
+      "label": "desktop",
+      "surface": "setup-start",
+      "width": 1280,
+      "height": 800,
+      "sha256": "bc9fd45aa508d7691e7b0a7794f75806db8ab497871e8d00c4f8c04eacabc0c7"
+    },
+    {
+      "name": "desktop-setup-terminal.png",
+      "label": "desktop",
+      "surface": "setup-terminal",
+      "width": 1280,
+      "height": 800,
+      "sha256": "c9f951dd3dfe1fef84a1e557a944e5d92888e3ba7d6152fb6fe68dbfddb87d74"
+    },
+    {
+      "name": "desktop-setup.png",
+      "label": "desktop",
+      "surface": "setup",
+      "width": 1280,
+      "height": 800,
+      "sha256": "923be3ff5e13c7e66754ab478b2e8935f5a6c81098adb05dc468fd747f3a2d54"
+    },
+    {
+      "name": "desktop-terminal-result.png",
+      "label": "desktop",
+      "surface": "terminal-result",
+      "width": 1280,
+      "height": 800,
+      "sha256": "d6fbec47fca3ff0b9ff8265932273844cceab2b302c2b357b561975b4f751459"
+    },
+    {
+      "name": "phone-battle-inspection.png",
+      "label": "phone",
+      "surface": "battle-inspection",
+      "width": 390,
+      "height": 844,
+      "sha256": "9b975bba225c87caf133981c4d7265934d0cda52bdc92a4881d2100ced567992"
+    },
+    {
+      "name": "phone-battle-settings.png",
+      "label": "phone",
+      "surface": "battle-settings",
+      "width": 390,
+      "height": 844,
+      "sha256": "6a08bfd5dc4bbbb729481e977917eefa56a0cce3068e8c9e78e3187dd9ce1901"
+    },
+    {
+      "name": "phone-battle-trigger.png",
+      "label": "phone",
+      "surface": "battle-trigger",
+      "width": 390,
+      "height": 844,
+      "sha256": "1801d812ecd6997d0125f86c77505d0773165a0248641d797cd0e87425066346"
+    },
+    {
+      "name": "phone-battle.png",
+      "label": "phone",
+      "surface": "battle",
+      "width": 390,
+      "height": 844,
+      "sha256": "6a08bfd5dc4bbbb729481e977917eefa56a0cce3068e8c9e78e3187dd9ce1901"
+    },
+    {
+      "name": "phone-draft-inspection.png",
+      "label": "phone",
+      "surface": "draft-inspection",
+      "width": 390,
+      "height": 844,
+      "sha256": "08d382911b4e6d5ded0c6edae8889d21cc8acc89fd7c531a960d62e46c4ef447"
+    },
+    {
+      "name": "phone-draft-scout.png",
+      "label": "phone",
+      "surface": "draft-scout",
+      "width": 390,
+      "height": 844,
+      "sha256": "910d357b9475c0ad1d4da5174120a6086191dfa52061c8574f236fd82675cc3f"
+    },
+    {
+      "name": "phone-draft.png",
+      "label": "phone",
+      "surface": "draft",
+      "width": 390,
+      "height": 844,
+      "sha256": "910d357b9475c0ad1d4da5174120a6086191dfa52061c8574f236fd82675cc3f"
+    },
+    {
+      "name": "phone-refit-1.png",
+      "label": "phone",
+      "surface": "refit-1",
+      "width": 390,
+      "height": 844,
+      "sha256": "910d357b9475c0ad1d4da5174120a6086191dfa52061c8574f236fd82675cc3f"
+    },
+    {
+      "name": "phone-refit-2.png",
+      "label": "phone",
+      "surface": "refit-2",
+      "width": 390,
+      "height": 844,
+      "sha256": "4efc8a80b7badbf42ef568f13fbca549ba080507196bce75724e8eb2f70bc75a"
+    },
+    {
+      "name": "phone-refit-inspection.png",
+      "label": "phone",
+      "surface": "refit-inspection",
+      "width": 390,
+      "height": 844,
+      "sha256": "08d382911b4e6d5ded0c6edae8889d21cc8acc89fd7c531a960d62e46c4ef447"
+    },
+    {
+      "name": "phone-refit-rule-2.png",
+      "label": "phone",
+      "surface": "refit-rule-2",
+      "width": 390,
+      "height": 844,
+      "sha256": "f06e2799a0cab2980f71068eb3ddd75968852fe77d7cbf956d20df06de857481"
+    },
+    {
+      "name": "phone-result-after-replay.png",
+      "label": "phone",
+      "surface": "result-after-replay",
+      "width": 390,
+      "height": 844,
+      "sha256": "6aff585bfadf27690e8ad481b43511b942669b60fc3374642d53d43e9399fc42"
+    },
+    {
+      "name": "phone-result.png",
+      "label": "phone",
+      "surface": "result",
+      "width": 390,
+      "height": 844,
+      "sha256": "d90f2d4fe40d0ef01e71e7e374ad27529ea3241fba24557a2d676c912cdb82bd"
+    },
+    {
+      "name": "phone-reward.png",
+      "label": "phone",
+      "surface": "reward",
+      "width": 390,
+      "height": 844,
+      "sha256": "903f1076d0b837d391a5637b3eb041a5daffbd024fa23b403a247caf632438c0"
+    },
+    {
+      "name": "phone-scout.png",
+      "label": "phone",
+      "surface": "scout",
+      "width": 390,
+      "height": 844,
+      "sha256": "5eb7f7c1aa141ec6c05a10ee8590873874eb868bdf871ca4a0906f66231bb574"
+    },
+    {
+      "name": "phone-setup-start.png",
+      "label": "phone",
+      "surface": "setup-start",
+      "width": 390,
+      "height": 844,
+      "sha256": "5eb7f7c1aa141ec6c05a10ee8590873874eb868bdf871ca4a0906f66231bb574"
+    },
+    {
+      "name": "phone-setup-terminal.png",
+      "label": "phone",
+      "surface": "setup-terminal",
+      "width": 390,
+      "height": 844,
+      "sha256": "e8ec3b08042a60bca55941a2cbbb832fd33a4f39d075c755ba888552c83aa5b6"
+    },
+    {
+      "name": "phone-setup.png",
+      "label": "phone",
+      "surface": "setup",
+      "width": 390,
+      "height": 844,
+      "sha256": "492fe44b93edd6c499456a6906d19c5ca7be38c7774ae30bfd44172245ab1987"
+    },
+    {
+      "name": "phone-terminal-result.png",
+      "label": "phone",
+      "surface": "terminal-result",
+      "width": 390,
+      "height": 844,
+      "sha256": "d90f2d4fe40d0ef01e71e7e374ad27529ea3241fba24557a2d676c912cdb82bd"
+    }
+  ],
+  "evidenceDigest": "4009a9b5188e2919d8a0501233cdd77cda72779ca61edd88f6318d7940087ca0"
 }
