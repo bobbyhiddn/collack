@@ -2526,6 +2526,10 @@ function love.touchreleased(_, x, y)
 end
 
 function love.mousepressed(x, y, button)
+    -- The packaged-browser phone proof must exercise LÖVE's touch callback,
+    -- not whichever side of Chromium's synthetic touch/mouse pair happens to
+    -- arrive first. Ordinary play keeps the cross-source deduplication below.
+    if verification_mode and mode() == "phone" then return end
     if button == 1 then
         local base_x, base_y = to_base(x, y)
         local now = love.timer.getTime()
@@ -2544,6 +2548,7 @@ function love.mousepressed(x, y, button)
 end
 
 function love.mousereleased(x, y, button)
+    if verification_mode and mode() == "phone" then return end
     if button == 1 then
         local base_x, base_y = to_base(x, y)
         local now = love.timer.getTime()

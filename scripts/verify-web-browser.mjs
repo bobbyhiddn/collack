@@ -279,6 +279,9 @@ async function inspectAction(runtime, pointer, x, y, action, type, timeout = 20_
   }
   const detail = (await inspected).text();
   await handled;
+  assert(detail.includes(`source=${pointer}`),
+    `${type} inspection used ${detail.match(/\bsource=(\S+)/)?.[1] ?? "no source"}, `
+      + `expected ${pointer}: ${detail}`);
   assert(/name=[^ ]+/.test(detail), `${type} inspection did not expose a readable name: ${detail}`);
   if (type === "choice") {
     assert(/mechanics=[1-9]\d*/.test(detail),
@@ -732,6 +735,9 @@ try {
     const settings = settingSamples.filter((sample) => sample.label === label);
     assert(settings.some((sample) => sample.muted && sample.reducedMotion),
       `${label}: pointer controls did not preserve mute plus reduced motion`);
+    const expectedPointer = label === "phone" ? "touch" : "mouse";
+    assert(settings.every((sample) => sample.source === expectedPointer),
+      `${label}: settings used a non-${expectedPointer} input path: ${JSON.stringify(settings)}`);
     const sweep = canonicalSweeps.find((sample) => sample.label === label);
     assert(sweep?.kind === "box_collision"
       && sweep.speed >= 240
