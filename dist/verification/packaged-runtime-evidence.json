@@ -1,8 +1,8 @@
 {
-  "schemaVersion": 4,
-  "sourceDigest": "b8afb73e233c604cf7e8f43dc9bb420d4e2db9ffd329cc6ed0a5109a17652bd9",
-  "sourceCommit": "39021a1941eed446d9b7e9e460e6d18b55d2cdc4",
-  "sourceTree": "2bf379aeb515d2983820a56177892af1f7691b0b",
+  "schemaVersion": 6,
+  "sourceDigest": "b8d04dfd36961dc7f16314b168c609702a09a4a1acbbd9d6211d82c75e13cba0",
+  "sourceCommit": "30ca635792bb515e1824989acc808f89841a1915",
+  "sourceTree": "bb7f98fe46f299b2130c14d8c21bd5941cf11b97",
   "viewports": {
     "phone": {
       "width": 390,
@@ -18,24 +18,24 @@
   "executableEvidence": {
     "archive": {
       "path": "dist/collack-spike.love",
-      "size": 160689,
-      "sha256": "2cd05a7b9c68b18fb1906b503c187817b9f0c2c101c38e0017af3784cc8dfb95"
+      "size": 165265,
+      "sha256": "dd5d1abc21e977ae0c64a1a1d22c97b930db8c89a04dcbfed1a6fbd538cbf039"
     },
     "webFiles": [
       {
-        "path": "dist/web/game.2cd05a7b9c68b18f.data",
-        "size": 160689,
-        "sha256": "2cd05a7b9c68b18fb1906b503c187817b9f0c2c101c38e0017af3784cc8dfb95"
+        "path": "dist/web/game.11bf786352e10f03.js",
+        "size": 11516,
+        "sha256": "11bf786352e10f03a0f03fb91d4ce55df87f5ab6556dddcd330489d84513c811"
       },
       {
-        "path": "dist/web/game.f30f2d716d61fe69.js",
-        "size": 11516,
-        "sha256": "f30f2d716d61fe6900e2f5e1090138e79203b1f367a6e59a937832ce69ac1e44"
+        "path": "dist/web/game.dd5d1abc21e977ae.data",
+        "size": 165265,
+        "sha256": "dd5d1abc21e977ae0c64a1a1d22c97b930db8c89a04dcbfed1a6fbd538cbf039"
       },
       {
         "path": "dist/web/index.html",
         "size": 8558,
-        "sha256": "a1aebc31c844a125f73431038faa27ae1a7743880491d4c64058be425cb9d86f"
+        "sha256": "5ecc31330a0d37c52691952606ea5ae48955a4b80ea60ca67dbd887f4d1af852"
       },
       {
         "path": "dist/web/love.cc23a2a709781e03.js",
@@ -58,7 +58,7 @@
         "sha256": "b991b00f74b61804d52f8e5590337f4ef1311fa8bb4315337a1bbc7c8bd262cd"
       }
     ],
-    "aggregateDigest": "f17a96ec124f1778139cca9676b511683e16222661cebbfa08f565342d64d1a0"
+    "aggregateDigest": "a1d93b62a30b9683463e7740c523f984a15b7787713687833685603cea3e2b97"
   },
   "canonicalSweeps": [
     {
@@ -468,6 +468,320 @@
       "text": "CALLACK_LINKED_COST source=brick.plain_block ability=bloodstone_relay activation=activation:A:relay:000001 cost_rule=fixture.relay.cost cost=1 cost_unit=damage target=setup_linked_allied_brick relation=allied target_uid=ally cadence_index=1 charges=2_to_1 payoff_rule=fixture.relay.payoff payoff=2 payoff_unit=durability ordered=true copy=COST_1_linked_allied_integrity_once_per_exchange_2_charges__wear_the_striking_shell_by_2_durability."
     }
   ],
+  "spliceGuardEvidence": [
+    {
+      "label": "phone",
+      "stage": "triggered",
+      "order": 1,
+      "recipeId": "glass_cannon",
+      "battleSeed": 9125,
+      "eventType": "splice_triggered",
+      "eventId": "8",
+      "triggerCollisionEventId": "6",
+      "preventionCollisionEventId": "13",
+      "tick": 2,
+      "ruleId": "brick.splice.guard",
+      "sourceRuleSetId": "brick.splice_node",
+      "abilityId": "splice_guard",
+      "sourceUid": "opponent-b04",
+      "targetUid": "none",
+      "amount": 1,
+      "unit": "damage",
+      "magnitude": 1,
+      "cadenceUnit": "exchange",
+      "cadenceInterval": 1,
+      "durationTicks": 120,
+      "expiresTick": null,
+      "appliedCount": 3,
+      "expiredCount": 2,
+      "requestedDamage": null,
+      "appliedDamage": null,
+      "integrityBefore": null,
+      "integrityAfter": null,
+      "visualFrameTick": 3,
+      "visualGuardCount": 2,
+      "reason": "hostile_collision",
+      "screenshot": {
+        "name": "phone-splice-guard.png",
+        "sha256": "d0d2e6654ff7702146bed4a7153b2b1190f99fc0811ff807ea7889c7009196da",
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "label": "phone",
+      "stage": "applied",
+      "order": 2,
+      "recipeId": "glass_cannon",
+      "battleSeed": 9125,
+      "eventType": "guard_applied",
+      "eventId": "9",
+      "triggerCollisionEventId": "6",
+      "preventionCollisionEventId": "13",
+      "tick": 2,
+      "ruleId": "brick.splice.guard",
+      "sourceRuleSetId": "brick.splice_node",
+      "abilityId": "splice_guard",
+      "sourceUid": "opponent-b04",
+      "targetUid": "opponent-b01",
+      "amount": 1,
+      "unit": "damage",
+      "magnitude": 1,
+      "cadenceUnit": "exchange",
+      "cadenceInterval": 1,
+      "durationTicks": 120,
+      "expiresTick": 122,
+      "appliedCount": 3,
+      "expiredCount": 2,
+      "requestedDamage": null,
+      "appliedDamage": null,
+      "integrityBefore": null,
+      "integrityAfter": null,
+      "visualFrameTick": 3,
+      "visualGuardCount": 2,
+      "reason": "adjacent_allied_guard",
+      "screenshot": {
+        "name": "phone-splice-guard.png",
+        "sha256": "d0d2e6654ff7702146bed4a7153b2b1190f99fc0811ff807ea7889c7009196da",
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "label": "phone",
+      "stage": "prevented",
+      "order": 3,
+      "recipeId": "glass_cannon",
+      "battleSeed": 9125,
+      "eventType": "guard_prevented",
+      "eventId": "14",
+      "triggerCollisionEventId": "6",
+      "preventionCollisionEventId": "13",
+      "tick": 3,
+      "ruleId": "brick.splice.guard",
+      "sourceRuleSetId": "brick.splice_node",
+      "abilityId": "splice_guard",
+      "sourceUid": "opponent-b04",
+      "targetUid": "opponent-b05",
+      "amount": 1,
+      "unit": "damage",
+      "magnitude": 1,
+      "cadenceUnit": "exchange",
+      "cadenceInterval": 1,
+      "durationTicks": 120,
+      "expiresTick": null,
+      "appliedCount": 3,
+      "expiredCount": 2,
+      "requestedDamage": 2,
+      "appliedDamage": 1,
+      "integrityBefore": 2,
+      "integrityAfter": 1,
+      "visualFrameTick": 3,
+      "visualGuardCount": 2,
+      "reason": "hostile_damage",
+      "screenshot": {
+        "name": "phone-splice-guard.png",
+        "sha256": "d0d2e6654ff7702146bed4a7153b2b1190f99fc0811ff807ea7889c7009196da",
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "label": "phone",
+      "stage": "expired",
+      "order": 4,
+      "recipeId": "glass_cannon",
+      "battleSeed": 9125,
+      "eventType": "guard_expired",
+      "eventId": "22",
+      "triggerCollisionEventId": "6",
+      "preventionCollisionEventId": "13",
+      "tick": 122,
+      "ruleId": "brick.splice.guard",
+      "sourceRuleSetId": "brick.splice_node",
+      "abilityId": "splice_guard",
+      "sourceUid": "opponent-b04",
+      "targetUid": "opponent-b01",
+      "amount": 1,
+      "unit": "damage",
+      "magnitude": 1,
+      "cadenceUnit": "exchange",
+      "cadenceInterval": 1,
+      "durationTicks": 120,
+      "expiresTick": 122,
+      "appliedCount": 3,
+      "expiredCount": 2,
+      "requestedDamage": null,
+      "appliedDamage": null,
+      "integrityBefore": null,
+      "integrityAfter": null,
+      "visualFrameTick": 3,
+      "visualGuardCount": 2,
+      "reason": "duration",
+      "screenshot": {
+        "name": "phone-splice-guard.png",
+        "sha256": "d0d2e6654ff7702146bed4a7153b2b1190f99fc0811ff807ea7889c7009196da",
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "label": "desktop",
+      "stage": "triggered",
+      "order": 1,
+      "recipeId": "glass_cannon",
+      "battleSeed": 9125,
+      "eventType": "splice_triggered",
+      "eventId": "8",
+      "triggerCollisionEventId": "6",
+      "preventionCollisionEventId": "13",
+      "tick": 2,
+      "ruleId": "brick.splice.guard",
+      "sourceRuleSetId": "brick.splice_node",
+      "abilityId": "splice_guard",
+      "sourceUid": "opponent-b04",
+      "targetUid": "none",
+      "amount": 1,
+      "unit": "damage",
+      "magnitude": 1,
+      "cadenceUnit": "exchange",
+      "cadenceInterval": 1,
+      "durationTicks": 120,
+      "expiresTick": null,
+      "appliedCount": 3,
+      "expiredCount": 2,
+      "requestedDamage": null,
+      "appliedDamage": null,
+      "integrityBefore": null,
+      "integrityAfter": null,
+      "visualFrameTick": 3,
+      "visualGuardCount": 2,
+      "reason": "hostile_collision",
+      "screenshot": {
+        "name": "desktop-splice-guard.png",
+        "sha256": "a757e15a1aea0186f0084b09d2be849329392340982a570601d89ed7010b4fa8",
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "label": "desktop",
+      "stage": "applied",
+      "order": 2,
+      "recipeId": "glass_cannon",
+      "battleSeed": 9125,
+      "eventType": "guard_applied",
+      "eventId": "9",
+      "triggerCollisionEventId": "6",
+      "preventionCollisionEventId": "13",
+      "tick": 2,
+      "ruleId": "brick.splice.guard",
+      "sourceRuleSetId": "brick.splice_node",
+      "abilityId": "splice_guard",
+      "sourceUid": "opponent-b04",
+      "targetUid": "opponent-b01",
+      "amount": 1,
+      "unit": "damage",
+      "magnitude": 1,
+      "cadenceUnit": "exchange",
+      "cadenceInterval": 1,
+      "durationTicks": 120,
+      "expiresTick": 122,
+      "appliedCount": 3,
+      "expiredCount": 2,
+      "requestedDamage": null,
+      "appliedDamage": null,
+      "integrityBefore": null,
+      "integrityAfter": null,
+      "visualFrameTick": 3,
+      "visualGuardCount": 2,
+      "reason": "adjacent_allied_guard",
+      "screenshot": {
+        "name": "desktop-splice-guard.png",
+        "sha256": "a757e15a1aea0186f0084b09d2be849329392340982a570601d89ed7010b4fa8",
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "label": "desktop",
+      "stage": "prevented",
+      "order": 3,
+      "recipeId": "glass_cannon",
+      "battleSeed": 9125,
+      "eventType": "guard_prevented",
+      "eventId": "14",
+      "triggerCollisionEventId": "6",
+      "preventionCollisionEventId": "13",
+      "tick": 3,
+      "ruleId": "brick.splice.guard",
+      "sourceRuleSetId": "brick.splice_node",
+      "abilityId": "splice_guard",
+      "sourceUid": "opponent-b04",
+      "targetUid": "opponent-b05",
+      "amount": 1,
+      "unit": "damage",
+      "magnitude": 1,
+      "cadenceUnit": "exchange",
+      "cadenceInterval": 1,
+      "durationTicks": 120,
+      "expiresTick": null,
+      "appliedCount": 3,
+      "expiredCount": 2,
+      "requestedDamage": 2,
+      "appliedDamage": 1,
+      "integrityBefore": 2,
+      "integrityAfter": 1,
+      "visualFrameTick": 3,
+      "visualGuardCount": 2,
+      "reason": "hostile_damage",
+      "screenshot": {
+        "name": "desktop-splice-guard.png",
+        "sha256": "a757e15a1aea0186f0084b09d2be849329392340982a570601d89ed7010b4fa8",
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "label": "desktop",
+      "stage": "expired",
+      "order": 4,
+      "recipeId": "glass_cannon",
+      "battleSeed": 9125,
+      "eventType": "guard_expired",
+      "eventId": "22",
+      "triggerCollisionEventId": "6",
+      "preventionCollisionEventId": "13",
+      "tick": 122,
+      "ruleId": "brick.splice.guard",
+      "sourceRuleSetId": "brick.splice_node",
+      "abilityId": "splice_guard",
+      "sourceUid": "opponent-b04",
+      "targetUid": "opponent-b01",
+      "amount": 1,
+      "unit": "damage",
+      "magnitude": 1,
+      "cadenceUnit": "exchange",
+      "cadenceInterval": 1,
+      "durationTicks": 120,
+      "expiresTick": 122,
+      "appliedCount": 3,
+      "expiredCount": 2,
+      "requestedDamage": null,
+      "appliedDamage": null,
+      "integrityBefore": null,
+      "integrityAfter": null,
+      "visualFrameTick": 3,
+      "visualGuardCount": 2,
+      "reason": "duration",
+      "screenshot": {
+        "name": "desktop-splice-guard.png",
+        "sha256": "a757e15a1aea0186f0084b09d2be849329392340982a570601d89ed7010b4fa8",
+        "width": 1280,
+        "height": 800
+      }
+    }
+  ],
   "settings": [
     {
       "label": "phone",
@@ -506,14 +820,15 @@
     "desktop-refit-2.png": "9997fb03b026314b48416503e2adfd1b49d625f40b926459be08998c32c90159",
     "desktop-refit-inspection.png": "5028f2f41d67994a37138864643a0c014c5159c6bdaa3fb5c401a08cd9f8c10e",
     "desktop-refit-rule-2.png": "588b5ef3e88de8849b7532182f07f0c3c878cdea2d30cbe3bce4d540c508c5ae",
-    "desktop-result-after-replay.png": "d08ed375811933ff89cf84c988ef80fc6338eddb6377d51e768e23a526a366c6",
-    "desktop-result.png": "d6fbec47fca3ff0b9ff8265932273844cceab2b302c2b357b561975b4f751459",
+    "desktop-result-after-replay.png": "29c5a4bf9889446bcded84254e96a9ac5aad2fa36bb920caa0f0fdcbc2121692",
+    "desktop-result.png": "8a4d0ca29456d3d16729e4f3af31ace23603afeca051a073f77f1bae78136bf4",
     "desktop-reward.png": "17aecc2c6429e29dd5ad0fc7966a09e06b678e168353bf98a864362a8f84af6f",
     "desktop-scout.png": "bc9fd45aa508d7691e7b0a7794f75806db8ab497871e8d00c4f8c04eacabc0c7",
     "desktop-setup-start.png": "bc9fd45aa508d7691e7b0a7794f75806db8ab497871e8d00c4f8c04eacabc0c7",
     "desktop-setup-terminal.png": "c9f951dd3dfe1fef84a1e557a944e5d92888e3ba7d6152fb6fe68dbfddb87d74",
     "desktop-setup.png": "923be3ff5e13c7e66754ab478b2e8935f5a6c81098adb05dc468fd747f3a2d54",
-    "desktop-terminal-result.png": "d6fbec47fca3ff0b9ff8265932273844cceab2b302c2b357b561975b4f751459",
+    "desktop-splice-guard.png": "a757e15a1aea0186f0084b09d2be849329392340982a570601d89ed7010b4fa8",
+    "desktop-terminal-result.png": "8a4d0ca29456d3d16729e4f3af31ace23603afeca051a073f77f1bae78136bf4",
     "phone-battle-inspection.png": "9b975bba225c87caf133981c4d7265934d0cda52bdc92a4881d2100ced567992",
     "phone-battle-settings.png": "6a08bfd5dc4bbbb729481e977917eefa56a0cce3068e8c9e78e3187dd9ce1901",
     "phone-battle-trigger.png": "1801d812ecd6997d0125f86c77505d0773165a0248641d797cd0e87425066346",
@@ -525,14 +840,15 @@
     "phone-refit-2.png": "4efc8a80b7badbf42ef568f13fbca549ba080507196bce75724e8eb2f70bc75a",
     "phone-refit-inspection.png": "08d382911b4e6d5ded0c6edae8889d21cc8acc89fd7c531a960d62e46c4ef447",
     "phone-refit-rule-2.png": "f06e2799a0cab2980f71068eb3ddd75968852fe77d7cbf956d20df06de857481",
-    "phone-result-after-replay.png": "6aff585bfadf27690e8ad481b43511b942669b60fc3374642d53d43e9399fc42",
-    "phone-result.png": "d90f2d4fe40d0ef01e71e7e374ad27529ea3241fba24557a2d676c912cdb82bd",
+    "phone-result-after-replay.png": "77ecc2a3963e6e3c46ab74d1817330f3e9ac4f3f9256d369c52c1b8d8d18be4c",
+    "phone-result.png": "caaabbf5812cf2c556218ef7ef759fc1778afb6d917b466903f40629a48b1658",
     "phone-reward.png": "903f1076d0b837d391a5637b3eb041a5daffbd024fa23b403a247caf632438c0",
     "phone-scout.png": "5eb7f7c1aa141ec6c05a10ee8590873874eb868bdf871ca4a0906f66231bb574",
     "phone-setup-start.png": "5eb7f7c1aa141ec6c05a10ee8590873874eb868bdf871ca4a0906f66231bb574",
     "phone-setup-terminal.png": "e8ec3b08042a60bca55941a2cbbb832fd33a4f39d075c755ba888552c83aa5b6",
     "phone-setup.png": "492fe44b93edd6c499456a6906d19c5ca7be38c7774ae30bfd44172245ab1987",
-    "phone-terminal-result.png": "d90f2d4fe40d0ef01e71e7e374ad27529ea3241fba24557a2d676c912cdb82bd"
+    "phone-splice-guard.png": "d0d2e6654ff7702146bed4a7153b2b1190f99fc0811ff807ea7889c7009196da",
+    "phone-terminal-result.png": "caaabbf5812cf2c556218ef7ef759fc1778afb6d917b466903f40629a48b1658"
   },
   "screenshotRecords": [
     {
@@ -629,7 +945,7 @@
       "surface": "result-after-replay",
       "width": 1280,
       "height": 800,
-      "sha256": "d08ed375811933ff89cf84c988ef80fc6338eddb6377d51e768e23a526a366c6"
+      "sha256": "29c5a4bf9889446bcded84254e96a9ac5aad2fa36bb920caa0f0fdcbc2121692"
     },
     {
       "name": "desktop-result.png",
@@ -637,7 +953,7 @@
       "surface": "result",
       "width": 1280,
       "height": 800,
-      "sha256": "d6fbec47fca3ff0b9ff8265932273844cceab2b302c2b357b561975b4f751459"
+      "sha256": "8a4d0ca29456d3d16729e4f3af31ace23603afeca051a073f77f1bae78136bf4"
     },
     {
       "name": "desktop-reward.png",
@@ -680,12 +996,20 @@
       "sha256": "923be3ff5e13c7e66754ab478b2e8935f5a6c81098adb05dc468fd747f3a2d54"
     },
     {
+      "name": "desktop-splice-guard.png",
+      "label": "desktop",
+      "surface": "splice-guard",
+      "width": 1280,
+      "height": 800,
+      "sha256": "a757e15a1aea0186f0084b09d2be849329392340982a570601d89ed7010b4fa8"
+    },
+    {
       "name": "desktop-terminal-result.png",
       "label": "desktop",
       "surface": "terminal-result",
       "width": 1280,
       "height": 800,
-      "sha256": "d6fbec47fca3ff0b9ff8265932273844cceab2b302c2b357b561975b4f751459"
+      "sha256": "8a4d0ca29456d3d16729e4f3af31ace23603afeca051a073f77f1bae78136bf4"
     },
     {
       "name": "phone-battle-inspection.png",
@@ -781,7 +1105,7 @@
       "surface": "result-after-replay",
       "width": 390,
       "height": 844,
-      "sha256": "6aff585bfadf27690e8ad481b43511b942669b60fc3374642d53d43e9399fc42"
+      "sha256": "77ecc2a3963e6e3c46ab74d1817330f3e9ac4f3f9256d369c52c1b8d8d18be4c"
     },
     {
       "name": "phone-result.png",
@@ -789,7 +1113,7 @@
       "surface": "result",
       "width": 390,
       "height": 844,
-      "sha256": "d90f2d4fe40d0ef01e71e7e374ad27529ea3241fba24557a2d676c912cdb82bd"
+      "sha256": "caaabbf5812cf2c556218ef7ef759fc1778afb6d917b466903f40629a48b1658"
     },
     {
       "name": "phone-reward.png",
@@ -832,13 +1156,21 @@
       "sha256": "492fe44b93edd6c499456a6906d19c5ca7be38c7774ae30bfd44172245ab1987"
     },
     {
+      "name": "phone-splice-guard.png",
+      "label": "phone",
+      "surface": "splice-guard",
+      "width": 390,
+      "height": 844,
+      "sha256": "d0d2e6654ff7702146bed4a7153b2b1190f99fc0811ff807ea7889c7009196da"
+    },
+    {
       "name": "phone-terminal-result.png",
       "label": "phone",
       "surface": "terminal-result",
       "width": 390,
       "height": 844,
-      "sha256": "d90f2d4fe40d0ef01e71e7e374ad27529ea3241fba24557a2d676c912cdb82bd"
+      "sha256": "caaabbf5812cf2c556218ef7ef759fc1778afb6d917b466903f40629a48b1658"
     }
   ],
-  "evidenceDigest": "4009a9b5188e2919d8a0501233cdd77cda72779ca61edd88f6318d7940087ca0"
+  "evidenceDigest": "b2ca6cb393ce695fb9a4dfe9d583287c5e189ef2d3b33069c2470cb64e817acd"
 }
