@@ -9,7 +9,7 @@ local M = {}
 
 M.SCHEMA_VERSION = 2
 
-M.RARITY_ORDER = {
+local RARITY_ORDER = {
     "common",
     "uncommon",
     "rare",
@@ -20,11 +20,11 @@ M.RARITY_ORDER = {
 -- This value-only table is the sole economy authority. Draft, reward, setup,
 -- presentation, and validation all project it instead of repeating tier
 -- numbers in private lookup tables.
-M.ECONOMY = {
+local ECONOMY = {
     schema_version = 1,
     kind = "economy_rule_set",
     id = "economy.rarity.v1",
-    rarity_order = M.RARITY_ORDER,
+    rarity_order = RARITY_ORDER,
     tiers = {
         common = {
             rank = 1, shell_cap = 1,
@@ -845,14 +845,31 @@ local function drawback_credit(drawback)
 end
 
 local RARITY_RANK = {}
-for rank, rarity in ipairs(M.RARITY_ORDER) do RARITY_RANK[rarity] = rank end
+for rank, rarity in ipairs(RARITY_ORDER) do RARITY_RANK[rarity] = rank end
 
 function M.rarity_rank(rarity)
     return RARITY_RANK[rarity]
 end
 
+function M.rarity_order()
+    return deep_copy(RARITY_ORDER)
+end
+
+function M.economy()
+    return deep_copy(ECONOMY)
+end
+
+function M.economy_id()
+    return ECONOMY.id
+end
+
+function M.acquisition(acquisition_id)
+    local weights = ECONOMY.acquisition[acquisition_id]
+    return weights and deep_copy(weights) or nil
+end
+
 function M.tier(rarity)
-    local tier = M.ECONOMY.tiers[rarity]
+    local tier = ECONOMY.tiers[rarity]
     return tier and deep_copy(tier) or nil
 end
 
@@ -899,6 +916,44 @@ local ALLIED_HARM_VERBS = {
     splash = true,
     wear = true,
 }
+
+local function brick_body_behaviour(item)
+    local slug = type(item.id) == "string" and item.id:match("^brick%.([%w_]+)$")
+    if not slug then return nil, nil end
+    for _, rule in ipairs(item.rules or {}) do
+        if rule.id == "brick." .. slug .. ".behaviour"
+            and rule.trigger.event == "build"
+            and rule.operation.stat == "behaviour" then
+            return slug, rule.magnitude.value
+        end
+    end
+    return slug, nil
+end
+
+-- Bricks may carry only their three authored body projections plus the
+-- behaviour/status identity projections selected by that body. Every other
+-- rule, including a rule whose trigger was changed to "build", is an ability
+-- and must belong to a canonical ability group.
+local function is_brick_body_rule(item, rule)
+    if not rule or not rule.trigger or rule.trigger.event ~= "build"
+        or not rule.operation then return false end
+    local slug, behaviour = brick_body_behaviour(item)
+    if not slug or not behaviour then return false end
+    if rule.id == "brick." .. slug .. "." .. tostring(rule.operation.stat) then
+        return rule.operation.stat == "hp"
+            or rule.operation.stat == "restitution"
+            or rule.operation.stat == "behaviour"
+    end
+    if rule.id == "brick." .. tostring(behaviour) .. ".identity" then
+        return rule.operation.stat == "behaviour"
+            and rule.magnitude.value == behaviour
+    end
+    if rule.id == "status." .. tostring(behaviour) .. ".identity" then
+        return rule.operation.stat == "status"
+            and rule.magnitude.value == behaviour
+    end
+    return false
+end
 
 local ROUTING_STATS = {
     behaviour = true,
@@ -1154,7 +1209,7 @@ local function validate_abilities(item, errors)
                 else
                     local grouped_rule = rules[rule_id]
                     if group.kind == "passive"
-                        and grouped_rule.trigger.event == "build" then
+                        and is_brick_body_rule(item, grouped_rule) then
                         errors[#errors + 1] =
                             path .. " cannot disguise a body rule as a passive"
                     elseif group.kind == "core_release"
@@ -1183,7 +1238,7 @@ local function validate_abilities(item, errors)
 
     if item.content_kind == "brick" then
         for _, rule in ipairs(item.rules or {}) do
-            if rule.trigger.event ~= "build" and not assigned[rule.id] then
+            if not is_brick_body_rule(item, rule) and not assigned[rule.id] then
                 errors[#errors + 1] = "rule_set has ungrouped brick rule " .. rule.id
             end
         end
@@ -1387,7 +1442,7 @@ function M.validate(item)
         if not item.rarity then
             errors[#errors + 1] = "complete marble and brick content must declare rarity"
         end
-        local tier = item.rarity and M.ECONOMY.tiers[item.rarity]
+        local tier = item.rarity and ECONOMY.tiers[item.rarity]
         if tier then
             local summary = M.ability_summary(item)
             local group_cap = item.content_kind == "brick"
@@ -1737,55 +1792,150 @@ function M.validate_collection(items)
     return #errors == 0, errors
 end
 
+local function candidate_content_identity(candidate)
+    if type(candidate) ~= "table" then
+        error("rarity candidate must be a table", 3)
+    end
+    if candidate.rule_set ~= nil then
+        M.assert_valid(candidate.rule_set)
+        if candidate.rarity ~= nil and candidate.rarity ~= candidate.rule_set.rarity then
+            error("rarity candidate diverges from its canonical RuleSet: "
+                .. tostring(candidate.id), 3)
+        end
+        return candidate.rule_set.id
+    end
+    local identity = candidate.content_id or candidate.id
+    if not nonempty(identity) then
+        error("rarity candidate is missing canonical content identity", 3)
+    end
+    return identity
+end
+
+function M.content_identity(candidate)
+    return candidate_content_identity(candidate)
+end
+
+local function unique_candidates(candidates)
+    local unique, by_identity = {}, {}
+    for _, candidate in ipairs(candidates or {}) do
+        local identity = candidate_content_identity(candidate)
+        local existing = by_identity[identity]
+        if existing then
+            local left_rules, right_rules = existing.rule_set, candidate.rule_set
+            if (left_rules or right_rules)
+                and (not left_rules or not right_rules or not M.same(left_rules, right_rules)) then
+                error("duplicate catalogue identity has conflicting authority: " .. identity, 3)
+            end
+            if existing.rarity ~= candidate.rarity then
+                error("duplicate catalogue identity has conflicting rarity: " .. identity, 3)
+            end
+        else
+            by_identity[identity] = candidate
+            unique[#unique + 1] = candidate
+        end
+    end
+    return unique
+end
+
 function M.sample_rarity(candidates, acquisition_id, tier_ticket, item_ticket)
-    local weights = M.ECONOMY.acquisition[acquisition_id]
+    local weights = ECONOMY.acquisition[acquisition_id]
     if not weights then error("unknown acquisition point: " .. tostring(acquisition_id), 2) end
     tier_ticket = math.floor(tonumber(tier_ticket) or 0)
     if tier_ticket < 1 or tier_ticket > 100 then
         error("tier ticket must be an integer from 1 through 100", 2)
     end
     local represented, by_tier, eligible_ids = {}, {}, {}
-    for _, candidate in ipairs(candidates or {}) do
+    for _, candidate in ipairs(unique_candidates(candidates)) do
         if not RARITY_RANK[candidate.rarity] then
             error("rarity candidate is missing canonical rarity: " .. tostring(candidate.id), 2)
         end
         by_tier[candidate.rarity] = by_tier[candidate.rarity] or {}
         by_tier[candidate.rarity][#by_tier[candidate.rarity] + 1] = candidate
-        eligible_ids[#eligible_ids + 1] = candidate.id
+        eligible_ids[#eligible_ids + 1] = candidate_content_identity(candidate)
     end
     table.sort(eligible_ids)
     local total = 0
-    for _, rarity in ipairs(M.RARITY_ORDER) do
+    for _, rarity in ipairs(RARITY_ORDER) do
         if by_tier[rarity] and (weights[rarity] or 0) > 0 then
             represented[rarity] = weights[rarity]
             total = total + weights[rarity]
-            table.sort(by_tier[rarity], function(left, right) return left.id < right.id end)
+            table.sort(by_tier[rarity], function(left, right)
+                return candidate_content_identity(left) < candidate_content_identity(right)
+            end)
         end
     end
     if total == 0 then error("rarity sampler has no represented eligible tier", 2) end
     local point = (tier_ticket - 0.5) * total / 100
     local cumulative, selected_tier = 0
-    for _, rarity in ipairs(M.RARITY_ORDER) do
+    for _, rarity in ipairs(RARITY_ORDER) do
         cumulative = cumulative + (represented[rarity] or 0)
         if point < cumulative then selected_tier = rarity break end
     end
-    selected_tier = selected_tier or M.RARITY_ORDER[#M.RARITY_ORDER]
+    selected_tier = selected_tier or RARITY_ORDER[#RARITY_ORDER]
     local tier_items = by_tier[selected_tier]
     local selector = math.floor(tonumber(item_ticket) or tier_ticket)
     local selected = tier_items[((selector - 1) % #tier_items) + 1]
     local normalized = {}
-    for _, rarity in ipairs(M.RARITY_ORDER) do
+    for _, rarity in ipairs(RARITY_ORDER) do
         normalized[rarity] = represented[rarity]
             and represented[rarity] * 100 / total or 0
     end
     return selected, {
-        economy_rule_set_id = M.ECONOMY.id,
+        economy_rule_set_id = ECONOMY.id,
         acquisition = acquisition_id,
         eligible_ids = eligible_ids,
         normalized_tier_weights = normalized,
         tier_ticket = tier_ticket,
         selected_tier = selected_tier,
         selected_id = selected.id,
+        selected_content_id = candidate_content_identity(selected),
+    }
+end
+
+-- Weighted deterministic sampling without replacement. Duplicate catalogue
+-- aliases collapse to one canonical content identity. If the eligible pool is
+-- smaller than requested, every unique eligible item is returned exactly once
+-- and the journal marks the exhaustion instead of duplicating or inventing
+-- content.
+function M.sample_rarity_without_replacement(
+    candidates,
+    acquisition_id,
+    requested_count,
+    tickets
+)
+    requested_count = math.max(0, math.floor(tonumber(requested_count) or 0))
+    local remaining = unique_candidates(candidates)
+    local selected, slots = {}, {}
+    local count = math.min(requested_count, #remaining)
+    for slot = 1, count do
+        local ticket = tickets and tickets[slot] or {}
+        local tier_ticket = ticket.tier_ticket or (((slot * 37 - 1) % 100) + 1)
+        local item_ticket = ticket.item_ticket or (slot * 104729)
+        local item, sample = M.sample_rarity(
+            remaining,
+            acquisition_id,
+            tier_ticket,
+            item_ticket
+        )
+        selected[#selected + 1] = item
+        sample.slot = slot
+        slots[#slots + 1] = sample
+        local identity = candidate_content_identity(item)
+        for index, candidate in ipairs(remaining) do
+            if candidate_content_identity(candidate) == identity then
+                table.remove(remaining, index)
+                break
+            end
+        end
+    end
+    return selected, {
+        economy_rule_set_id = ECONOMY.id,
+        acquisition = acquisition_id,
+        requested_count = requested_count,
+        returned_count = #selected,
+        unique_pool_size = #selected + #remaining,
+        pool_exhausted = #selected < requested_count,
+        slots = slots,
     }
 end
 
@@ -1996,7 +2146,7 @@ function M.expanded_lines(item)
     local lines = { "Role: " .. item.role .. "." }
     local summary = M.ability_summary(item)
     if item.rarity then
-        local tier = M.ECONOMY.tiers[item.rarity]
+        local tier = ECONOMY.tiers[item.rarity]
         local ceiling = item.content_kind == "brick"
             and tier.brick_passive_groups or tier.bonus_release_groups
         lines[#lines + 1] = string.format(
@@ -2071,7 +2221,7 @@ end
 function M.player_authority(item)
     M.assert_valid(item)
     local summary = M.ability_summary(item)
-    local tier = item.rarity and M.ECONOMY.tiers[item.rarity] or nil
+    local tier = item.rarity and ECONOMY.tiers[item.rarity] or nil
     return {
         schema_version = M.SCHEMA_VERSION,
         rule_set_id = item.id,

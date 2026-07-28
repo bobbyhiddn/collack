@@ -54,7 +54,7 @@ local function relay_rule_set()
     return {
         schema_version = ast.SCHEMA_VERSION,
         kind = "rule_set",
-        id = "fixture.brick.bloodstone_relay",
+        id = "brick.plain_block",
         name = "Bloodstone Relay",
         role = "sacrificial shell bolster",
         content_kind = "brick",
@@ -80,12 +80,12 @@ local function relay_rule_set()
             },
         },
         rules = {
-            rule("fixture.relay.hp", "build", "self", "protect", "hp", 2, "hp",
+            rule("brick.plain_block.hp", "build", "self", "protect", "hp", 2, "hp",
                 { visibility = "expanded" }),
-            rule("fixture.relay.restitution", "build", "self", "set", "restitution",
+            rule("brick.plain_block.restitution", "build", "self", "set", "restitution",
                 0.72, "multiplier", { visibility = "expanded" }),
-            rule("fixture.relay.behaviour", "build", "self", "set", "behaviour",
-                "bloodstone_relay", "id", { visibility = "expanded" }),
+            rule("brick.plain_block.behaviour", "build", "self", "set", "behaviour",
+                "inert", "id", { visibility = "expanded" }),
             rule("fixture.relay.cost", "damaging_collision",
                 "setup_linked_allied_brick", "deal", "damage", 1, "damage", {
                     phase = "after",
@@ -225,45 +225,155 @@ local function all_behaviour_battle()
     })
 end
 
-local function prepare_relay()
-    local battle = test_battle()
+local function prepare_relay(mutate_rule_set)
+    local relay = relay_rule_set()
+    if mutate_rule_set then mutate_rule_set(relay) end
+    ast.assert_valid(relay)
+    local relay_brick = {
+        uid = "relay", content_id = "plain_block", id = "plain_block",
+        name = "Bloodstone Relay", behaviour = "inert", rarity = "rare",
+        hp = 2, max_hp = 2, restitution = 0.72, rule_set = relay,
+    }
+    local ally = draft.instantiate_brick("guard_pair", "basalt_absorber", 1, "A")
+    ally.uid = "ally"
+    local other = draft.instantiate_brick("guard_pair", "basalt_absorber", 2, "A")
+    other.uid = "other"
+    local formation = blank_formation()
+    formation[1][1], formation[1][2], formation[1][3] = "relay", "ally", "other"
+    local side_a = {
+        name = "Relay", sling = "momentum", formation = formation,
+        bricks = { relay_brick, ally, other },
+        marbles = {{
+            name = "A", rarity = "common", core = "dull_quartz",
+            shells = { "chalk_plain" },
+        }},
+    }
+    local links, errors = setup_rules.resolve_ability_links(side_a)
+    assert(#errors == 0, errors[1] and errors[1].code)
+    side_a.ability_links = links
+    local enemy_formation = blank_formation()
+    enemy_formation[1][1], enemy_formation[1][2], enemy_formation[1][3] =
+        "plain_block", "plain_block", "plain_block"
+    local battle = engine.new({
+        seed = 17017,
+        sides = {
+            A = side_a,
+            B = {
+                name = "Striker", sling = "momentum",
+                formation = enemy_formation,
+                marbles = {{
+                    name = "B", rarity = "common", core = "dull_quartz",
+                    shells = { "chalk_plain" },
+                }},
+            },
+        },
+        max_exchanges = 2,
+        max_exchange_ticks = 20,
+    })
     battle.exchange = 1
     local owner = battle.sides.A
     local source = owner.formation.grid[1][1]
     local target = owner.formation.grid[1][2]
-    local other = owner.formation.grid[1][3]
-    source.uid = "relay"
-    source.rule_set = relay_rule_set()
-    source.behaviour = "inert"
-    source.ability_state = {}
-    target.uid = "ally"
+    other = owner.formation.grid[1][3]
     target.hp, target.max_hp = 3, 3
-    other.uid = "other"
     other.hp, other.max_hp = 3, 3
     battle.world:get_box(target.body_id).data.hp = 3
     battle.world:get_box(other.body_id).data.hp = 3
-    battle.ability_links["A|relay|bloodstone_relay"] = {
-        ability_id = "bloodstone_relay",
-        source_uid = "relay",
-        target_uid = "ally",
-        source_rule_set_id = source.rule_set.id,
-        cost_rule_id = "fixture.relay.cost",
-        payoff_rule_ids = { "fixture.relay.payoff" },
-        source_cell = { row = 1, col = 1 },
-        target_cell = { row = 1, col = 2 },
-        cost_amount = 1,
-        lethal = false,
-        cadence = { unit = "exchange", interval = 1, charges = 2 },
-    }
     local striking = battle.sides.B.all_marbles[1]
     striking.shells[1].durability = 3
     striking.shells[1].max_durability = 3
     return battle, owner, source, target, other, striking
 end
 
+local function prepare_splice(mutate_rule_set)
+    local splice = draft.instantiate_brick("splice_keg", "splice_node", 1, "A")
+    splice.uid = "splice"
+    if mutate_rule_set then mutate_rule_set(splice.rule_set) end
+    ast.assert_valid(splice.rule_set)
+    local guarded = draft.instantiate_brick(
+        "guard_pair", "basalt_absorber", 2, "A"
+    )
+    guarded.uid = "guarded"
+    local formation = blank_formation()
+    formation[1][1], formation[1][2] = "splice", "guarded"
+    local enemy = blank_formation()
+    enemy[1][1] = "plain_block"
+    local battle = engine.new({
+        seed = 17018,
+        sides = {
+            A = {
+                name = "Splice", sling = "momentum", formation = formation,
+                bricks = { splice, guarded }, ability_links = {},
+                marbles = {{
+                    name = "A", rarity = "common", core = "dull_quartz",
+                    shells = { "chalk_plain" },
+                }},
+            },
+            B = {
+                name = "Enemy", sling = "momentum", formation = enemy,
+                marbles = {{
+                    name = "B", rarity = "common", core = "dull_quartz",
+                    shells = { "chalk_plain" },
+                }},
+            },
+        },
+        max_exchanges = 3,
+        max_exchange_ticks = 20,
+    })
+    battle.exchange = 1
+    return battle, battle.sides.A,
+        battle.sides.A.formation.grid[1][1],
+        battle.sides.A.formation.grid[1][2]
+end
+
+local function prepare_keg(enemy_marble_count)
+    local keg = draft.instantiate_brick("shatter_keg", "powder_keg", 1, "A")
+    keg.uid = "keg"
+    local neighbour = draft.instantiate_brick(
+        "guard_pair", "basalt_absorber", 2, "A"
+    )
+    neighbour.uid = "safe-neighbour"
+    local formation = blank_formation()
+    formation[1][1], formation[1][2] = "keg", "safe-neighbour"
+    local enemy_formation = blank_formation()
+    enemy_formation[1][1] = "plain_block"
+    local enemy_marbles = {}
+    for index = 1, enemy_marble_count do
+        enemy_marbles[index] = {
+            name = "Enemy " .. index, rarity = "common",
+            core = "dull_quartz", shells = { "chalk_plain" }, lane = index,
+        }
+    end
+    local battle = engine.new({
+        seed = 17020,
+        sides = {
+            A = {
+                name = "Keg", sling = "momentum", formation = formation,
+                bricks = { keg, neighbour }, ability_links = {},
+                marbles = {{
+                    name = "Owner", rarity = "common", core = "dull_quartz",
+                    shells = { "chalk_plain" },
+                }},
+            },
+            B = {
+                name = "Cluster", sling = "momentum",
+                formation = enemy_formation, marbles = enemy_marbles,
+            },
+        },
+        max_exchanges = 2,
+        max_exchange_ticks = 20,
+    })
+    battle.exchange = 1
+    return battle, battle.sides.A,
+        battle.sides.A.formation.grid[1][1],
+        battle.sides.A.formation.grid[1][2],
+        battle.sides.B.all_marbles[1],
+        battle.sides.B.all_marbles[2]
+end
+
 local function count_rarity(acquisition)
     local candidates = {}
-    for _, rarity in ipairs(ast.ECONOMY.rarity_order) do
+    for _, rarity in ipairs(ast.rarity_order()) do
         candidates[#candidates + 1] = { id = rarity, rarity = rarity }
     end
     local counts = {}
@@ -353,6 +463,54 @@ function M.run(t)
     t:eq(valid, false, "a generic passive cannot claim allied damage authority")
     t:ok(table.concat(errors, "; "):find("generic allied harm", 1, true) ~= nil,
         "generic allied harm is rejected independently of cost metadata")
+
+    local common = ast.copy(rules.bricks.basalt_absorber)
+    local disguised = ast.copy(common)
+    local reflected
+    for _, candidate in ipairs(rules.bricks.mirror_pane.rules) do
+        if candidate.id == "brick.reflect.rebound" then reflected = ast.copy(candidate) end
+    end
+    reflected.trigger.event = "build"
+    disguised.rules[#disguised.rules + 1] = reflected
+    valid, errors = ast.validate(disguised)
+    t:eq(valid, false, "common rejects a passive disguised as a build rule")
+    t:ok(table.concat(errors, "; "):find("ungrouped brick rule", 1, true) ~= nil,
+        "build-passive disguise fails at canonical AST validation")
+
+    local nested = ast.copy(common)
+    nested.rules[1].operation.passive = { stat = "reflect", magnitude = 1 }
+    t:eq(ast.validate(nested), false,
+        "common rejects a nested alternate effect field")
+
+    local aliased = ast.copy(common)
+    aliased.abilities = {{
+        id = "body_alias",
+        kind = "passive",
+        rule_ids = { "brick.basalt_absorber.hp" },
+    }}
+    t:eq(ast.validate(aliased), false,
+        "common rejects a body rule aliased into a passive group")
+
+    local cached = {
+        rule_set = ast.copy(common),
+        behaviour = "absorb",
+        hp = 2,
+        max_hp = 2,
+        restitution = 0.68,
+        rarity = "common",
+        cached_rules = { passive = "reflect" },
+    }
+    t:raises(function()
+        bricks.runtime("basalt_absorber", common, cached)
+    end, "forbidden shadow mechanics", "common rejects cached shadow passives")
+
+    local economy_copy = ast.economy()
+    economy_copy.tiers.common.shell_cap = 5
+    economy_copy.rarity_order[1] = "legendary"
+    t:eq(ast.tier("common").shell_cap, 1,
+        "mutating a copied economy cannot change canonical shell caps")
+    t:eq(ast.rarity_order()[1], "common",
+        "mutating a copied rarity order cannot change canonical tier order")
 
     local mutations = {
         {
@@ -640,9 +798,53 @@ function M.run(t)
     t:eq(fresh_battle.authorizations["fresh-cost"].used, false,
         "a denied generic path cannot consume the narrow authorization")
 
+    local forged_before = fresh_target.hp
+    engine.apply_brick_harm(fresh_battle, fresh_owner, fresh_target, 1, {
+        source_owner = "B",
+        source_entity_id = fresh_source.uid,
+        source_rule_set_id = fresh_source.rule_set.id,
+        operation = "deal",
+        target_selector = "setup_linked_allied_brick",
+        cause = "ability_cost",
+        authorization_id = "fresh-cost",
+    })
+    t:eq(fresh_target.hp, forged_before,
+        "forging an enemy owner around an actual allied source fails closed")
+    local enemy_owner = fresh_battle.sides.B
+    local enemy_source = enemy_owner.all_marbles[1]
+    engine.apply_brick_harm(fresh_battle, enemy_owner, fresh_target, 1, {
+        source_owner = enemy_owner.id,
+        source_entity_id = enemy_source.uid,
+        source_marble = enemy_source,
+        cause = "hostile_collision",
+    })
+    t:eq(fresh_target.hp, forged_before,
+        "forging the target owner cannot redirect hostile damage onto its ally")
+    local replay_payload = ast.copy(paid[1])
+    replay_payload.source_entity_id = fresh_source.uid
+    replay_payload.source_uid = fresh_source.uid
+    engine.apply_brick_harm(
+        fresh_battle, fresh_owner, fresh_target, 1, replay_payload
+    )
+    t:eq(fresh_target.hp, forged_before,
+        "replayed and deserialized attribution fields carry no allied authority")
+    engine.apply_brick_harm(fresh_battle, fresh_owner, fresh_target, 1, {
+        source_owner = fresh_owner.id,
+        source_entity_id = fresh_source.uid,
+        nested = {
+            operation = "deal",
+            target_selector = "setup_linked_allied_brick",
+            authorization_id = "fresh-cost",
+        },
+        cause = "ability_cost",
+    })
+    t:eq(fresh_target.hp, forged_before,
+        "nested caller payloads cannot manufacture allied-cost authority")
+
     local roster_battle = all_behaviour_battle()
     local roster_owner = roster_battle.sides.A
     local roster_count = 0
+    local roster_source = roster_owner.all_marbles[1]
     for row = 1, roster_owner.formation.rows do
         for col = 1, roster_owner.formation.cols do
             local brick = roster_owner.formation.grid[row][col]
@@ -660,8 +862,9 @@ function M.run(t)
                 }) do
                     engine.apply_brick_harm(roster_battle, roster_owner, brick, 1, {
                         source_owner = "A",
-                        source_entity_id = "allied-probe",
-                        source_rule_set_id = brick.rule_set.id,
+                        source_entity_id = roster_source.uid,
+                        source_rule_set_id = roster_source.shells[1].rule_set.id,
+                        source_marble = roster_source,
                         cause = cause,
                         root_event_id = brick.id .. ":" .. cause,
                         generation = cause == "generation_three" and 3 or 0,
@@ -732,9 +935,7 @@ function M.run(t)
         "cadence block grants no payoff")
 
     local interval_battle, _, interval_source, interval_target, _, interval_striking =
-        prepare_relay()
-    interval_source.rule_set.rules[4].cadence.interval = 2
-    interval_battle.ability_links["A|relay|bloodstone_relay"].cadence.interval = 2
+        prepare_relay(function(item) item.rules[4].cadence.interval = 2 end)
     activated = engine.activate_linked_cost(
         interval_battle, "A", interval_source.uid, "bloodstone_relay",
         "hostile_collision", interval_striking
@@ -770,11 +971,9 @@ function M.run(t)
     t:eq(activated, false, "an undeclared recursive cause is denied")
 
     local lethal_battle, _, lethal_source, lethal_target, _, lethal_striking =
-        prepare_relay()
+        prepare_relay(function(item) item.rules[4].lethal = true end)
     lethal_target.hp = 1
     lethal_battle.world:get_box(lethal_target.body_id).data.hp = 1
-    lethal_source.rule_set.rules[4].lethal = true
-    lethal_battle.ability_links["A|relay|bloodstone_relay"].lethal = true
     activated = engine.activate_linked_cost(
         lethal_battle,
         "A",
@@ -825,18 +1024,9 @@ function M.run(t)
     t:eq(capped_source.ability_state.bloodstone_relay.spent, 0,
         "an activation-cap refusal spends no charge")
 
-    local chain_battle = test_battle()
-    chain_battle.exchange = 1
-    local keg_owner = chain_battle.sides.A
-    local keg = keg_owner.formation.grid[1][1]
-    local neighbour = keg_owner.formation.grid[1][2]
-    keg.uid = "keg"
-    keg.rule_set = bricks.canonical_rule_set("powder_keg")
-    keg.behaviour = "chain"
-    keg.hp, keg.max_hp = 1, 1
-    neighbour.uid = "safe-neighbour"
+    local chain_battle, keg_owner, keg, neighbour, enemy_marble =
+        prepare_keg(1)
     neighbour.hp, neighbour.max_hp = 3, 3
-    local enemy_marble = chain_battle.sides.B.all_marbles[1]
     enemy_marble.shells[1].durability = 3
     enemy_marble.shells[1].max_durability = 3
     engine.apply_brick_harm(chain_battle, keg_owner, keg, 1, {
@@ -853,48 +1043,8 @@ function M.run(t)
     t:eq(enemy_marble.shells[1].durability, 2,
         "Powder Keg Chain wears the causal enemy marble shell exactly once")
 
-    local cascade_battle = engine.new({
-        seed = 17017,
-        sides = {
-            A = {
-                name = "Keg",
-                sling = "momentum",
-                formation = { { "plain_block", "plain_block", "plain_block" } },
-                marbles = {
-                    {
-                        name = "Owner", rarity = "common",
-                        core = "dull_quartz", shells = { "chalk_plain" },
-                    },
-                },
-            },
-            B = {
-                name = "Cluster",
-                sling = "momentum",
-                formation = { { "plain_block", "plain_block", "plain_block" } },
-                marbles = {
-                    {
-                        name = "Causal", rarity = "common",
-                        core = "dull_quartz", shells = { "chalk_plain" },
-                    },
-                    {
-                        name = "Nearby", rarity = "common",
-                        core = "dull_quartz", shells = { "chalk_plain" },
-                    },
-                },
-            },
-        },
-        max_exchanges = 2,
-        max_exchange_ticks = 20,
-    })
-    cascade_battle.exchange = 1
-    local cascade_owner = cascade_battle.sides.A
-    local cascade_keg = cascade_owner.formation.grid[1][1]
-    cascade_keg.uid = "cascade-keg"
-    cascade_keg.rule_set = bricks.canonical_rule_set("powder_keg")
-    cascade_keg.behaviour = "chain"
-    cascade_keg.hp, cascade_keg.max_hp = 1, 1
-    local causal = cascade_battle.sides.B.all_marbles[1]
-    local nearby = cascade_battle.sides.B.all_marbles[2]
+    local cascade_battle, cascade_owner, cascade_keg, _, causal, nearby =
+        prepare_keg(2)
     local nearby_body = cascade_battle.world:get_body(nearby.body_id)
     cascade_battle.world:set_position(
         nearby.body_id,
@@ -926,15 +1076,8 @@ function M.run(t)
             "a shell broken by generation-one Chain releases at generation two")
     end
 
-    local generation_battle = test_battle()
-    generation_battle.exchange = 1
-    local generation_owner = generation_battle.sides.A
-    local generation_keg = generation_owner.formation.grid[1][1]
-    generation_keg.uid = "generation-keg"
-    generation_keg.rule_set = bricks.canonical_rule_set("powder_keg")
-    generation_keg.behaviour = "chain"
-    generation_keg.hp, generation_keg.max_hp = 1, 1
-    local generation_marble = generation_battle.sides.B.all_marbles[1]
+    local generation_battle, generation_owner, generation_keg, _,
+        generation_marble = prepare_keg(1)
     generation_marble.shells[1].durability = 1
     engine.apply_brick_harm(generation_battle, generation_owner, generation_keg, 1, {
         source_owner = "B",
@@ -956,29 +1099,65 @@ function M.run(t)
     t:eq(generation_caps[1].cap_reason, "generation",
         "the cap evidence names the refused generation")
 
-    local splice_battle = test_battle()
-    splice_battle.exchange = 1
-    local splice_owner = splice_battle.sides.A
-    local splice = splice_owner.formation.grid[1][1]
-    local guarded = splice_owner.formation.grid[1][2]
-    splice.uid = "splice"
-    guarded.uid = "guarded"
-    splice.rule_set = bricks.canonical_rule_set("splice_node")
-    splice.behaviour = "splice"
+    local splice_battle, splice_owner, splice, guarded = prepare_splice()
     guarded.hp, guarded.max_hp = 3, 3
     local guarded_ok = engine.trigger_splice_guard(splice_battle, "A", "splice")
     t:eq(guarded_ok, true, "Splice grants its canonical adjacent Guard")
     t:eq(guarded.guard.amount, 1, "Splice Guard is exactly one point")
     engine.trigger_splice_guard(splice_battle, "A", "splice")
     t:eq(guarded.guard.amount, 1, "Splice Guard does not stack")
+    local splice_enemy = splice_battle.sides.B.all_marbles[1]
     engine.apply_brick_harm(splice_battle, splice_owner, guarded, 2, {
         source_owner = "B",
-        source_entity_id = "enemy",
+        source_entity_id = splice_enemy.uid,
+        source_rule_set_id = splice_enemy.shells[1].rule_set.id,
+        source_marble = splice_enemy,
         cause = "shrapnel",
         root_event_id = "guard-root",
     })
     t:eq(guarded.hp, 2, "Guard prevents one point of hostile brick damage")
     t:eq(guarded.guard, nil, "the one-point Guard is consumed")
+
+    local parameter_battle, _, parameter_splice, parameter_guarded =
+        prepare_splice(function(item)
+            for _, guard in ipairs(item.rules) do
+                if guard.id == "brick.splice.guard" then
+                    guard.magnitude.value = 2
+                    guard.duration.value = 17
+                    guard.cadence.interval = 2
+                end
+            end
+        end)
+    guarded_ok = engine.trigger_splice_guard(
+        parameter_battle, "A", parameter_splice.uid
+    )
+    t:eq(guarded_ok, true, "mutated canonical Splice activates in its first window")
+    t:eq(parameter_guarded.guard.amount, 2,
+        "Splice runtime reads canonical guard magnitude")
+    t:eq(parameter_guarded.guard.expires_tick, parameter_battle.tick + 17,
+        "Splice runtime reads canonical guard duration")
+    parameter_battle.exchange = 2
+    guarded_ok = engine.trigger_splice_guard(
+        parameter_battle, "A", parameter_splice.uid
+    )
+    t:eq(guarded_ok, false, "Splice runtime reads canonical interval cadence")
+    parameter_battle.exchange = 3
+    guarded_ok = engine.trigger_splice_guard(
+        parameter_battle, "A", parameter_splice.uid
+    )
+    t:eq(guarded_ok, true, "Splice cadence reopens on the canonical interval")
+
+    local tampered_battle, _, tampered_splice, tampered_guarded = prepare_splice()
+    for _, guard in ipairs(tampered_splice.rule_set.rules) do
+        if guard.id == "brick.splice.guard" then guard.magnitude.value = 9 end
+    end
+    guarded_ok = engine.trigger_splice_guard(
+        tampered_battle, "A", tampered_splice.uid
+    )
+    t:eq(guarded_ok, false,
+        "post-validation passive mutation is rejected by engine-owned identity")
+    t:eq(tampered_guarded.guard, nil,
+        "post-validation passive mutation cannot reach runtime state")
 
     local tutorial_state = short_fixtures.to_battle(short_run.new({
         run_seed = 9125,
@@ -1048,7 +1227,7 @@ function M.run(t)
         roster_count = roster_count + 1
         local item = rules.bricks[id]
         local summary = ast.ability_summary(item)
-        local tier = ast.ECONOMY.tiers[rarity]
+        local tier = ast.tier(rarity)
         t:eq(item.rarity, rarity, id .. " has canonical rarity")
         t:eq(item.rarity_budget, 100, id .. " uses the fixed 100-point envelope")
         t:ok(summary.count <= tier.brick_passive_groups,
@@ -1099,7 +1278,7 @@ function M.run(t)
         local lowered_rank = ast.rarity_rank(kit.rarity) == 1
             and 2
             or ast.rarity_rank(kit.rarity) - 1
-        lowered.rarity = ast.RARITY_ORDER[lowered_rank]
+        lowered.rarity = ast.rarity_order()[lowered_rank]
         local lowered_valid, lowered_errors = ast.validate(lowered)
         t:eq(lowered_valid, false,
             kit.id .. " rejects an offer tier unlike its highest member")
@@ -1146,7 +1325,7 @@ function M.run(t)
         "the old Splice neighbour-damage rule is absent")
 
     for _, marble in ipairs(catalog.ALL_MARBLES) do
-        local tier = ast.ECONOMY.tiers[marble.rule_set.rarity]
+        local tier = ast.tier(marble.rule_set.rarity)
         local summary = ast.ability_summary(marble.rule_set)
         local shell_count = #marble.shells
         t:eq(marble.rule_set.rarity_budget, 100,
@@ -1190,6 +1369,53 @@ function M.run(t)
         t:eq(later_counts[rarity] or 0, expected,
             "later-win 100-ticket table is exact for " .. rarity)
     end
+
+    local first = ast.copy(catalog.MARBLES[1])
+    local alias = ast.copy(first)
+    alias.id = "catalogue_alias_for_" .. first.id
+    local second = ast.copy(catalog.MARBLES[2])
+    local tickets = {
+        { tier_ticket = 1, item_ticket = 17 },
+        { tier_ticket = 1, item_ticket = 19 },
+        { tier_ticket = 1, item_ticket = 23 },
+    }
+    local sampled, journal = ast.sample_rarity_without_replacement(
+        { first, alias, second },
+        "full_loadout_initial",
+        3,
+        tickets
+    )
+    t:eq(#sampled, 2,
+        "undersized reward pool returns every unique identity without replacement")
+    t:eq(journal.unique_pool_size, 2,
+        "sampling journal records alias-collapsed canonical pool size")
+    t:eq(journal.pool_exhausted, true,
+        "sampling journal explicitly records undersized pool exhaustion")
+    t:ok(ast.content_identity(sampled[1]) ~= ast.content_identity(sampled[2]),
+        "weighted sampling never repeats a canonical content identity")
+    local repeated = ast.sample_rarity_without_replacement(
+        { first, alias, second },
+        "full_loadout_initial",
+        3,
+        tickets
+    )
+    t:eq(
+        table.concat({
+            ast.content_identity(sampled[1]), ast.content_identity(sampled[2]),
+        }, ","),
+        table.concat({
+            ast.content_identity(repeated[1]), ast.content_identity(repeated[2]),
+        }, ","),
+        "fixed tickets reproduce unique reward sampling exactly"
+    )
+    local conflicting_alias = ast.copy(alias)
+    conflicting_alias.rule_set.name = "tampered alias"
+    t:raises(function()
+        ast.sample_rarity_without_replacement(
+            { first, conflicting_alias }, "full_loadout_initial", 2, tickets
+        )
+    end, "conflicting authority",
+        "duplicate catalogue aliases with divergent authority fail closed")
 end
 
 if arg and arg[0] and arg[0]:find("test_allied_cost_rarity.lua", 1, true) then

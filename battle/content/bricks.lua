@@ -29,6 +29,21 @@ local by_id = {}
 local spec_by_id = {}
 for _, spec in ipairs(SPECS) do spec_by_id[spec.id] = spec end
 
+local function same_value(left, right, seen)
+    if type(left) ~= type(right) then return false end
+    if type(left) ~= "table" then return left == right end
+    seen = seen or {}
+    if seen[left] == right then return true end
+    seen[left] = right
+    for key, value in pairs(left) do
+        if not same_value(value, right[key], seen) then return false end
+    end
+    for key in pairs(right) do
+        if left[key] == nil then return false end
+    end
+    return true
+end
+
 local function compile(spec, rule_set)
     local authority = ast.player_authority(rule_set)
     return {
@@ -55,6 +70,26 @@ local function runtime(id, rule_set, shadow)
     rule_set = rule_set or rulebook.bricks[id]
     ast.assert_runtime_source("brick", id, rule_set, shadow)
     local canonical = compile(spec, rule_set)
+    if canonical.rarity == "common"
+        and ast.ability_summary(rule_set).count ~= 0 then
+        error("common brick runtime authority must have zero passives")
+    end
+    for _, field in ipairs({
+        "passive", "passives", "effect", "effects", "build_passive",
+        "build_effect", "runtime_rules", "cached_rules",
+    }) do
+        if shadow and shadow[field] ~= nil then
+            error(string.format(
+                "brick %s carries forbidden shadow mechanics field %s",
+                tostring(id),
+                field
+            ))
+        end
+    end
+    if shadow and shadow.abilities ~= nil
+        and not same_value(shadow.abilities, canonical.abilities) then
+        error("brick shadow abilities diverge from canonical RuleSet")
+    end
     for _, field in ipairs({ "behaviour", "hp", "restitution", "rarity" }) do
         if shadow and shadow[field] ~= nil and shadow[field] ~= canonical[field] then
             error(string.format(

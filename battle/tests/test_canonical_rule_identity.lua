@@ -244,12 +244,21 @@ function M.run(t)
                 1,
                 true
             ) ~= nil
-            t:ok(valid or rejected_negative,
+            local rejected_identity = error_text:find(
+                "ungrouped brick rule",
+                1,
+                true
+            ) ~= nil
+            t:ok(valid or rejected_negative or rejected_identity,
                 rule.id .. " either remains valid or fails the canonical negative-net guard: "
                     .. error_text)
             if rejected_negative then
                 t:ok(not valid,
                     rule.id .. " cannot use a mutation to create negative net cost")
+            end
+            if rejected_identity then
+                t:ok(not valid,
+                    rule.id .. " cannot detach a body/identity projection from its canonical body")
             end
             if valid then
                 local before_profile = ast.project(rule_set)

@@ -142,7 +142,6 @@ M.type_scale = {
     line_height = 1.22,
 }
 
-M.rarity = {}
 local rarity_visual = {
     common = { colour = "rarity_common", rim_width = 1, shoulder_notches = 0 },
     uncommon = { colour = "rarity_uncommon", rim_width = 2, shoulder_notches = 1 },
@@ -150,10 +149,11 @@ local rarity_visual = {
     epic = { colour = "rarity_epic", rim_width = 3, shoulder_notches = 3 },
     legendary = { colour = "rarity_legendary", rim_width = 3, shoulder_notches = 4 },
 }
-for _, rarity in ipairs(rule_ast.ECONOMY.rarity_order) do
-    local tier = rule_ast.ECONOMY.tiers[rarity]
+local function rarity_token(rarity)
+    local tier = rule_ast.tier(rarity)
+    if not tier then return nil end
     local visual = rarity_visual[rarity]
-    M.rarity[rarity] = {
+    return {
         rank = tier.rank,
         colour = visual.colour,
         shell_cap = tier.shell_cap,
@@ -161,6 +161,10 @@ for _, rarity in ipairs(rule_ast.ECONOMY.rarity_order) do
         rim_width = visual.rim_width,
         shoulder_notches = visual.shoulder_notches,
     }
+end
+
+function M.rarity_token(rarity)
+    return rarity_token(rarity)
 end
 
 M.behaviour = {

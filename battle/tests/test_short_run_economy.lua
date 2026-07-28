@@ -48,10 +48,37 @@ end
 
 function M.run(t)
     local base = run.new({ run_seed = 9125, short_run = true })
-    local coverage = kinds(assert(short_run.preview_reward_offer(base)))
+    local base_offer = assert(short_run.preview_reward_offer(base))
+    local coverage = kinds(base_offer)
     t:ok(coverage.add_marble, "sparse economy can add a marble")
     t:ok(coverage.add_brick, "sparse economy can add a brick")
     t:ok(coverage.replace_brick, "sparse economy can reshape an existing brick")
+    local reward_ids = {}
+    for _, choice in ipairs(base_offer.choices) do
+        local identity = ast.content_identity(choice)
+        t:eq(reward_ids[identity], nil,
+            "reward offer contains each canonical content identity once")
+        reward_ids[identity] = true
+    end
+    local repeated_offer = assert(short_run.preview_reward_offer(base))
+    t:ok(util.deep_equal(base_offer, repeated_offer),
+        "fixed run seed reproduces the unique reward offer exactly")
+
+    local tampered_offer_state = util.deep_copy(base)
+    tampered_offer_state.phase = "draft"
+    tampered_offer_state.draft.offer = util.deep_copy(base_offer)
+    tampered_offer_state.draft.offer.choices[2].rule_set =
+        util.deep_copy(tampered_offer_state.draft.offer.choices[1].rule_set)
+    tampered_offer_state.draft.offer.choices[2].content_id =
+        tampered_offer_state.draft.offer.choices[1].content_id
+    local tampered_result, tampered_error = run.dispatch(tampered_offer_state, {
+        kind = "choose_offer",
+        offer_id = tampered_offer_state.draft.offer.offer_id,
+        choice_id = tampered_offer_state.draft.offer.choices[1].choice_id,
+    })
+    t:eq(tampered_result, nil, "duplicate reward-offer tampering fails closed")
+    t:eq(tampered_error and tampered_error.code, "reward_authority_changed",
+        "duplicate reward-offer tampering reports canonical authority failure")
 
     local remove_state = util.deep_copy(base)
     add_marble(remove_state, "geode_uncommon")

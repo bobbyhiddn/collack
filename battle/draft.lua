@@ -111,8 +111,9 @@ end
 
 local function pick_where(candidates, used, predicate)
     for _, candidate in ipairs(candidates) do
-        if not used[candidate.id] and predicate(candidate) then
-            used[candidate.id] = true
+        local identity = rule_ast.content_identity(candidate)
+        if not used[identity] and predicate(candidate) then
+            used[identity] = true
             return candidate
         end
     end
@@ -172,13 +173,15 @@ local function curated_choices(state, category)
         local predicate = predicates[#chosen + 1] or function() return true end
         local eligible = {}
         for _, candidate in ipairs(candidates) do
-            if not used[candidate.id] and predicate(candidate) then
+            if not used[rule_ast.content_identity(candidate)] and predicate(candidate) then
                 eligible[#eligible + 1] = candidate
             end
         end
         if #eligible == 0 then
             for _, candidate in ipairs(candidates) do
-                if not used[candidate.id] then eligible[#eligible + 1] = candidate end
+                if not used[rule_ast.content_identity(candidate)] then
+                    eligible[#eligible + 1] = candidate
+                end
             end
         end
         if #eligible == 0 then error("draft pool cannot fill a three-choice offer") end
@@ -188,7 +191,7 @@ local function curated_choices(state, category)
             rng:int(1, 100),
             rng:int(1, 2147483646)
         )
-        used[selected.id] = true
+        used[rule_ast.content_identity(selected)] = true
         chosen[#chosen + 1] = selected
         sample.slot = #chosen
         journal[#journal + 1] = sample
@@ -262,6 +265,10 @@ local function marble_details(item)
         shells = shell_details,
         shell_count = #shell_details,
     }
+end
+
+function M.marble_details(item)
+    return util.deep_copy(marble_details(item))
 end
 
 local function kit_details(item)
@@ -355,7 +362,7 @@ function M.make_offer(state)
         choices = choices,
         build_tags = M.current_tags(state),
         scout_tags = util.deep_copy(state.opponent.scout_tags),
-        economy_rule_set_id = rule_ast.ECONOMY.id,
+        economy_rule_set_id = rule_ast.economy_id(),
         sampling_journal = util.deep_copy(sampling_journal),
     }
     local valid, message = contract.validate_offer(offer)
@@ -413,11 +420,6 @@ local function plain_value(value, seen)
     return true
 end
 
-local RARITY_RANK = {}
-for rank, rarity in ipairs(rule_ast.ECONOMY.rarity_order) do
-    RARITY_RANK[rarity] = rank
-end
-
 -- Component identity and exact shell order already live in the composed
 -- RuleSet: the core trajectory node and each shell durability node appear in
 -- source order. Derive selectors from those canonical nodes, then require the
@@ -458,7 +460,7 @@ local function marble_selectors(item)
     if not core_id then error("canonical marble RuleSet has no core identity") end
     if #shell_ids < 1 then error("canonical marble RuleSet has no shell identity") end
     local rarity = item.rule_set.rarity
-    local tier = rule_ast.ECONOMY.tiers[rarity]
+    local tier = rule_ast.tier(rarity)
     if not tier then error("canonical marble RuleSet has invalid rarity") end
     if #shell_ids > tier.shell_cap then
         error("canonical marble RuleSet exceeds its rarity shell cap")
@@ -487,7 +489,7 @@ local function materialize_marble(item, uid)
     rule_ast.assert_valid(item.rule_set)
     local selectors = marble_selectors(item)
     local core = cores.runtime(selectors.core, item.rule_set)
-    if RARITY_RANK[core.min_rarity] > RARITY_RANK[selectors.rarity] then
+    if rule_ast.rarity_rank(core.min_rarity) > rule_ast.rarity_rank(selectors.rarity) then
         error(string.format(
             "canonical core %s needs rarity %s or better",
             tostring(core.id),

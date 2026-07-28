@@ -1083,7 +1083,7 @@ for id, spec in pairs(brick_specs) do
         compatibility = {
             requires = {},
             excludes = {},
-            max_copies = ast.ECONOMY.tiers[spec.rarity].brick_copy_cap,
+            max_copies = ast.tier(spec.rarity).brick_copy_cap,
         },
     }, sources)
 end

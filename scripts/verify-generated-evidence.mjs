@@ -129,6 +129,16 @@ function runMutationControls(evidence, manifestBytes, checksumBytes, expectedDig
   assertPayloadMutationRejected(evidence, "changed executable bytes", (changed) => {
     changed.executableEvidence.archive.sha256 = "0".repeat(64);
   });
+  assertPayloadMutationRejected(evidence, "missing linked-cost evidence", (changed) => {
+    changed.linkedCostEvidence.pop();
+  });
+  assertPayloadMutationRejected(evidence, "crossed viewport evidence", (changed) => {
+    changed.screenshotRecords[0].label =
+      changed.screenshotRecords[0].label === "phone" ? "desktop" : "phone";
+  });
+  assertPayloadMutationRejected(evidence, "tampered screenshot binding", (changed) => {
+    changed.screenshotRecords[0].sha256 = "0".repeat(64);
+  });
 
   // Preserve the inherited aa5bf74 stale-evidence control even if all of its
   // internal integrity fields are honestly recomputed.
@@ -168,8 +178,10 @@ exactKeys(evidence, [
   "guidance",
   "inspections",
   "ruleCallouts",
+  "linkedCostEvidence",
   "settings",
   "screenshotHashes",
+  "screenshotRecords",
   "evidenceDigest",
 ], "generated evidence");
 validateRawChecksum(manifestBytes, checksumBytes);
@@ -208,6 +220,24 @@ for (const [name, expected] of screenshotEntries) {
   const actual = sha256(bytes);
   assert(actual === expected,
     `stale generated screenshot ${name}: ${actual}, expected ${expected}`);
+}
+assert(evidence.screenshotRecords?.length === 38,
+  "generated evidence must carry one semantic record per screenshot");
+for (const record of evidence.screenshotRecords) {
+  const expectedViewport = evidence.viewports[record.label];
+  assert(expectedViewport
+      && record.name.startsWith(`${record.label}-`)
+      && record.width === expectedViewport.width
+      && record.height === expectedViewport.height
+      && record.sha256 === evidence.screenshotHashes[record.name],
+    `missing, crossed, stale, or tampered screenshot record: ${JSON.stringify(record)}`);
+}
+for (const label of ["phone", "desktop"]) {
+  const linked = evidence.linkedCostEvidence?.filter((sample) => sample.label === label) ?? [];
+  assert(linked.length === 1 && linked[0].text.includes("ordered=true")
+      && linked[0].text.includes("cost=1")
+      && linked[0].text.includes("payoff=2"),
+    `${label} linked-cost evidence is missing or incorrect`);
 }
 
 runMutationControls(

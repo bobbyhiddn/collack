@@ -20,11 +20,11 @@ local M = { name = "data_model" }
 
 function M.run(t)
     -- Rarity caps, exactly as the spec states them.
-    t:eq(marble_mod.SHELL_CAP.common, 1, "common cap")
-    t:eq(marble_mod.SHELL_CAP.uncommon, 2, "uncommon cap")
-    t:eq(marble_mod.SHELL_CAP.rare, 3, "rare cap")
-    t:eq(marble_mod.SHELL_CAP.epic, 4, "epic cap")
-    t:eq(marble_mod.SHELL_CAP.legendary, 5, "legendary cap")
+    t:eq(marble_mod.shell_cap("common"), 1, "common cap")
+    t:eq(marble_mod.shell_cap("uncommon"), 2, "uncommon cap")
+    t:eq(marble_mod.shell_cap("rare"), 3, "rare cap")
+    t:eq(marble_mod.shell_cap("epic"), 4, "epic cap")
+    t:eq(marble_mod.shell_cap("legendary"), 5, "legendary cap")
 
     -- Shells are ordered, outermost first.
     local built = marble_mod.build(fixtures.sturdy(1), slings.by_id.precision, "A")

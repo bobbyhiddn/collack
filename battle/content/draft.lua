@@ -214,7 +214,7 @@ for _, spec in ipairs(MARBLE_SPECS) do
         compatibility = {
             requires = {},
             excludes = {},
-            max_copies = ast.ECONOMY.tiers[spec.rarity].marble_copy_cap,
+            max_copies = ast.tier(spec.rarity).marble_copy_cap,
         },
     }, sources)
     ast.register(rule_set)
@@ -328,7 +328,7 @@ for _, spec in ipairs(KIT_SPECS) do
     item.brick_ids = ast.copy(spec.brick_ids)
     item.telegraph = {
         rarity = spec.rarity,
-        beads = ast.ECONOMY.tiers[spec.rarity].rank,
+        beads = ast.tier(spec.rarity).rank,
         offer_tier = spec.rarity,
         packaging_only = true,
         members = {},
@@ -382,7 +382,9 @@ end
 table.sort(M.brick_reward_pool, function(left, right) return left.id < right.id end)
 assert(#M.brick_reward_pool == 16, "all 16 behaviour bricks must be reward-authorized")
 
-M.ECONOMY = ast.copy(ast.ECONOMY)
+function M.economy()
+    return ast.economy()
+end
 
 M.COMPREHENSION_POOL = {}
 for _, item in ipairs(M.SLINGS) do

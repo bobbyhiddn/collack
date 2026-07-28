@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { createReadStream } from "node:fs";
-import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, stat, unlink, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { createHash } from "node:crypto";
 import path from "node:path";
@@ -75,6 +75,7 @@ const ruleCallouts = [];
 const actionStates = new Map();
 const canonicalSweeps = [];
 const canonicalBlowbacks = [];
+const linkedCostEvidence = [];
 const expectedRuleMarks = {
   accelerate: "ACC",
   aim: "AIM",
@@ -132,6 +133,9 @@ function observePage(page, label) {
     }
     if (text.startsWith("CALLACK_RULE_CALLOUT ")) {
       ruleCallouts.push({ label, text });
+    }
+    if (text.startsWith("CALLACK_LINKED_COST ")) {
+      linkedCostEvidence.push({ label, text });
     }
     const actionState = text.match(/^CALLACK_ACTION_STATE phase=(\S+) enabled=(\S+)$/);
     if (actionState) {
@@ -430,8 +434,10 @@ async function completeMobile(runtime) {
   await firstRefitReached;
   await screenshot(runtime, "phone-refit-1.png");
   await screenshot(runtime, "phone-draft-scout.png");
+  await screenshot(runtime, "phone-draft.png");
   await inspectAction(runtime, "touch", 195, 180, "offer:", "choice");
   await screenshot(runtime, "phone-refit-inspection.png");
+  await screenshot(runtime, "phone-draft-inspection.png");
   await touchAction(runtime, 310, 664, "inspection_next");
   await screenshot(runtime, "phone-refit-rule-2.png");
   await touchAction(runtime, 80, 664, "inspection_prev");
@@ -577,8 +583,10 @@ async function completeDesktop(runtime) {
   await firstRefitReached;
   await screenshot(runtime, "desktop-refit-1.png");
   await screenshot(runtime, "desktop-draft-scout.png");
+  await screenshot(runtime, "desktop-draft.png");
   await inspectAction(runtime, "mouse", 456, 348, "offer:", "choice");
   await screenshot(runtime, "desktop-refit-inspection.png");
+  await screenshot(runtime, "desktop-draft-inspection.png");
   await mouseAction(runtime, 1016, 620, "inspection_next");
   await screenshot(runtime, "desktop-refit-rule-2.png");
   await mouseAction(runtime, 892, 620, "inspection_prev");
@@ -681,6 +689,11 @@ async function completeDesktop(runtime) {
 
 try {
   await mkdir(verificationRoot, { recursive: true });
+  for (const name of await readdir(verificationRoot)) {
+    if (/^(phone|desktop)-[a-z0-9-]+\.png$/.test(name)) {
+      await unlink(path.join(verificationRoot, name));
+    }
+  }
   await new Promise((resolve, reject) => {
     server.once("error", reject);
     server.listen(0, "127.0.0.1", resolve);
@@ -781,6 +794,15 @@ try {
     `${label}: packaged allied/enemy blowback evidence is incomplete: ${JSON.stringify(blowback)}`);
   }
   assert(runtimeErrors.length === 0, runtimeErrors.join("\n"));
+  for (const label of ["phone", "desktop"]) {
+    const linked = linkedCostEvidence.filter((sample) => sample.label === label);
+    assert(linked.length === 1,
+      `${label}: expected one packaged linked-cost proof, got ${linked.length}`);
+    assert(
+      /source=brick\.plain_block .*ability=bloodstone_relay .*cost_rule=fixture\.relay\.cost .*cost=1 .*target=setup_linked_allied_brick .*relation=allied .*cadence_index=1 .*charges=2_to_1 .*payoff_rule=fixture\.relay\.payoff .*payoff=2 .*ordered=true .*copy=COST/.test(linked[0].text),
+      `${label}: linked-cost proof omitted exact cost/target/cadence/payoff attribution: ${linked[0].text}`
+    );
+  }
 
   const motionEvidence = {};
   for (const label of ["phone", "desktop"]) {
@@ -795,11 +817,41 @@ try {
   const screenshotNames = (await readdir(verificationRoot))
     .filter((name) => name.endsWith(".png"))
     .sort();
+  const surfaces = [
+    "battle-inspection", "battle-settings", "battle-trigger", "battle",
+    "draft-inspection", "draft-scout", "draft", "refit-1",
+    "refit-2", "refit-inspection", "refit-rule-2", "result-after-replay",
+    "result", "reward", "scout", "setup-start", "setup-terminal",
+    "setup", "terminal-result",
+  ];
+  const expectedScreenshotNames = ["desktop", "phone"]
+    .flatMap((label) => surfaces.map((surface) => `${label}-${surface}.png`))
+    .sort();
   assert(screenshotNames.length === 38,
     `evidence must bind all 38 generated screenshots, got ${screenshotNames.length}`);
+  assert(JSON.stringify(screenshotNames) === JSON.stringify(expectedScreenshotNames),
+    `evidence screenshot set is stale, missing, or crossed: ${screenshotNames.join(",")}`);
   const screenshotHashes = {};
+  const screenshotRecords = [];
   for (const name of screenshotNames) {
-    screenshotHashes[name] = digest(await readFile(path.join(verificationRoot, name)));
+    const bytes = await readFile(path.join(verificationRoot, name));
+    screenshotHashes[name] = digest(bytes);
+    const label = name.startsWith("phone-") ? "phone" : "desktop";
+    const width = bytes.readUInt32BE(16);
+    const height = bytes.readUInt32BE(20);
+    const expected = label === "phone"
+      ? { width: 390, height: 844 }
+      : { width: 1280, height: 800 };
+    assert(width === expected.width && height === expected.height,
+      `${name} crossed viewport evidence: ${width}x${height}`);
+    screenshotRecords.push({
+      name,
+      label,
+      surface: name.replace(/^(phone|desktop)-/, "").replace(/\.png$/, ""),
+      width,
+      height,
+      sha256: screenshotHashes[name],
+    });
   }
   assertSourceWorkingTreeClean(root);
   const sourceDigest = await evidenceSourceDigest(root);
@@ -821,8 +873,10 @@ try {
     guidance: guidanceSamples,
     inspections: inspectionSamples,
     ruleCallouts,
+    linkedCostEvidence,
     settings: settingSamples,
     screenshotHashes,
+    screenshotRecords,
   });
   const manifestBytes = serializeEvidence(evidence);
   await writeFile(path.join(root, manifestName), manifestBytes);

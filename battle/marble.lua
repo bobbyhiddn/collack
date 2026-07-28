@@ -18,19 +18,13 @@ local draft = require("battle.draft")
 
 local M = {}
 
-M.SHELL_CAP = {}
-M.RARITY_ORDER = rule_ast.copy(rule_ast.ECONOMY.rarity_order)
-for rarity, tier in pairs(rule_ast.ECONOMY.tiers) do
-    M.SHELL_CAP[rarity] = tier.shell_cap
-end
-
-local rarity_rank = {}
-for index, name in ipairs(M.RARITY_ORDER) do
-    rarity_rank[name] = index
-end
-
 function M.rarity_rank(rarity)
-    return rarity_rank[rarity]
+    return rule_ast.rarity_rank(rarity)
+end
+
+function M.shell_cap(rarity)
+    local tier = rule_ast.tier(rarity)
+    return tier and tier.shell_cap or nil
 end
 
 local next_uid = 0
@@ -57,7 +51,7 @@ function M.build(def, sling, owner_id, require_canonical)
     elseif require_canonical then
         error("product battle marble is missing canonical content identity")
     end
-    local cap = M.SHELL_CAP[def.rarity]
+    local cap = M.shell_cap(def.rarity)
     if not cap then
         error("unknown rarity: " .. tostring(def.rarity))
     end
@@ -81,7 +75,7 @@ function M.build(def, sling, owner_id, require_canonical)
         def.core,
         entity_rule_set
     )
-    if rarity_rank[core_def.min_rarity] > rarity_rank[def.rarity] then
+    if M.rarity_rank(core_def.min_rarity) > M.rarity_rank(def.rarity) then
         error(string.format(
             "core %q needs rarity %s or better, marble %q is %s",
             core_def.id, core_def.min_rarity, tostring(def.name), def.rarity))

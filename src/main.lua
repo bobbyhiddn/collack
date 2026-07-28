@@ -517,7 +517,7 @@ local function panel(x, y, width, height, surface, radius)
 end
 
 local function draw_beads(rarity, x, y, direction)
-    local rarity_token = art.rarity[rarity] or art.rarity.common
+    local rarity_token = art.rarity_token(rarity) or art.rarity_token("common")
     local color = COLORS[rarity] or COLORS.common
     for index = 1, rarity_token.beads do
         set_color(color)
@@ -554,7 +554,7 @@ local function draw_marble(x, y, radius, rarity, mineral, shell_ratio, statuses,
     set_color(base, art.material.glass.body_alpha * (0.48 + shell_ratio * 0.52))
     love.graphics.circle("fill", x, y, radius)
     set_color(rarity_color, art.material.glass.edge_alpha)
-    love.graphics.setLineWidth((art.rarity[rarity] or art.rarity.common).rim_width)
+    love.graphics.setLineWidth((art.rarity_token(rarity) or art.rarity_token("common")).rim_width)
     love.graphics.circle("line", x, y, radius - 1)
     set_color(COLORS.chalk, art.material.glass.inner_alpha)
     love.graphics.circle("line", x, y, radius * 0.68)
@@ -2521,6 +2521,26 @@ function love.load(args)
             evidence.blowback.substeps,
             evidence.blowback.iterations,
             evidence.blowback.tick
+        ))
+        print(string.format(
+            "CALLACK_LINKED_COST source=%s ability=%s activation=%s cost_rule=%s cost=%d cost_unit=%s target=%s relation=%s target_uid=%s cadence_index=%d charges=%d_to_%d payoff_rule=%s payoff=%d payoff_unit=%s ordered=%s copy=%s",
+            evidence.linked_cost.source_rule_set_id,
+            evidence.linked_cost.ability_id,
+            evidence.linked_cost.activation_id,
+            evidence.linked_cost.cost_rule_id,
+            evidence.linked_cost.cost_amount,
+            evidence.linked_cost.cost_unit,
+            evidence.linked_cost.target_selector,
+            evidence.linked_cost.target_relation,
+            evidence.linked_cost.target_uid,
+            evidence.linked_cost.cadence_index,
+            evidence.linked_cost.charges_before,
+            evidence.linked_cost.charges_after,
+            evidence.linked_cost.payoff_rule_id,
+            evidence.linked_cost.payoff_amount,
+            evidence.linked_cost.payoff_unit,
+            tostring(evidence.linked_cost.ordered),
+            telemetry_value(evidence.linked_cost.compact_copy)
         ))
     end
     if not touch and not desktop and love.system.getOS() ~= "Web" then

@@ -16,6 +16,13 @@ local slings = require("battle.content.slings")
 
 local M = {}
 
+-- Capability keys and state never enter battle snapshots, replay, logs, or
+-- caller-owned tables. Deserialised or recursively copied operation payloads
+-- therefore cannot manufacture engine authority.
+local PRIVATE = setmetatable({}, { __mode = "k" })
+local AUTHORITY_KEY, SOURCE_KEY = {}, {}
+local HOSTILE_AUTHORITY, COST_AUTHORITY = {}, {}
+
 M.SCHEMA_VERSION = 2
 M.RULES_VERSION = "continuous-v1"
 M.FIXED_DT = physics.FIXED_DT
@@ -553,8 +560,8 @@ function M.new(opts)
     end
     assert(sides and sides.A and sides.B, "battle.new needs player/opponent or sides A/B")
     local handoff_links = {
-        A = product_handoff and verified_handoff_links(sides.A) or {},
-        B = product_handoff and verified_handoff_links(sides.B) or {},
+        A = verified_handoff_links(sides.A),
+        B = verified_handoff_links(sides.B),
     }
     marble_mod.reset_uids()
     local a_cols = #sides.A.formation[1]
@@ -594,7 +601,7 @@ function M.new(opts)
         cascade_draining = false,
         next_cascade_work_id = 0,
         rule_set_identities = {},
-        enforce_rule_set_identity = product_handoff,
+        enforce_rule_set_identity = true,
         state = "boundary",
         result = nil,
         pending_events = {},
@@ -614,21 +621,14 @@ function M.new(opts)
     }
     battle.sides.A = build_player("A", sides.A, a_cols, product_handoff)
     battle.sides.B = build_player("B", sides.B, b_cols, product_handoff)
-    if product_handoff then
-        for _, side_id in ipairs(battle.order) do
-            local player = battle.sides[side_id]
-            for row = 1, player.formation.rows do
-                for col = 1, player.formation.cols do
-                    local brick = player.formation.grid[row][col]
-                    if brick then
-                        battle.rule_set_identities[
-                            side_id .. "|" .. tostring(brick.uid)
-                        ] = rule_ast.canonical(brick.rule_set)
-                    end
-                end
-            end
-        end
-    end
+    local security = {
+        authorizations = {},
+        owner_by_entity = setmetatable({}, { __mode = "k" }),
+        owner_by_brick = setmetatable({}, { __mode = "k" }),
+        identities = setmetatable({}, { __mode = "k" }),
+        sources_by_id = {},
+    }
+    PRIVATE[battle] = security
     for _, side_id in ipairs(battle.order) do
         for _, link in ipairs(handoff_links[side_id]) do
             battle.ability_links[
@@ -642,11 +642,45 @@ function M.new(opts)
         local player = battle.sides[side_id]
         for _, marble in ipairs(player.all_marbles) do
             battle.marble_by_body[marble.body_id] = { owner = player, marble = marble }
+            security.owner_by_entity[marble] = player
+            security.identities[marble] = {
+                rule_set = marble.rule_set and rule_ast.canonical(marble.rule_set) or nil,
+                core = rule_ast.canonical(marble.core.rule_set),
+                sling = rule_ast.canonical(marble.sling_rule_set),
+                shells = setmetatable({}, { __mode = "k" }),
+            }
+            for _, shell in ipairs(marble.shells) do
+                security.identities[marble].shells[shell] =
+                    rule_ast.canonical(shell.rule_set)
+            end
+            for _, identity in ipairs({
+                marble.uid, marble.body_id, tostring(marble.uid), tostring(marble.body_id),
+            }) do
+                security.sources_by_id[identity] = security.sources_by_id[identity] or {}
+                security.sources_by_id[identity][#security.sources_by_id[identity] + 1] = marble
+            end
         end
         for row = 1, player.formation.rows do
             for col = 1, player.formation.cols do
                 local brick = player.formation.grid[row][col]
-                if brick then battle.brick_by_body[brick.body_id] = { owner = player, brick = brick } end
+                if brick then
+                    battle.brick_by_body[brick.body_id] = { owner = player, brick = brick }
+                    security.owner_by_entity[brick] = player
+                    security.owner_by_brick[brick] = player
+                    security.identities[brick] = rule_ast.canonical(brick.rule_set)
+                    battle.rule_set_identities[
+                        side_id .. "|" .. tostring(brick.uid)
+                    ] = security.identities[brick]
+                    for _, identity in ipairs({
+                        brick.uid, brick.body_id, tostring(brick.uid), tostring(brick.body_id),
+                    }) do
+                        security.sources_by_id[identity] =
+                            security.sources_by_id[identity] or {}
+                        security.sources_by_id[identity][
+                            #security.sources_by_id[identity] + 1
+                        ] = brick
+                    end
+                end
             end
         end
     end
@@ -877,9 +911,61 @@ local function destroy_brick(battle, owner, brick, request)
     return true
 end
 
+local function entity_identity_valid(security, entity)
+    local expected = security.identities[entity]
+    if type(expected) == "string" then
+        local ok, current = pcall(rule_ast.canonical, entity.rule_set)
+        return ok and current == expected
+    end
+    if type(expected) ~= "table" then return false end
+    local function same(rule_set, canonical)
+        local ok, current = pcall(rule_ast.canonical, rule_set)
+        return ok and current == canonical
+    end
+    if expected.rule_set
+        and not same(entity.rule_set, expected.rule_set) then return false end
+    if not same(entity.core and entity.core.rule_set, expected.core)
+        or not same(entity.sling_rule_set, expected.sling) then return false end
+    for _, shell in ipairs(entity.shells or {}) do
+        local canonical = expected.shells[shell]
+        if not canonical or not same(shell.rule_set, canonical) then
+            return false
+        end
+    end
+    return true
+end
+
+local function resolve_source(battle, request)
+    local security = PRIVATE[battle]
+    if not security then return nil, nil, "engine_state_missing" end
+    local entity = request[SOURCE_KEY] or request.source_marble
+    if not entity then
+        local identity = request.source_entity_id or request.source_uid
+        local candidates = security.sources_by_id[identity]
+            or security.sources_by_id[tostring(identity)]
+        if candidates then
+            for _, candidate in ipairs(candidates) do
+                if not entity then entity = candidate
+                elseif entity ~= candidate then return nil, nil, "source_ambiguous" end
+            end
+        end
+    end
+    local owner = entity and security.owner_by_entity[entity] or nil
+    if not owner then return nil, nil, "source_entity_unknown" end
+    if request.source_owner ~= nil and request.source_owner ~= owner.id then
+        return nil, nil, "source_owner_mismatch"
+    end
+    if not entity_identity_valid(security, entity) then
+        return nil, nil, "source_rule_set_changed"
+    end
+    return entity, owner
+end
+
 local function authorization_valid(battle, request, owner, brick, amount)
+    if request[AUTHORITY_KEY] ~= COST_AUTHORITY then return false end
+    local security = PRIVATE[battle]
     local authorization = request.authorization_id
-        and battle.authorizations[request.authorization_id] or nil
+        and security and security.authorizations[request.authorization_id] or nil
     if not authorization or authorization.used then return false end
     return authorization.root_event_id == request.root_event_id
         and authorization.activation_id == request.activation_id
@@ -898,7 +984,6 @@ end
 local function guard_valid(battle, brick)
     return brick.guard
         and brick.guard.amount > 0
-        and brick.guard.exchange == battle.exchange
         and brick.guard.expires_tick > battle.tick
 end
 
@@ -906,6 +991,29 @@ apply_brick_harm = function(battle, owner, brick, amount, request)
     request = request or {}
     amount = floor(tonumber(amount) or 0)
     if not brick or not brick.alive or amount <= 0 then return false, 0 end
+    local security = PRIVATE[battle]
+    local actual_owner = security and security.owner_by_brick[brick] or nil
+    local source_entity, source_owner, source_error = resolve_source(battle, request)
+    local relation = source_owner and actual_owner
+        and source_owner.id == actual_owner.id and "allied"
+        or source_owner and actual_owner and "enemy"
+        or "unknown"
+    local boundary_error
+    if not actual_owner then
+        boundary_error = "target_entity_unknown"
+    elseif owner ~= actual_owner then
+        boundary_error = "target_owner_mismatch"
+    elseif not entity_identity_valid(security, brick) then
+        boundary_error = "target_rule_set_changed"
+    elseif source_error then
+        boundary_error = source_error
+    elseif request[AUTHORITY_KEY] == HOSTILE_AUTHORITY and relation ~= "enemy" then
+        boundary_error = "hostile_authority_relation_mismatch"
+    end
+    owner = actual_owner or owner
+    request.source_owner = source_owner and source_owner.id or nil
+    request.source_entity_id = source_entity
+        and (source_entity.uid or source_entity.body_id) or request.source_entity_id
     request.root_event_id = request.root_event_id or string.format(
         "root:%d:%s:%s:%s",
         battle.tick,
@@ -946,14 +1054,10 @@ apply_brick_harm = function(battle, owner, brick, amount, request)
     ) then
         return false, 0
     end
-    local source_owner_known = request.source_owner ~= nil
-        and battle.sides[request.source_owner] ~= nil
-    local relation = request.source_owner == owner.id and "allied"
-        or source_owner_known and "enemy"
-        or "unknown"
     local authorized = relation == "allied"
         and authorization_valid(battle, request, owner, brick, amount)
-    if relation == "unknown" or (relation == "allied" and not authorized) then
+    if boundary_error or relation == "unknown"
+        or (relation == "allied" and not authorized) then
         append_event(battle, owner.id, "brick_harm_denied", {
             brick = brick.id,
             target_entity_id = brick.uid or brick.body_id,
@@ -973,13 +1077,14 @@ apply_brick_harm = function(battle, owner, brick, amount, request)
             root_event_id = request.root_event_id,
             parent_event_id = request.parent_event_id,
             generation = request.generation or 0,
-            reason = relation == "unknown" and "source_owner_missing"
+            reason = boundary_error
+                or (relation == "unknown" and "source_entity_unknown")
                 or "allied_harm_not_authorized",
         })
         return false, 0
     end
     if authorized then
-        local authorization = battle.authorizations[request.authorization_id]
+        local authorization = security.authorizations[request.authorization_id]
         if brick.hp < amount or (not authorization.lethal and brick.hp - amount <= 0) then
             append_event(battle, owner.id, "ability_blocked", {
                 activation_id = request.activation_id,
@@ -1011,10 +1116,10 @@ apply_brick_harm = function(battle, owner, brick, amount, request)
             source_owner = brick.guard.source_owner,
             source_entity_id = brick.guard.source_uid,
             source_rule_set_id = brick.guard.source_rule_set_id,
-            rule_id = "brick.splice.guard",
+            rule_id = brick.guard.rule_id,
             ability_id = brick.guard.ability_id,
-            operation = "protect",
-            target_selector = "orthogonal_neighbours",
+            operation = brick.guard.operation,
+            target_selector = brick.guard.target_selector,
             target_owner = owner.id,
             target_entity_id = brick.uid or brick.body_id,
             target_relation = "allied",
@@ -1073,6 +1178,9 @@ apply_brick_harm = function(battle, owner, brick, amount, request)
     return false, applied
 end
 
+-- Public/direct callers cross the same engine-owned identity boundary. They
+-- can damage an actual enemy using an actual registered source, but can never
+-- obtain the private capability needed to spend allied HP.
 M.apply_brick_harm = apply_brick_harm
 
 local release_core
@@ -1377,6 +1485,8 @@ release_core = function(battle, owner, other, marble, x, y, depth, context)
                 generation = depth,
                 source_marble = marble,
             }
+            request[AUTHORITY_KEY] = HOSTILE_AUTHORITY
+            request[SOURCE_KEY] = marble
             apply_brick_harm(battle, closest.owner, closest.brick,
                 base.shrapnel + amplification, request)
             for _, neighbour in ipairs(formation_mod.neighbours(
@@ -1655,14 +1765,8 @@ function M.activate_linked_cost(battle, owner_id, source_uid, ability_id, cause,
     if not owner or not source or not source.alive then return blocked("source_dead") end
     if not ability or ability.kind ~= "allied_brick_cost" then return blocked("ability_missing") end
     if not link then return blocked("link_missing") end
-    if battle.enforce_rule_set_identity then
-        local expected = battle.rule_set_identities[
-            owner.id .. "|" .. tostring(source_uid)
-        ]
-        local valid_identity, current = pcall(rule_ast.canonical, source.rule_set)
-        if not valid_identity or current ~= expected then
-            return blocked("rule_set_identity_changed")
-        end
+    if not entity_identity_valid(PRIVATE[battle], source) then
+        return blocked("rule_set_identity_changed")
     end
     local valid_cost, cost_rule = pcall(rule_ast.rule, source.rule_set, ability.cost_rule_id)
     if not valid_cost or not cost_rule then return blocked("cost_rule_invalid") end
@@ -1787,7 +1891,7 @@ function M.activate_linked_cost(battle, owner_id, source_uid, ability_id, cause,
         battle.next_activation_id
     )
     local authorization_id = activation_id .. ":cost"
-    battle.authorizations[authorization_id] = {
+    local authorization = {
         root_event_id = root_event_id,
         activation_id = activation_id,
         ability_id = ability_id,
@@ -1800,6 +1904,10 @@ function M.activate_linked_cost(battle, owner_id, source_uid, ability_id, cause,
         lethal = cost_rule.lethal,
         used = false,
     }
+    PRIVATE[battle].authorizations[authorization_id] = authorization
+    -- This public projection is audit-only. Runtime never reads it as
+    -- authority, so mutation, replay, or deserialisation cannot grant access.
+    battle.authorizations[authorization_id] = copy(authorization)
     local before = target.hp
     local charges_before = charges - state.spent
     append_event(battle, owner.id, "ability_triggered", {
@@ -1826,7 +1934,7 @@ function M.activate_linked_cost(battle, owner_id, source_uid, ability_id, cause,
         generation = event_context.generation or 1,
         cause = cause,
     })
-    local _, applied = apply_brick_harm(battle, owner, target, amount, {
+    local cost_request = {
         source_owner = owner.id,
         source_entity_id = source_uid,
         source_uid = source_uid,
@@ -1842,11 +1950,16 @@ function M.activate_linked_cost(battle, owner_id, source_uid, ability_id, cause,
         activation_id = activation_id,
         authorization_id = authorization_id,
         defer_destruction = true,
-    })
+    }
+    cost_request[AUTHORITY_KEY] = COST_AUTHORITY
+    cost_request[SOURCE_KEY] = source
+    local _, applied = apply_brick_harm(battle, owner, target, amount, cost_request)
     if applied ~= amount then
+        PRIVATE[battle].authorizations[authorization_id] = nil
         battle.authorizations[authorization_id] = nil
         return blocked("atomic_cost_failed")
     end
+    battle.authorizations[authorization_id].used = true
     state.spent = state.spent + 1
     state.last_exchange = battle.exchange
     state.last_tick = battle.tick
@@ -1971,37 +2084,84 @@ function M.activate_linked_cost(battle, owner_id, source_uid, ability_id, cause,
     return true, activation_id
 end
 
+local function splice_contract(source)
+    for _, ability in ipairs(source.rule_set.abilities or {}) do
+        if ability.kind == "passive" then
+            for _, rule_id in ipairs(ability.rule_ids or {}) do
+                local rule = rule_ast.rule(source.rule_set, rule_id)
+                if rule.operation.stat == "guard" then return ability, rule end
+            end
+        end
+    end
+    return nil, nil
+end
+
+local function cadence_ready(battle, source, ability, rule)
+    source.ability_state = source.ability_state or {}
+    local state = source.ability_state[ability.id] or { trigger_count = 0 }
+    source.ability_state[ability.id] = state
+    local cadence = rule.cadence
+    if cadence.unit == "exchange" then
+        if state.last_exchange ~= nil
+            and battle.exchange - state.last_exchange < cadence.interval then
+            return false
+        end
+    elseif cadence.unit == "ticks" then
+        if state.last_tick ~= nil
+            and battle.tick - state.last_tick < cadence.interval then
+            return false
+        end
+    else
+        state.trigger_count = state.trigger_count + 1
+        if (state.trigger_count - 1) % cadence.interval ~= 0 then return false end
+    end
+    return true, state
+end
+
 local function apply_splice_guard(battle, owner, source, profile, root_event)
-    if source.splice_exchange == battle.exchange then return end
-    source.splice_exchange = battle.exchange
-    local duration = profile._duration
-        and profile._duration.guard
-        and profile._duration.guard.value
-        or 120
-    for _, neighbour in ipairs(formation_mod.neighbours(
+    if not entity_identity_valid(PRIVATE[battle], source) then
+        return false, "rule_set_identity_changed"
+    end
+    local ability, rule = splice_contract(source)
+    if not ability or not rule then return false, "guard_ability_missing" end
+    local ready, state = cadence_ready(battle, source, ability, rule)
+    if not ready then return false, "cadence" end
+    local duration = rule.duration.value
+    local amount = rule.magnitude.value
+    local neighbours = formation_mod.neighbours(
         owner.formation,
         source.row,
         source.col
-    )) do
+    )
+    local limit = rule.target.count or #neighbours
+    for index, neighbour in ipairs(neighbours) do
+        if index > limit then break end
         neighbour.guard = {
-            amount = 1,
+            amount = amount,
             expires_tick = battle.tick + duration,
             exchange = battle.exchange,
             source_owner = owner.id,
             source_uid = source.uid or source.body_id,
             source_rule_set_id = source.rule_set.id,
-            ability_id = "splice_guard",
+            rule_id = rule.id,
+            ability_id = ability.id,
+            operation = rule.operation.verb,
+            target_selector = rule.target.selector,
         }
         append_rule_event(battle, owner.id, "guard_applied", {
             brick = neighbour.id,
             source_owner = owner.id,
             source_entity_id = source.uid or source.body_id,
             source_rule_set_id = source.rule_set.id,
-            ability_id = "splice_guard",
+            rule_id = rule.id,
+            ability_id = ability.id,
+            operation = rule.operation.verb,
+            target_selector = rule.target.selector,
             target_owner = owner.id,
             target_entity_id = neighbour.uid or neighbour.body_id,
             target_relation = "allied",
-            amount = 1,
+            amount = amount,
+            unit = rule.magnitude.unit,
             expires_tick = battle.tick + duration,
             x = neighbour.x,
             y = neighbour.y,
@@ -2010,6 +2170,9 @@ local function apply_splice_guard(battle, owner, source, profile, root_event)
             generation = 1,
         }, profile, "guard", source.name)
     end
+    state.last_exchange = battle.exchange
+    state.last_tick = battle.tick
+    return true
 end
 
 function M.trigger_splice_guard(battle, owner_id, source_uid)
@@ -2017,22 +2180,36 @@ function M.trigger_splice_guard(battle, owner_id, source_uid)
     local source = owner and brick_by_uid(owner, source_uid) or nil
     if not source or not source.alive then return false, "source_dead" end
     local profile = effects.brick_profile(source.behaviour, source.rule_set)
-    if (profile.guard or 0) <= 0 then return false, "guard_ability_missing" end
+    local ability, rule = splice_contract(source)
+    if not ability or not rule then return false, "guard_ability_missing" end
     local root = append_event(battle, owner.id, "splice_triggered", {
         source_owner = owner.id,
         source_entity_id = source.uid or source.body_id,
         source_rule_set_id = source.rule_set.id,
-        rule_id = "brick.splice.guard",
-        ability_id = "splice_guard",
-        operation = "protect",
-        target_selector = "orthogonal_neighbours",
+        rule_id = rule.id,
+        ability_id = ability.id,
+        operation = rule.operation.verb,
+        target_selector = rule.target.selector,
+        amount = rule.magnitude.value,
+        unit = rule.magnitude.unit,
     })
-    apply_splice_guard(battle, owner, source, profile, root)
-    return true
+    return apply_splice_guard(battle, owner, source, profile, root)
 end
 
 local function collision_damage(battle, attacker, defender, marble, brick, event)
     if marble.state == "destroyed" or not brick.alive then return end
+    local security = PRIVATE[battle]
+    if not entity_identity_valid(security, marble)
+        or not entity_identity_valid(security, brick) then
+        append_event(battle, defender.id, "collision_denied", {
+            source_owner = attacker.id,
+            source_entity_id = marble.uid,
+            target_owner = defender.id,
+            target_entity_id = brick.uid or brick.body_id,
+            reason = "rule_set_identity_changed",
+        })
+        return
+    end
     local key = marble.body_id .. "|" .. brick.body_id
     if (battle.contact_cooldown[key] or -1000) + 5 > battle.tick then return end
     if (event.impulse or 0) < 2 then return end
@@ -2085,7 +2262,7 @@ local function collision_damage(battle, attacker, defender, marble, brick, event
     }, collision, "damage", shell.mineral)
     local hp_before = brick.hp
     local guard_before = copy(brick.guard)
-    local _, applied_damage = apply_brick_harm(battle, defender, brick, damage, {
+    local collision_request = {
         source_owner = attacker.id,
         source_entity_id = marble.uid,
         source_rule_set_id = shell.rule_set.id,
@@ -2098,13 +2275,18 @@ local function collision_damage(battle, attacker, defender, marble, brick, event
         generation = 0,
         source_marble = marble,
         defer_cascade_drain = true,
-    })
+    }
+    collision_request[AUTHORITY_KEY] = HOSTILE_AUTHORITY
+    collision_request[SOURCE_KEY] = marble
+    local _, applied_damage = apply_brick_harm(
+        battle, defender, brick, damage, collision_request
+    )
 
     if collision.splash_behind > 0 then
         local direction = attacker.id == "A" and -1 or 1
         local behind = formation_mod.brick_at(defender.formation, brick.row + direction, brick.col)
         if behind then
-            apply_brick_harm(battle, defender, behind, collision.splash_behind, {
+            local splash_request = {
                 source_owner = attacker.id,
                 source_entity_id = marble.uid,
                 source_rule_set_id = shell.rule_set.id,
@@ -2118,7 +2300,12 @@ local function collision_damage(battle, attacker, defender, marble, brick, event
                 generation = 1,
                 source_marble = marble,
                 defer_cascade_drain = true,
-            })
+            }
+            splash_request[AUTHORITY_KEY] = HOSTILE_AUTHORITY
+            splash_request[SOURCE_KEY] = marble
+            apply_brick_harm(
+                battle, defender, behind, collision.splash_behind, splash_request
+            )
         end
     end
     if brick.alive and applied_damage > 0 and (profile.guard or 0) > 0 then
@@ -2355,29 +2542,27 @@ local function tick_statuses(battle)
     end
 end
 
-local function expire_guards(battle, exchange_end)
+local function expire_guards(battle)
     for _, side_id in ipairs(battle.order) do
         local owner = battle.sides[side_id]
         for row = 1, owner.formation.rows do
             for col = 1, owner.formation.cols do
                 local brick = formation_mod.brick_at(owner.formation, row, col)
                 if brick and brick.guard
-                    and (exchange_end
-                        or brick.guard.exchange ~= battle.exchange
-                        or brick.guard.expires_tick <= battle.tick) then
+                    and brick.guard.expires_tick <= battle.tick then
                     append_event(battle, owner.id, "guard_expired", {
                         brick = brick.id,
                         source_owner = brick.guard.source_owner,
                         source_entity_id = brick.guard.source_uid,
                         source_rule_set_id = brick.guard.source_rule_set_id,
-                        rule_id = "brick.splice.guard",
+                        rule_id = brick.guard.rule_id,
                         ability_id = brick.guard.ability_id,
-                        operation = "protect",
-                        target_selector = "orthogonal_neighbours",
+                        operation = brick.guard.operation,
+                        target_selector = brick.guard.target_selector,
                         target_owner = owner.id,
                         target_entity_id = brick.uid or brick.body_id,
                         target_relation = "allied",
-                        reason = exchange_end and "exchange_end" or "duration",
+                        reason = "duration",
                     })
                     brick.guard = nil
                 end

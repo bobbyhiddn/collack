@@ -6,8 +6,11 @@
 
 local engine = require("battle.engine")
 local physics = require("battle.physics")
+local ast = require("battle.rule_ast")
+local draft = require("battle.draft")
+local setup_rules = require("battle.setup_rules")
 
-local M = { SCHEMA_VERSION = 1 }
+local M = { SCHEMA_VERSION = 2 }
 
 local function event_of(events, kind)
     for _, event in ipairs(events or {}) do
@@ -43,6 +46,173 @@ local function side(name, sling, formation, marbles)
         sling = sling,
         formation = formation,
         marbles = marbles,
+    }
+end
+
+local function linked_rule(id, trigger, target, verb, stat, value, unit, options)
+    options = options or {}
+    return {
+        id = id,
+        trigger = { event = trigger, phase = options.phase or "during" },
+        condition = {
+            predicate = options.condition or "always",
+            value = options.condition_value,
+        },
+        target = options.target or { selector = target, relation = options.relation },
+        operation = { verb = verb, stat = stat, mode = options.mode or "set" },
+        magnitude = { value = value, unit = unit },
+        cadence = {
+            unit = options.cadence_unit or trigger,
+            interval = options.interval or 1,
+            charges = options.charges,
+        },
+        cost = { kind = "none" },
+        visibility = options.visibility or "compact",
+        scaling = options.scaling,
+        lethal = options.lethal,
+    }
+end
+
+local function linked_cost_rule_set()
+    return {
+        schema_version = ast.SCHEMA_VERSION,
+        kind = "rule_set",
+        id = "brick.plain_block",
+        name = "Bloodstone Relay Verification Fixture",
+        role = "sacrificial shell bolster",
+        content_kind = "brick",
+        rarity = "rare",
+        rarity_budget = 100,
+        availability = {
+            player_draft = false, player_reward = false,
+            cpu_recipe = false, legacy_only = false,
+        },
+        components = {},
+        abilities = {{
+            id = "bloodstone_relay",
+            kind = "allied_brick_cost",
+            cost_rule_id = "fixture.relay.cost",
+            payoff_rule_ids = { "fixture.relay.payoff" },
+            recursion = {
+                accepts_causes = { "hostile_collision" },
+                max_generation = 1,
+            },
+        }},
+        rules = {
+            linked_rule("brick.plain_block.hp", "build", "self",
+                "protect", "hp", 2, "hp", { visibility = "expanded" }),
+            linked_rule("brick.plain_block.restitution", "build", "self",
+                "set", "restitution", 0.72, "multiplier", { visibility = "expanded" }),
+            linked_rule("brick.plain_block.behaviour", "build", "self",
+                "set", "behaviour", "inert", "id", { visibility = "expanded" }),
+            linked_rule("fixture.relay.cost", "damaging_collision",
+                "setup_linked_allied_brick", "deal", "damage", 1, "damage", {
+                    phase = "after", cadence_unit = "exchange", charges = 2,
+                    lethal = false,
+                    target = {
+                        selector = "setup_linked_allied_brick",
+                        relation = "allied", topology = "orthogonal", count = 1,
+                        exclude_self = true, require_alive = true,
+                        required_tags = {}, excluded_tags = {},
+                        order = "local_row_col_uid",
+                    },
+                }),
+            linked_rule("fixture.relay.payoff", "ability_cost_paid",
+                "current_shell", "wear", "shell_wear", 2, "durability", {
+                    phase = "after", relation = "enemy",
+                    condition_value = "bloodstone_relay",
+                    scaling = {
+                        basis = "cost_damage_applied", numerator = 2,
+                        denominator = 1, cap = 2, rounding = "floor",
+                    },
+                }),
+        },
+        drawback = { kind = "reduce", stat = "hp", magnitude = 1, unit = "hp" },
+        compatibility = { requires = {}, excludes = {}, max_copies = 2 },
+        synergy_tags = { "retaliation" },
+    }
+end
+
+local function linked_cost()
+    local relay_rules = linked_cost_rule_set()
+    ast.assert_valid(relay_rules)
+    local relay = {
+        uid = "relay", content_id = "plain_block", id = "plain_block",
+        name = "Bloodstone Relay Verification Fixture", behaviour = "inert",
+        rarity = "rare", hp = 2, max_hp = 2, restitution = 0.72,
+        rule_set = relay_rules,
+    }
+    local ally = draft.instantiate_brick(
+        "guard_pair", "basalt_absorber", 1, "A"
+    )
+    ally.uid = "ally"
+    local formation = {
+        { "relay", "ally", ".", ".", ".", ".", "." },
+        { ".", ".", ".", ".", ".", ".", "." },
+        { ".", ".", ".", ".", ".", ".", "." },
+    }
+    local player = {
+        name = "Fixture", sling = "momentum", formation = formation,
+        bricks = { relay, ally },
+        marbles = {{
+            name = "Fixture", rarity = "common", core = "dull_quartz",
+            shells = { "chalk_plain" },
+        }},
+    }
+    local links, errors = setup_rules.resolve_ability_links(player)
+    require_evidence(#errors == 0 and #links == 1,
+        "linked-cost fixture did not resolve exactly one setup target")
+    player.ability_links = links
+    local enemy_formation = {
+        { "plain_block", ".", ".", ".", ".", ".", "." },
+        { ".", ".", ".", ".", ".", ".", "." },
+        { ".", ".", ".", ".", ".", ".", "." },
+    }
+    local battle = engine.new({
+        seed = 17019,
+        sides = {
+            A = player,
+            B = side("Enemy", "momentum", enemy_formation, {{
+                name = "Enemy", rarity = "common", core = "dull_quartz",
+                shells = { "quartz_banded" },
+            }}),
+        },
+    })
+    battle.exchange = 1
+    local source = battle.sides.A.formation.grid[1][1]
+    local target = battle.sides.A.formation.grid[1][2]
+    local striking = battle.sides.B.all_marbles[1]
+    local activated = engine.activate_linked_cost(
+        battle, "A", source.uid, "bloodstone_relay",
+        "hostile_collision", striking
+    )
+    local triggered = log_event(battle, "ability_triggered")
+    local paid = log_event(battle, "ability_cost_paid")
+    local payoff = log_event(battle, "ability_payoff_applied")
+    require_evidence(activated and triggered and paid and payoff,
+        "linked-cost fixture did not emit its atomic event triple")
+    require_evidence(triggered.activation_id == paid.activation_id
+        and paid.activation_id == payoff.activation_id
+        and triggered.seq < paid.seq and paid.seq < payoff.seq,
+        "linked-cost fixture attribution/order diverged")
+    return {
+        compact_copy = ast.compact(relay_rules, 2),
+        source_rule_set_id = relay_rules.id,
+        ability_id = paid.ability_id,
+        activation_id = paid.activation_id,
+        cost_rule_id = paid.rule_id,
+        cost_amount = paid.amount,
+        cost_unit = paid.unit,
+        target_selector = paid.target_selector,
+        target_relation = paid.target_relation,
+        target_uid = target.uid,
+        cadence_index = paid.cadence_index,
+        charges_before = paid.charges_before,
+        charges_after = paid.charges_after,
+        payoff_rule_id = payoff.rule_id,
+        payoff_amount = payoff.amount,
+        payoff_unit = payoff.unit,
+        ordered = triggered.seq < paid.seq and paid.seq < payoff.seq,
     }
 end
 
@@ -175,6 +345,7 @@ function M.run()
         schema_version = M.SCHEMA_VERSION,
         sweep = swept_collision(),
         blowback = allied_enemy_blowback(),
+        linked_cost = linked_cost(),
     }
 end
 

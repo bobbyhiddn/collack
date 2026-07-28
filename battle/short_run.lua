@@ -728,7 +728,7 @@ local function owned_brick_ids(state)
     return out
 end
 
-local function candidate_marble(state, seed)
+local function candidate_marbles(state, seed, count)
     local owned = owned_marble_ids(state)
     local candidates = {}
     for _, item in ipairs(catalog.MARBLES) do
@@ -737,19 +737,32 @@ local function candidate_marble(state, seed)
             candidates[#candidates + 1] = item
         end
     end
-    if #candidates == 0 then return nil, nil end
+    if #candidates == 0 then return {}, nil end
     local acquisition = state.fight.index == 1
         and "short_run_win_1" or "short_run_win_2_plus"
-    local selected, journal = rule_ast.sample_rarity(
+    local selected, journal = rule_ast.sample_rarity_without_replacement(
         candidates,
         acquisition,
-        (contract.derive_seed(seed, "draft") % 100) + 1,
-        seed + 101
+        count,
+        {
+            {
+                tier_ticket = (contract.derive_seed(seed, "draft") % 100) + 1,
+                item_ticket = seed + 101,
+            },
+            {
+                tier_ticket = (contract.derive_seed(seed + 1, "draft") % 100) + 1,
+                item_ticket = seed + 102,
+            },
+            {
+                tier_ticket = (contract.derive_seed(seed + 2, "draft") % 100) + 1,
+                item_ticket = seed + 103,
+            },
+        }
     )
-    return selected.id, journal
+    return selected, journal
 end
 
-local function candidate_brick(state, seed)
+local function candidate_bricks(state, seed, count)
     local owned = owned_brick_ids(state)
     local candidates = {}
     for _, item in ipairs(catalog.brick_reward_pool) do
@@ -758,16 +771,20 @@ local function candidate_brick(state, seed)
             candidates[#candidates + 1] = item
         end
     end
-    if #candidates == 0 then return nil, nil end
+    if #candidates == 0 then return {}, nil end
     local acquisition = state.fight.index == 1
         and "short_run_win_1" or "short_run_win_2_plus"
-    local selected, journal = rule_ast.sample_rarity(
+    local selected, journal = rule_ast.sample_rarity_without_replacement(
         candidates,
         acquisition,
-        (seed % 100) + 1,
-        seed + 211
+        count,
+        {
+            { tier_ticket = (seed % 100) + 1, item_ticket = seed + 211 },
+            { tier_ticket = ((seed + 37) % 100) + 1, item_ticket = seed + 212 },
+            { tier_ticket = ((seed + 73) % 100) + 1, item_ticket = seed + 213 },
+        }
     )
-    return { selected.kit_id, selected.id }, journal
+    return selected, journal
 end
 
 local function candidate_sling(state, seed)
@@ -959,7 +976,9 @@ local function reward_choice(state, slot, operation, item, category, next_oppone
         },
         suggested_placement = item.suggested_placement,
         art_id = item.art_id,
-        details = util.deep_copy(item.details),
+        details = category == "marble"
+            and draft.marble_details(item)
+            or util.deep_copy(item.details),
         causal_attribution = {
             cause = "post_battle_choice",
             fight_index = state.fight.index,
@@ -992,8 +1011,13 @@ end
 local function reward_operations(state)
     local seed = reward_seed(state.run_seed, state.fight.index)
     local operations = {}
-    local marble_id, marble_sample = candidate_marble(state, seed)
-    local brick_spec, brick_sample = candidate_brick(state, seed + 17)
+    local marble_candidates, marble_sample = candidate_marbles(state, seed, 3)
+    local brick_candidates, brick_sample = candidate_bricks(state, seed + 17, 3)
+    local marble_id = marble_candidates[1] and marble_candidates[1].id
+    local brick_spec = brick_candidates[1]
+        and { brick_candidates[1].kit_id, brick_candidates[1].id } or nil
+    local replacement_spec = brick_candidates[2]
+        and { brick_candidates[2].kit_id, brick_candidates[2].id } or nil
     local sling_id = candidate_sling(state, seed + 31)
 
     if state.fight.index == 1 then
@@ -1016,15 +1040,16 @@ local function reward_operations(state)
             }
         end
         local target = first_brick(state)
-        if target and brick_spec then
+        if target and (replacement_spec or brick_spec) then
+            local replacement = replacement_spec or brick_spec
             operations[#operations + 1] = {
                 operation = {
                     kind = "replace_brick",
                     target_uid = target.uid,
-                    kit_id = brick_spec[1],
-                    content_id = brick_spec[2],
+                    kit_id = replacement[1],
+                    content_id = replacement[2],
                 },
-                item = brick_item(brick_spec[1], brick_spec[2]),
+                item = brick_item(replacement[1], replacement[2]),
                 category = "brick_kit",
             }
         end
@@ -1087,41 +1112,73 @@ local function reward_operations(state)
         end
     end
 
-    -- Cap or casualty edge cases can remove a primary operation.  Fill with
-    -- exact, legal replacement/removal operations rather than emitting a
-    -- dead card.
-    if #operations < LIMITS.OFFER_SIZE and marble_id and #state.player.marbles > 0 then
-        local target, target_authority = weakest_marble(state)
-        operations[#operations + 1] = {
-            operation = {
-                kind = "replace_marble",
-                target_uid = target.uid,
-                content_id = marble_id,
-                target_authority = target_authority,
-            },
-            item = marble_item(marble_id),
-            category = "marble",
-        }
+    local unique, seen = {}, {}
+    local function add_unique(spec)
+        local identity = rule_ast.content_identity(spec.item)
+        if seen[identity] then return false end
+        seen[identity] = true
+        unique[#unique + 1] = spec
+        return true
     end
-    if #operations < LIMITS.OFFER_SIZE and #state.player.bricks > 1 then
+    for _, spec in ipairs(operations) do add_unique(spec) end
+    operations = unique
+
+    -- Cap or casualty edge cases can remove a primary operation. Fill from
+    -- canonical pools without replacement; if one content identity is already
+    -- visible, no alternate operation may disguise it as a second reward.
+    if #state.player.bricks >= LIMITS.BRICK_CAP and #state.player.bricks > 1 then
+        local ordered = util.deep_copy(state.player.bricks)
+        table.sort(ordered, function(left, right) return left.uid < right.uid end)
+        for _, target in ipairs(ordered) do
+            if #operations >= LIMITS.OFFER_SIZE then break end
+            add_unique({
+                operation = {
+                    kind = "remove_brick",
+                    target_uid = target.uid,
+                    kit_id = target.kit_id,
+                    content_id = target.content_id,
+                },
+                item = util.deep_copy(target),
+                category = "brick_kit",
+            })
+        end
+    end
+    if #state.player.marbles > 0 then
+        local target, target_authority = weakest_marble(state)
+        for _, candidate in ipairs(marble_candidates) do
+            if #operations >= LIMITS.OFFER_SIZE then break end
+            add_unique({
+                operation = {
+                    kind = "replace_marble",
+                    target_uid = target.uid,
+                    content_id = candidate.id,
+                    target_authority = target_authority,
+                },
+                item = marble_item(candidate.id),
+                category = "marble",
+            })
+        end
+    end
+    for _, candidate in ipairs(brick_candidates) do
+        if #operations >= LIMITS.OFFER_SIZE then break end
         local target = first_brick(state)
-        operations[#operations + 1] = {
+        add_unique({
             operation = {
-                kind = "remove_brick",
+                kind = "replace_brick",
                 target_uid = target.uid,
-                kit_id = target.kit_id,
-                content_id = target.content_id,
+                kit_id = candidate.kit_id,
+                content_id = candidate.id,
             },
-            item = util.deep_copy(target),
+            item = brick_item(candidate.kit_id, candidate.id),
             category = "brick_kit",
-        }
+        })
     end
     if #operations < LIMITS.OFFER_SIZE and sling_id then
-        operations[#operations + 1] = {
+        add_unique({
             operation = { kind = "reshape_sling", content_id = sling_id },
             item = sling_item(sling_id),
             category = "sling",
-        }
+        })
     end
     assert(#operations >= LIMITS.OFFER_SIZE, "short-run reward pool cannot fill three choices")
     while #operations > LIMITS.OFFER_SIZE do table.remove(operations) end
@@ -1152,7 +1209,7 @@ local function make_reward_offer(state)
         stage = "refit",
         round = state.fight.index,
         offer_seed = seed,
-        economy_rule_set_id = rule_ast.ECONOMY.id,
+        economy_rule_set_id = rule_ast.economy_id(),
         sampling_journal = util.deep_copy(sampling_journal),
         choices = choices,
         build_tags = util.sorted_keys(current_tag_set(state)),
@@ -1182,7 +1239,7 @@ function M.reward_operation_legal(state, operation)
     end
     local acquisition = state.fight.index == 1
         and "short_run_win_1" or "short_run_win_2_plus"
-    local weights = rule_ast.ECONOMY.acquisition[acquisition]
+    local weights = rule_ast.acquisition(acquisition)
     if kind == "add_brick" or kind == "replace_brick" then
         local rule_set = brick_content.canonical_rule_set(operation.content_id)
         if not rule_set.availability.player_reward
@@ -1319,6 +1376,22 @@ local function choose_reward(state, command)
             "offer_stale",
             "That refit offer is no longer active.",
             { expected_offer_id = offer and offer.offer_id or nil }
+        )
+    end
+    local seen_content = {}
+    local offer_valid = offer.economy_rule_set_id == rule_ast.economy_id()
+    for _, offered in ipairs(offer.choices or {}) do
+        local ok, identity = pcall(rule_ast.content_identity, offered)
+        if not ok or seen_content[identity] then offer_valid = false break end
+        seen_content[identity] = true
+    end
+    if not offer_valid then
+        return nil, error_result(
+            state,
+            command,
+            "reward_authority_changed",
+            "That refit offer no longer matches its deterministic canonical pool.",
+            { offer_id = offer.offer_id }
         )
     end
     local choice = draft.find_choice(offer, command.choice_id)
