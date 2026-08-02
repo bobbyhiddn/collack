@@ -22,5 +22,5 @@ capacitor/ios/
 # Lua build artifacts (none expected, but)
 *.luac
 
-# Capacitor's generated lockfile is not part of the preserved wrapper scaffold.
-capacitor/package-lock.json
+# capacitor/package-lock.json is tracked so Simulator and signed builds resolve
+# the same wrapper dependencies.

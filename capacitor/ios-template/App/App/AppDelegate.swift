@@ -7,7 +7,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     var window: UIWindow?
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        // Override point for customization after application launch.
+        // The unsigned Simulator smoke job requires this marker from the
+        // launched process. A successful install alone is not launch proof.
+        NSLog("CALLACK_IOS_SMOKE app-did-launch bundle=%@", Bundle.main.bundleIdentifier ?? "unknown")
         return true
     }
 

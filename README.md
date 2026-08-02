@@ -30,9 +30,13 @@ lua5.1 battle/cli.lua --seed 9125
 ./scripts/verify-release-container.sh
 npm ci && npm run browser:install
 npm run verify:web
+npm run verify:deployed
 ./scripts/build-desktop.sh
 ./scripts/build-desktop.sh --windows
 ./scripts/build-ios.sh
+
+# macOS only: unsigned build, install, real process launch, logs, screenshot
+./scripts/verify-ios-simulator.sh
 ```
 
 The web result is written to `dist/web/` with content-addressed JavaScript,
@@ -40,6 +44,19 @@ data, and WebAssembly filenames. Serve that directory with any static HTTP
 server. The browser verifier starts and stops its own local server, completes
 the full flow at both 390×844 and 1280×800, validates moving canonical physics,
 and writes review captures to `dist/verification/`.
+
+The iOS Simulator verifier rebuilds that same web output, re-seeds and syncs
+the lockfile-pinned Capacitor project, builds with signing disabled, installs it
+on a clean available iPhone Simulator, and requires a launch marker emitted by
+the app process. Inspectable build logs, launch logs, identities, hashes, and a
+screenshot are written to `dist/ios-simulator-smoke/`. The
+`iOS Simulator smoke` workflow runs this secret-free path independently of the
+manually gated TestFlight job.
+
+`npm run verify:deployed` independently exercises the public legacy spike at
+390×844 and desktop size. It records render, collision, score-change, loss, and
+keyboard evidence under `dist/deployed-verification/`; it never deploys or
+changes the live service.
 
 Touch or click the visible controls; drag a selected brick or marble onto a
 legal destination, or use the equivalent tap sequence. Tab and Enter navigate
@@ -66,4 +83,4 @@ docs/art-direction/      Accepted presentation contract and reference boards
 ## Runtime pins
 
 The web build uses `love.js@11.4.1`, which embeds LÖVE 11.4. Desktop packaging
-uses LÖVE 11.5. Capacitor remains on the existing 6.x scaffold.
+uses LÖVE 11.5. The wrapper pins Capacitor 6.2.0 and commits its npm lockfile.

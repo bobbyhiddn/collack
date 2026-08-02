@@ -1,5 +1,13 @@
 # SPIKE REPORT — Collack framework (Love2D → web + iOS + desktop)
 
+> **Historical record, corrected 2026-08-01:** this May report proved only a
+> Linux-side Capacitor sync. It did not prove an Xcode build, Simulator install,
+> app launch, or `.ipa`, and the skipped historical iOS jobs must not be read as
+> native evidence. The durable unsigned proof route is now
+> `.github/workflows/ios-simulator-smoke.yml`, backed by
+> `scripts/verify-ios-simulator.sh`; the separately gated signed TestFlight path
+> remains unchanged.
+
 **Date**: 2026-05-07
 **Worker**: Gamma (Hermetic ForgePrime swarm)
 **Repo**: `~/projects/collack-framework-spike` (local, not pushed)
@@ -16,8 +24,8 @@ minor and known.
 |---|---|---|
 | Browser (love.js) | ✅ GO | `dist/web/{index.html, love.js, love.wasm 4.6 MB, game.data, game.js}` produced. `python3 -m http.server` serves the bundle; `index.html` references the love.js loader; `love.wasm` returns 200/4.7 MB over HTTP. |
 | Desktop (Linux) | ✅ GO | `dist/desktop/collack-spike.x86_64` (4.9 MB) is a proper ELF; `--version` prints `LOVE 11.5 (Mysterious Mysteries)`; `xvfb-run` runs the game without Lua errors. |
-| iOS (Capacitor scaffold) | ✅ GO (CI-only `.ipa`) | `capacitor/ios/App/` exists; `npx cap sync ios` reports `Sync finished in 0.055s`, copies web assets to `ios/App/App/public/`, writes `capacitor.config.json` correctly. CocoaPods/xcodebuild are skipped on Linux as expected — those run on `macos-latest` in the gated CI job. |
-| CI workflow | ✅ valid | `.github/workflows/build.yml` parses cleanly via `python3 -c "import yaml; yaml.safe_load(...)"`. |
+| iOS (historical evidence) | ⚠️ sync only | `capacitor/ios/App/` existed and `npx cap sync ios` copied web assets. No native build or launch was run for this report. |
+| CI workflow (historical evidence) | ⚠️ syntax only | `.github/workflows/build.yml` parsed; the iOS job was gated and skipped. |
 | Pure-logic tests | ✅ pass | `lua tests/test_logic.lua` → `OK: all logic tests passed`. Proves the LÖVE/logic fence holds. |
 
 ---
@@ -35,8 +43,7 @@ minor and known.
    Pi) need a separate AppImage or run the `.love` against system LÖVE.
 4. **iOS `npx cap add ios` requires macOS.** We work around this by
    committing a clean iOS scaffold to `capacitor/ios-template/` and
-   copying it on first build. CI on macos-latest can regenerate from
-   scratch via `npx cap add ios`.
+   re-seeding the generated project on every build.
 5. **`CocoaPods` install on Linux is a no-op.** `npx cap sync ios`
    prints `Skipping pod install because CocoaPods is not installed`.
    That's expected; pods install in the GHA macOS job.
@@ -49,8 +56,6 @@ minor and known.
 8. **The asteroids `WKAppBoundDomains` Info.plist key** is required for
    Capacitor's `file://` scheme on iOS 14+. Mirrored verbatim — leave
    alone.
-9. **`bundledWebRuntime` is deprecated** in Capacitor 6 (warning at
-   sync). Safe to remove from `capacitor.config.json` next pass.
 
 ---
 
