@@ -24,7 +24,9 @@ async function waitForState(page, description, predicate, timeout = 15_000) {
     if (predicate(state)) return state;
     await page.waitForTimeout(100);
   }
-  throw new Error(`${description}; last state: ${JSON.stringify(state)}`);
+  const error = new Error(`${description}; last state: ${JSON.stringify(state)}`);
+  error.lastState = state;
+  throw error;
 }
 
 async function readCanvasState(page) {
@@ -111,6 +113,123 @@ async function readCanvasState(page) {
     };
 }
 
+async function canvasPoint(page, logicalX, logicalY) {
+  const canvas = page.locator("#canvas");
+  const [box, surface] = await Promise.all([
+    canvas.boundingBox(),
+    canvas.evaluate((element) => ({ width: element.width, height: element.height })),
+  ]);
+  assert(box, "canvas does not have a browser-space bounding box");
+  return {
+    x: box.x + logicalX / surface.width * box.width,
+    y: box.y + logicalY / surface.height * box.height,
+  };
+}
+
+async function dragTouch(page, from, to, steps = 8) {
+  const session = await page.context().newCDPSession(page);
+  const point = (x, y) => ({
+    x,
+    y,
+    id: 1,
+    radiusX: 1,
+    radiusY: 1,
+    force: 1,
+  });
+  try {
+    await session.send("Input.dispatchTouchEvent", {
+      type: "touchStart",
+      touchPoints: [point(from.x, from.y)],
+    });
+    for (let step = 1; step <= steps; step += 1) {
+      const progress = step / steps;
+      await session.send("Input.dispatchTouchEvent", {
+        type: "touchMove",
+        touchPoints: [point(
+          from.x + (to.x - from.x) * progress,
+          from.y + (to.y - from.y) * progress,
+        )],
+      });
+      await page.waitForTimeout(25);
+    }
+    await session.send("Input.dispatchTouchEvent", {
+      type: "touchEnd",
+      touchPoints: [],
+    });
+  } finally {
+    await session.detach();
+  }
+}
+
+async function readInputEvidence(page) {
+  return page.evaluate(() => window.__callackInputEvidence);
+}
+
+async function installInputEvidence(context) {
+  await context.addInitScript(() => {
+    const evidence = {
+      keydown: 0,
+      keyup: 0,
+      touchstart: 0,
+      touchmove: 0,
+      touchend: 0,
+      touchcancel: 0,
+      trustedTouchstart: 0,
+      trustedTouchmove: 0,
+      trustedTouchend: 0,
+      trustedTouchcancel: 0,
+      touchTrace: [],
+    };
+    window.__callackInputEvidence = evidence;
+    for (const type of ["keydown", "keyup"]) {
+      window.addEventListener(type, () => { evidence[type] += 1; }, true);
+    }
+    for (const type of ["touchstart", "touchmove", "touchend", "touchcancel"]) {
+      window.addEventListener(type, (event) => {
+        evidence[type] += 1;
+        if (event.isTrusted) {
+          const key = `trusted${type[0].toUpperCase()}${type.slice(1)}`;
+          evidence[key] += 1;
+        }
+        const touch = event.touches[0] ?? event.changedTouches[0];
+        if (evidence.touchTrace.length < 24) {
+          evidence.touchTrace.push({
+            type,
+            target: event.target?.id ?? event.target?.tagName ?? null,
+            clientX: touch?.clientX ?? null,
+            clientY: touch?.clientY ?? null,
+            trusted: event.isTrusted,
+          });
+        }
+      }, true);
+    }
+  });
+}
+
+async function resourceManifest(page) {
+  const origin = new URL(deployedUrl).origin;
+  const urls = await page.evaluate((targetOrigin) => Array.from(new Set(
+    performance.getEntriesByType("resource")
+      .map((entry) => entry.name)
+      .filter((url) => new URL(url).origin === targetOrigin),
+  )).sort(), origin);
+  const records = [];
+  for (const url of urls) {
+    const response = await page.context().request.get(url);
+    assert(response.ok(), `target resource returned ${response.status()}: ${url}`);
+    const body = await response.body();
+    records.push({
+      url,
+      status: response.status(),
+      etag: response.headers().etag ?? null,
+      lastModified: response.headers()["last-modified"] ?? null,
+      bytes: body.length,
+      sha256: createHash("sha256").update(body).digest("hex"),
+    });
+  }
+  return records;
+}
+
 async function boot(context, label) {
   const page = await context.newPage();
   const errors = [];
@@ -119,6 +238,7 @@ async function boot(context, label) {
     errors.push(`${label} request: ${request.url()} ${request.failure()?.errorText ?? "failed"}`));
   const response = await page.goto(deployedUrl, { waitUntil: "domcontentloaded", timeout: 30_000 });
   assert(response?.ok(), `${label}: deployed URL returned ${response?.status() ?? "no response"}`);
+  const indexBody = await response.body();
   await page.waitForFunction(() => {
     const canvas = document.querySelector("#canvas");
     const loader = document.querySelector("#loading");
@@ -128,6 +248,14 @@ async function boot(context, label) {
   }, undefined, { timeout: 30_000 });
   await page.waitForTimeout(250);
   const state = await readCanvasState(page);
+  const viewport = await page.evaluate(() => ({
+    innerWidth: window.innerWidth,
+    innerHeight: window.innerHeight,
+    devicePixelRatio: window.devicePixelRatio,
+    visualWidth: window.visualViewport?.width ?? null,
+    visualHeight: window.visualViewport?.height ?? null,
+    visualScale: window.visualViewport?.scale ?? null,
+  }));
   assert(state.width === 800 && state.height === 600,
     `${label}: expected an 800x600 LÖVE surface, got ${state.width}x${state.height}`);
   assert(state.brickPixels > 35_000, `${label}: brick field did not render: ${state.brickPixels}`);
@@ -137,40 +265,134 @@ async function boot(context, label) {
     page,
     errors,
     response: {
+      url: response.url(),
       status: response.status(),
       etag: response.headers()["etag"] ?? null,
       lastModified: response.headers()["last-modified"] ?? null,
+      bytes: indexBody.length,
+      sha256: createHash("sha256").update(indexBody).digest("hex"),
     },
+    viewport,
     initial: state,
   };
+}
+
+async function waitForLoss(page, label, timeout = 10_000) {
+  let priorFrame;
+  let stableFrames = 0;
+  return waitForState(
+    page,
+    `${label}: deployed journey did not reach a stable loss`,
+    (state) => {
+      if (state.centerBrightPixels < 50) {
+        priorFrame = state.frameHash;
+        stableFrames = 0;
+        return false;
+      }
+      stableFrames = state.frameHash === priorFrame ? stableFrames + 1 : 0;
+      priorFrame = state.frameHash;
+      return stableFrames >= 3;
+    },
+    timeout,
+  );
 }
 
 async function sha256(file) {
   return createHash("sha256").update(await readFile(file)).digest("hex");
 }
 
+const git = (...args) => execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
+const screenshotNames = [];
+const declaredTargetCommit = process.env.CALLACK_TARGET_SOURCE_COMMIT ?? null;
+const evidence = {
+  schema: "callack-deployed-spike-v2",
+  outcome: "RUNNING",
+  verifier: {
+    commit: git("rev-parse", "HEAD"),
+    tree: git("rev-parse", "HEAD^{tree}"),
+    trackedStatus: git("status", "--porcelain", "--untracked-files=no"),
+    scriptSha256: await sha256(fileURLToPath(import.meta.url)),
+  },
+  target: {
+    url: deployedUrl,
+    declaredSourceCommit: declaredTargetCommit,
+    declaredSourceTree: declaredTargetCommit
+      ? git("rev-parse", `${declaredTargetCommit}^{tree}`)
+      : null,
+  },
+  viewport: {
+    phone: { width: 390, height: 844, deviceScaleFactor: 1, hasTouch: true, isMobile: true },
+    desktop: { width: 1280, height: 800, deviceScaleFactor: 1 },
+  },
+};
+
+async function capture(page, name) {
+  await page.screenshot({ path: path.join(evidenceRoot, name) });
+  screenshotNames.push(name);
+}
+
+async function persistEvidence() {
+  evidence.screenshotHashes = Object.fromEntries(await Promise.all(
+    screenshotNames.map(async (name) => [name, await sha256(path.join(evidenceRoot, name))]),
+  ));
+  await writeFile(
+    path.join(evidenceRoot, "evidence.json"),
+    `${JSON.stringify(evidence, null, 2)}\n`,
+  );
+}
+
 let browser;
 try {
   await mkdir(evidenceRoot, { recursive: true });
   browser = await chromium.launch({ headless: true });
+  evidence.browser = await browser.version();
 
   const phoneContext = await browser.newContext({
-    viewport: { width: 390, height: 844 },
-    deviceScaleFactor: 1,
-    hasTouch: true,
-    isMobile: true,
+    viewport: {
+      width: evidence.viewport.phone.width,
+      height: evidence.viewport.phone.height,
+    },
+    deviceScaleFactor: evidence.viewport.phone.deviceScaleFactor,
+    hasTouch: evidence.viewport.phone.hasTouch,
+    isMobile: evidence.viewport.phone.isMobile,
   });
+  await installInputEvidence(phoneContext);
   const phone = await boot(phoneContext, "phone");
-  await phone.page.screenshot({ path: path.join(evidenceRoot, "phone-render.png") });
+  evidence.target.response = phone.response;
+  evidence.phone390x844 = {
+    browserViewport: phone.viewport,
+    initial: phone.initial,
+    inputBefore: await readInputEvidence(phone.page),
+  };
+  assert(phone.viewport.innerWidth === 390 && phone.viewport.innerHeight === 844,
+    `phone: expected observed 390x844 viewport, got ${JSON.stringify(phone.viewport)}`);
+  await capture(phone.page, "phone-render.png");
 
-  // Park the paddle left. The deterministic opening shot hits a brick on its
-  // first ascent, then misses the left-parked paddle and reaches loss.
-  await phone.page.keyboard.down("ArrowLeft");
-  await phone.page.waitForTimeout(850);
-  await phone.page.keyboard.up("ArrowLeft");
-  const parked = await readCanvasState(phone.page);
-  assert(parked.paddleCenter < 80,
-    `phone: could not park the paddle for the loss journey: ${parked.paddleCenter}`);
+  // Use only the browser's touch stream on the phone path. Starting at the
+  // visible paddle and dragging left parks it away from the opening shot.
+  const dragFrom = await canvasPoint(phone.page, phone.initial.paddleCenter, 565);
+  const dragTo = await canvasPoint(phone.page, 30, 565);
+  await dragTouch(phone.page, dragFrom, dragTo, 1);
+  const inputAfterDrag = await readInputEvidence(phone.page);
+  evidence.phone390x844.touchDrag = {
+    fromBrowserCss: dragFrom,
+    toBrowserCss: dragTo,
+    inputAfter: inputAfterDrag,
+  };
+  assert(inputAfterDrag.keydown === 0 && inputAfterDrag.keyup === 0,
+    `phone: keyboard input leaked into touch drag: ${JSON.stringify(inputAfterDrag)}`);
+  assert(inputAfterDrag.trustedTouchstart >= 1
+      && inputAfterDrag.trustedTouchmove >= 1
+      && inputAfterDrag.trustedTouchend >= 1,
+  `phone: drag did not deliver a trusted touch sequence: ${JSON.stringify(inputAfterDrag)}`);
+  const parked = await waitForState(
+    phone.page,
+    "phone: genuine touch drag did not park the paddle",
+    (state) => state.paddleCenter !== null && state.paddleCenter < 80,
+    3_000,
+  );
+  evidence.phone390x844.touchDrag.paddleParked = parked;
+
   const collided = await waitForState(
     phone.page,
     "phone: no deployed brick collision/score change",
@@ -178,34 +400,64 @@ try {
       && state.hudHash !== phone.initial.hudHash,
     10_000,
   );
-  await phone.page.screenshot({ path: path.join(evidenceRoot, "phone-scored.png") });
+  evidence.phone390x844.collisionAndScore = collided;
+  await capture(phone.page, "phone-scored.png");
 
-  let priorLossFrame;
-  let stableLossFrames = 0;
-  const lost = await waitForState(
+  const lost = await waitForLoss(phone.page, "phone");
+  evidence.phone390x844.loss = lost;
+  await capture(phone.page, "phone-loss.png");
+  evidence.target.resources = await resourceManifest(phone.page);
+
+  const inputAtLoss = await readInputEvidence(phone.page);
+  assert(inputAtLoss.keydown === 0 && inputAtLoss.keyup === 0,
+    `phone: keyboard input occurred before retry: ${JSON.stringify(inputAtLoss)}`);
+  const retryPoint = await canvasPoint(phone.page, 400, 300);
+  evidence.phone390x844.retryTap = {
+    browserCss: retryPoint,
+    inputBefore: inputAtLoss,
+  };
+  await phone.page.touchscreen.tap(retryPoint.x, retryPoint.y);
+  evidence.phone390x844.retryTap.inputAfter = await readInputEvidence(phone.page);
+  assert(evidence.phone390x844.retryTap.inputAfter.keydown === 0
+      && evidence.phone390x844.retryTap.inputAfter.keyup === 0,
+  `phone: retry sent a keyboard event: ${JSON.stringify(evidence.phone390x844.retryTap.inputAfter)}`);
+  assert(evidence.phone390x844.retryTap.inputAfter.trustedTouchstart
+      > inputAtLoss.trustedTouchstart
+      && evidence.phone390x844.retryTap.inputAfter.trustedTouchend
+      > inputAtLoss.trustedTouchend,
+  `phone: retry was not a trusted touch tap: ${JSON.stringify(evidence.phone390x844.retryTap)}`);
+
+  const restarted = await waitForState(
     phone.page,
-    "phone: deployed journey did not reach loss",
-    (state) => {
-      if (state.centerBrightPixels < 100) {
-        priorLossFrame = state.frameHash;
-        stableLossFrames = 0;
-        return false;
-      }
-      stableLossFrames = state.frameHash === priorLossFrame ? stableLossFrames + 1 : 0;
-      priorLossFrame = state.frameHash;
-      return stableLossFrames >= 3;
-    },
-    10_000,
+    "phone: genuine touch tap after proven loss did not begin a fresh round",
+    (state) => state.centerBrightPixels < 50
+      && state.brickPixels >= phone.initial.brickPixels - 100
+      && state.hudHash === phone.initial.hudHash
+      && state.frameHash !== lost.frameHash,
+    3_000,
   );
-  await phone.page.screenshot({ path: path.join(evidenceRoot, "phone-loss.png") });
+  await phone.page.waitForTimeout(250);
+  const restartedProgress = await readCanvasState(phone.page);
+  assert(restartedProgress.frameHash !== restarted.frameHash,
+    "phone: the fresh round did not resume moving state");
+  evidence.phone390x844.freshRound = restarted;
+  evidence.phone390x844.freshRoundProgressed = restartedProgress;
+  await capture(phone.page, "phone-restarted.png");
   assert(phone.errors.length === 0, phone.errors.join("\n"));
   await phoneContext.close();
 
   const desktopContext = await browser.newContext({
-    viewport: { width: 1280, height: 800 },
-    deviceScaleFactor: 1,
+    viewport: {
+      width: evidence.viewport.desktop.width,
+      height: evidence.viewport.desktop.height,
+    },
+    deviceScaleFactor: evidence.viewport.desktop.deviceScaleFactor,
   });
   const desktop = await boot(desktopContext, "desktop");
+  assert(desktop.viewport.innerWidth === 1280 && desktop.viewport.innerHeight === 800,
+    `desktop: expected observed 1280x800 viewport, got ${JSON.stringify(desktop.viewport)}`);
+  assert(desktop.response.sha256 === phone.response.sha256,
+    "desktop and phone did not receive the same target index bytes");
   await desktop.page.keyboard.down("ArrowLeft");
   await desktop.page.waitForTimeout(350);
   await desktop.page.keyboard.up("ArrowLeft");
@@ -218,49 +470,65 @@ try {
     `desktop: ArrowLeft did not move paddle: ${desktop.initial.paddleCenter} -> ${keyboardLeft.paddleCenter}`);
   assert(keyboardRight.paddleCenter > keyboardLeft.paddleCenter + 160,
     `desktop: ArrowRight did not move paddle: ${keyboardLeft.paddleCenter} -> ${keyboardRight.paddleCenter}`);
-  await desktop.page.screenshot({ path: path.join(evidenceRoot, "desktop-keyboard.png") });
+  evidence.desktop1280x800 = {
+    browserViewport: desktop.viewport,
+    initial: desktop.initial,
+    keyboardLeft,
+    keyboardRight,
+  };
+  await capture(desktop.page, "desktop-keyboard.png");
   assert(desktop.errors.length === 0, desktop.errors.join("\n"));
   await desktopContext.close();
 
-  const screenshotNames = [
-    "desktop-keyboard.png",
-    "phone-loss.png",
-    "phone-render.png",
-    "phone-scored.png",
-  ];
-  const screenshotHashes = Object.fromEntries(await Promise.all(
-    screenshotNames.map(async (name) => [name, await sha256(path.join(evidenceRoot, name))]),
-  ));
-  const sourceCommit = execFileSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" }).trim();
-  const sourceTree = execFileSync("git", ["rev-parse", "HEAD^{tree}"], { cwd: root, encoding: "utf8" }).trim();
-  const evidence = {
-    schema: "callack-deployed-spike-v1",
-    sourceCommit,
-    sourceTree,
-    deployedUrl,
-    browser: await browser.version(),
-    response: phone.response,
-    phone390x844: {
-      initial: phone.initial,
-      paddleParked: parked,
-      collisionAndScore: collided,
-      loss: lost,
+  const desktopRetryContext = await browser.newContext({
+    viewport: {
+      width: evidence.viewport.desktop.width,
+      height: evidence.viewport.desktop.height,
     },
-    desktop1280x800: {
-      initial: desktop.initial,
-      keyboardLeft,
-      keyboardRight,
-    },
-    screenshotHashes,
+    deviceScaleFactor: evidence.viewport.desktop.deviceScaleFactor,
+  });
+  const desktopRetry = await boot(desktopRetryContext, "desktop-retry");
+  await desktopRetry.page.keyboard.down("ArrowLeft");
+  await desktopRetry.page.waitForTimeout(850);
+  await desktopRetry.page.keyboard.up("ArrowLeft");
+  const desktopParked = await readCanvasState(desktopRetry.page);
+  assert(desktopParked.paddleCenter < 80,
+    `desktop: could not park paddle for SPACE retry: ${desktopParked.paddleCenter}`);
+  const desktopLost = await waitForLoss(desktopRetry.page, "desktop-retry");
+  await capture(desktopRetry.page, "desktop-loss.png");
+  await desktopRetry.page.keyboard.press("Space");
+  const desktopRestarted = await waitForState(
+    desktopRetry.page,
+    "desktop: SPACE after loss did not begin a fresh round",
+    (state) => state.centerBrightPixels < 50
+      && state.brickPixels >= desktopRetry.initial.brickPixels - 100
+      && state.hudHash === desktopRetry.initial.hudHash
+      && state.frameHash !== desktopLost.frameHash,
+    3_000,
+  );
+  evidence.desktop1280x800.spaceRetry = {
+    paddleParked: desktopParked,
+    loss: desktopLost,
+    freshRound: desktopRestarted,
   };
-  await writeFile(
-    path.join(evidenceRoot, "evidence.json"),
-    `${JSON.stringify(evidence, null, 2)}\n`,
-  );
+  await capture(desktopRetry.page, "desktop-restarted.png");
+  assert(desktopRetry.errors.length === 0, desktopRetry.errors.join("\n"));
+  await desktopRetryContext.close();
+
+  evidence.outcome = "PASS";
+  await persistEvidence();
   console.log(
-    `[deployed-spike] OK: 390x844 render + brick collision + score change + loss; `
-      + `desktop Left/Right at ${deployedUrl}`,
+    `[deployed-spike] OK: trusted 390x844 touch drag + loss + touch retry; `
+      + `desktop Left/Right + SPACE retry at ${deployedUrl}`,
   );
+} catch (error) {
+  evidence.outcome = "FAIL";
+  evidence.failure = {
+    message: error instanceof Error ? error.message : String(error),
+    lastState: error?.lastState ?? null,
+  };
+  await persistEvidence();
+  throw error;
 } finally {
   if (browser) await browser.close();
 }
