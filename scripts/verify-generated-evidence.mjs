@@ -13,6 +13,7 @@ import {
   manifestName,
   sealEvidence,
   sha256,
+  validateEvidenceFreshness,
   validatePayloadDigest,
   validateRawChecksum,
 } from "./evidence-integrity.mjs";
@@ -47,19 +48,6 @@ function exactKeys(value, expected, label) {
     `${label} fields changed: ${actual.join(",")}; expected ${wanted.join(",")}`);
 }
 
-function validateFreshness(evidence, expectedSourceDigest, provenance) {
-  assert(evidence.schemaVersion === evidenceSchemaVersion,
-    `generated evidence schema must be ${evidenceSchemaVersion}, got ${evidence.schemaVersion}`);
-  assert(/^[0-9a-f]{64}$/.test(evidence.sourceDigest ?? ""),
-    "generated evidence is missing its exact source digest");
-  assert(evidence.sourceDigest === expectedSourceDigest,
-    `stale generated evidence: source ${evidence.sourceDigest}, expected ${expectedSourceDigest}`);
-  assert(evidence.sourceCommit === provenance.sourceCommit,
-    `stale generated evidence commit: ${evidence.sourceCommit}, expected ${provenance.sourceCommit}`);
-  assert(evidence.sourceTree === provenance.sourceTree,
-    `stale generated evidence tree: ${evidence.sourceTree}, expected ${provenance.sourceTree}`);
-}
-
 function deepClone(value) {
   return JSON.parse(JSON.stringify(value));
 }
@@ -79,6 +67,49 @@ function assertPayloadMutationRejected(evidence, label, mutate) {
     rejected = true;
   }
   assert(rejected, `evidence integrity accepted ${label}`);
+}
+
+function assertResealedFreshnessMutationRejected(
+  evidence,
+  label,
+  expectedDigest,
+  provenance,
+  mutate
+) {
+  const changed = deepClone(evidence);
+  mutate(changed);
+  const resealed = sealEvidence(payloadWithoutDigest(changed));
+  validatePayloadDigest(resealed);
+  let rejected = false;
+  try {
+    validateEvidenceFreshness(resealed, expectedDigest, provenance);
+  } catch {
+    rejected = true;
+  }
+  assert(rejected, `evidence freshness accepted resealed ${label}`);
+}
+
+function assertExecutableBinding(evidence, currentExecutables) {
+  assert(JSON.stringify(evidence.executableEvidence) === JSON.stringify(currentExecutables),
+    "generated evidence executable bytes do not match the exact packaged archive/web build");
+}
+
+function assertResealedExecutableMutationRejected(evidence, currentExecutables, label, mutate) {
+  const changed = deepClone(evidence);
+  mutate(changed);
+  changed.executableEvidence.aggregateDigest = sha256(Buffer.from(JSON.stringify([
+    changed.executableEvidence.archive,
+    ...changed.executableEvidence.webFiles,
+  ]), "utf8"));
+  const resealed = sealEvidence(payloadWithoutDigest(changed));
+  validatePayloadDigest(resealed);
+  let rejected = false;
+  try {
+    assertExecutableBinding(resealed, currentExecutables);
+  } catch {
+    rejected = true;
+  }
+  assert(rejected, `executable binding accepted resealed ${label}`);
 }
 
 const spliceRecordKeys = [
@@ -226,7 +257,14 @@ function assertResealedSemanticMutationRejected(evidence, label, mutate) {
   assert(rejected, `Splice Guard semantic validation accepted resealed ${label}`);
 }
 
-function runMutationControls(evidence, manifestBytes, checksumBytes, expectedDigest, provenance) {
+function runMutationControls(
+  evidence,
+  manifestBytes,
+  checksumBytes,
+  expectedDigest,
+  provenance,
+  currentExecutables
+) {
   const text = manifestBytes.toString("utf8");
   assert(text.includes("magnitude=3"),
     "direct callout tamper control needs the canonical magnitude=3 sample");
@@ -322,20 +360,42 @@ function runMutationControls(evidence, manifestBytes, checksumBytes, expectedDig
     assertResealedSemanticMutationRejected(evidence, label, mutate);
   }
 
-  // Preserve the inherited aa5bf74 stale-evidence control even if all of its
-  // internal integrity fields are honestly recomputed.
-  const inherited = sealEvidence({
-    ...payloadWithoutDigest(evidence),
-    sourceCommit: inheritedStaleCommit,
-  });
-  let inheritedRejected = false;
-  try {
-    validateFreshness(inherited, expectedDigest, provenance);
-  } catch {
-    inheritedRejected = true;
-  }
-  assert(inheritedRejected,
-    "freshness guard accepted internally consistent inherited-aa5bf74 evidence");
+  assertResealedFreshnessMutationRejected(
+    evidence,
+    "stale source digest",
+    expectedDigest,
+    provenance,
+    (changed) => { changed.sourceDigest = "0".repeat(64); }
+  );
+  assertResealedFreshnessMutationRejected(
+    evidence,
+    "inherited aa5bf74 commit",
+    expectedDigest,
+    provenance,
+    (changed) => { changed.sourceCommit = inheritedStaleCommit; }
+  );
+  assertResealedFreshnessMutationRejected(
+    evidence,
+    "wrong source tree",
+    expectedDigest,
+    provenance,
+    (changed) => { changed.sourceTree = "0".repeat(40); }
+  );
+  assertResealedExecutableMutationRejected(
+    evidence,
+    currentExecutables,
+    "mixed archive from another build",
+    (changed) => {
+      changed.executableEvidence.archive.sha256 =
+        changed.executableEvidence.webFiles[0].sha256;
+    }
+  );
+  assertResealedExecutableMutationRejected(
+    evidence,
+    currentExecutables,
+    "cross-build web asset",
+    (changed) => { changed.executableEvidence.webFiles[0].sha256 = "0".repeat(64); }
+  );
 }
 
 assert(!compareTracked || workingTree,
@@ -369,11 +429,10 @@ exactKeys(evidence, [
 ], "generated evidence");
 validateRawChecksum(manifestBytes, checksumBytes);
 validatePayloadDigest(evidence);
-validateFreshness(evidence, expectedSourceDigest, provenance);
+validateEvidenceFreshness(evidence, expectedSourceDigest, provenance);
 
 const currentExecutables = await executableEvidence(root);
-assert(JSON.stringify(evidence.executableEvidence) === JSON.stringify(currentExecutables),
-  "generated evidence executable bytes do not match the exact packaged archive/web build");
+assertExecutableBinding(evidence, currentExecutables);
 assert(evidence.executableEvidence.webFiles.length > 0,
   "generated evidence did not bind the packaged web files");
 
@@ -429,7 +488,8 @@ runMutationControls(
   manifestBytes,
   checksumBytes,
   expectedSourceDigest,
-  provenance
+  provenance,
+  currentExecutables
 );
 
 if (compareTracked) {
@@ -453,6 +513,10 @@ console.log(
     + `${evidence.spliceGuardEvidence.length} ordered Splice Guard records; `
     + `${screenshotEntries.length} bound screenshots; `
     + `${evidence.executableEvidence.webFiles.length + 1} executable files; `
-    + `aa5bf74 + direct tamper controls rejected`
+    + `stale/tree/manifest/mixed-asset/cross-build controls rejected; `
+    + `reviewed ${provenance.reviewedCommit} tree ${provenance.reviewedTree}`
+    + (provenance.mergeCommit
+      ? `; merge ${provenance.mergeCommit} parents ${provenance.mergeParents.join("/")}`
+      : "")
     + `${compareTracked ? "; fresh bytes equal tracked evidence" : ""}`
 );
