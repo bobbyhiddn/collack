@@ -58,7 +58,8 @@ function M.run(t)
     t:eq(state.limits.bricks, 6, "brick roster cap is six")
     t:eq(state.fight.total, 3, "run contains exactly three fights")
     t:eq(#state.fight.route, 3, "all three encounter nodes are visible")
-    t:eq(state.fight.route[1].brick_count, 2, "opening scout is deliberately small")
+    t:eq(state.fight.route[1].brick_count, 1,
+        "opening scout is a legal lone-fuse tutorial")
     t:eq(state.fight.route[2].brick_count, 4, "middle encounter grows in formation depth")
     t:eq(state.fight.route[3].brick_count, 5, "terminal encounter is the largest formation")
     t:eq(state.fight.route[1].marble_count, 2, "opening opponent has two marbles")
@@ -135,9 +136,11 @@ function M.run(t)
             choice.causal_attribution.source_rule_ids,
             authority.rule_ids
         ), "reward causality exposes exactly the inspectable executable rules")
-        t:eq(#choice.causal_attribution.source_rule_ids,
+        t:eq(
             #authority.balance.lines,
-            "reward attribution and accounting expose the same rule count")
+            #choice.causal_attribution.source_rule_ids + #authority.ability_summary.groups,
+            "reward accounting covers every causal rule and explicit ability group"
+        )
         t:ok(util.deep_equal(choice.inspection_copy, authority.inspection_copy),
             "reward inspection shares the exact causal rule authority")
     end

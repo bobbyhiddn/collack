@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { createReadStream } from "node:fs";
-import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, stat, unlink, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { createHash } from "node:crypto";
 import path from "node:path";
@@ -75,6 +75,8 @@ const ruleCallouts = [];
 const actionStates = new Map();
 const canonicalSweeps = [];
 const canonicalBlowbacks = [];
+const linkedCostEvidence = [];
+const spliceGuardEvidence = [];
 const expectedRuleMarks = {
   accelerate: "ACC",
   aim: "AIM",
@@ -105,6 +107,120 @@ const expectedRuleMarks = {
   wear: "WER",
 };
 
+function telemetryFields(text, prefix) {
+  const fields = {};
+  for (const token of text.slice(prefix.length).trim().split(/\s+/)) {
+    const split = token.indexOf("=");
+    assert(split > 0, `malformed ${prefix.trim()} telemetry token: ${token}`);
+    fields[token.slice(0, split)] = token.slice(split + 1);
+  }
+  return fields;
+}
+
+function optionalNumber(value) {
+  return value === "none" ? null : Number(value);
+}
+
+function parseSpliceGuardTelemetry(text, label) {
+  const fields = telemetryFields(text, "CALLACK_SPLICE_GUARD ");
+  const cadence = fields.cadence?.match(/^([^/]+)\/(\d+)$/);
+  const integrity = fields.integrity?.match(/^([^_]+)_to_([^_]+)$/);
+  assert(cadence && integrity,
+    `${label}: malformed Splice Guard cadence/integrity telemetry: ${text}`);
+  return {
+    label,
+    stage: fields.stage,
+    order: Number(fields.order),
+    recipeId: fields.recipe,
+    battleSeed: Number(fields.seed),
+    eventType: fields.type,
+    eventId: fields.event_id,
+    triggerCollisionEventId: fields.trigger_collision_event_id,
+    preventionCollisionEventId: fields.prevention_collision_event_id,
+    tick: Number(fields.tick),
+    ruleId: fields.rule,
+    sourceRuleSetId: fields.source_rule_set,
+    abilityId: fields.ability,
+    sourceUid: fields.source_uid,
+    targetUid: fields.target_uid,
+    amount: optionalNumber(fields.amount),
+    unit: fields.unit,
+    magnitude: Number(fields.magnitude),
+    cadenceUnit: cadence[1],
+    cadenceInterval: Number(cadence[2]),
+    durationTicks: Number(fields.duration_ticks),
+    expiresTick: optionalNumber(fields.expires_tick),
+    appliedCount: Number(fields.applied_count),
+    expiredCount: Number(fields.expired_count),
+    requestedDamage: optionalNumber(fields.requested_damage),
+    appliedDamage: optionalNumber(fields.applied_damage),
+    integrityBefore: optionalNumber(integrity[1]),
+    integrityAfter: optionalNumber(integrity[2]),
+    visualFrameTick: Number(fields.visual_tick),
+    visualGuardCount: Number(fields.visual_guards),
+    reason: fields.reason,
+  };
+}
+
+function assertSpliceGuardSequence(records, label) {
+  assert(records.length === 4,
+    `${label}: expected four Splice Guard stages, got ${records.length}`);
+  const stages = ["triggered", "applied", "prevented", "expired"];
+  const types = ["splice_triggered", "guard_applied", "guard_prevented", "guard_expired"];
+  records.forEach((record, index) => {
+    assert(record.order === index + 1
+        && record.stage === stages[index]
+        && record.eventType === types[index],
+      `${label}: Splice Guard stage ${index + 1} is out of order: ${JSON.stringify(record)}`);
+    assert(record.recipeId === "glass_cannon"
+        && record.battleSeed === 9125
+        && record.ruleId === "brick.splice.guard"
+        && record.sourceRuleSetId === "brick.splice_node"
+        && record.abilityId === "splice_guard"
+        && record.magnitude === 1
+        && record.cadenceUnit === "exchange"
+        && record.cadenceInterval === 1
+        && record.durationTicks === 120
+        && record.appliedCount === 3
+        && record.expiredCount === 2
+        && record.visualGuardCount === 2,
+      `${label}: Splice Guard canonical identity changed: ${JSON.stringify(record)}`);
+  });
+  assert(records[0].reason === "hostile_collision"
+      && records[0].amount === 1
+      && records[0].unit === "damage"
+      && records[0].targetUid === "none",
+    `${label}: Splice did not record its real hostile collision trigger`);
+  assert(records[1].amount === 1
+      && records[1].unit === "damage"
+      && records[1].expiresTick === records[3].tick
+      && records[1].reason === "adjacent_allied_guard",
+    `${label}: Splice did not apply one point of bounded Guard`);
+  assert(records[2].amount === 1
+      && records[2].requestedDamage === 2
+      && records[2].appliedDamage === 1
+      && records[2].integrityBefore - records[2].integrityAfter === 1
+      && records[2].reason === "hostile_damage",
+    `${label}: Guard did not prevent exactly one of two hostile damage`);
+  assert(records[3].amount === 1
+      && records[3].unit === "damage"
+      && records[3].reason === "duration"
+      && records[3].expiresTick === records[3].tick
+      && records[3].tick - records[0].tick === 120,
+    `${label}: untouched Guard did not expire after exactly 120 canonical ticks`);
+  assert(Number(records[0].triggerCollisionEventId) < Number(records[0].eventId)
+      && Number(records[1].eventId) < Number(records[0].preventionCollisionEventId)
+      && Number(records[0].preventionCollisionEventId) < Number(records[2].eventId)
+      && records[0].visualFrameTick === records[2].tick
+      && records.every((record) =>
+        record.triggerCollisionEventId === records[0].triggerCollisionEventId
+          && record.preventionCollisionEventId === records[0].preventionCollisionEventId
+          && record.visualFrameTick === records[0].visualFrameTick
+          && record.visualGuardCount === records[0].visualGuardCount
+          && record.sourceUid === records[0].sourceUid),
+    `${label}: Splice Guard stages lost their physical roots or visible frame binding`);
+}
+
 function assertSharedRuleIdentity(text, label) {
   const icon = text.match(/\bicon=(\S+)/)?.[1];
   const verb = text.match(/\bverb=(\S+)/)?.[1];
@@ -132,6 +248,12 @@ function observePage(page, label) {
     }
     if (text.startsWith("CALLACK_RULE_CALLOUT ")) {
       ruleCallouts.push({ label, text });
+    }
+    if (text.startsWith("CALLACK_LINKED_COST ")) {
+      linkedCostEvidence.push({ label, text });
+    }
+    if (text.startsWith("CALLACK_SPLICE_GUARD ")) {
+      spliceGuardEvidence.push(parseSpliceGuardTelemetry(text, label));
     }
     const actionState = text.match(/^CALLACK_ACTION_STATE phase=(\S+) enabled=(\S+)$/);
     if (actionState) {
@@ -308,6 +430,18 @@ async function inspectAction(runtime, pointer, x, y, action, type, timeout = 20_
       `${type} inspection omitted exact ${field} identity: ${detail}`);
   }
   assertSharedRuleIdentity(detail, `${type} inspection`);
+  assert(/\brarity=(common|uncommon|rare|epic|legendary)\b/.test(detail),
+    `${type} inspection omitted canonical rarity: ${detail}`);
+  assert(/\bbeads=[1-5]\b/.test(detail),
+    `${type} inspection omitted the one-through-five rarity bead count: ${detail}`);
+  assert(/\bshells=\d+\b/.test(detail),
+    `${type} inspection omitted shell-pip source count: ${detail}`);
+  assert(/\bpassives=\d+\/\d+\b/.test(detail) && /\bmcu=\d+\/\d+\b/.test(detail),
+    `${type} inspection omitted passive/complexity ceilings: ${detail}`);
+  assert(/\bbalance=\d+(?:\.\d+)?\/100\b/.test(detail),
+    `${type} inspection omitted the fixed 100-point balance envelope: ${detail}`);
+  assert(/\bcopy_cap=[1-4]\b/.test(detail),
+    `${type} inspection omitted the canonical copy cap: ${detail}`);
   return detail;
 }
 
@@ -374,6 +508,27 @@ async function advancePausedBattle(runtime, ticks) {
   }
 }
 
+async function screenshotSpliceProbe(runtime, name) {
+  const record = spliceGuardEvidence.find((sample) => sample.label === runtime.label);
+  assert(record, `${runtime.label}: Splice Guard telemetry was not emitted before capture`);
+  const shown = waitForConsole(runtime.page, "CALLACK_SPLICE_VIEW active=true");
+  await runtime.page.keyboard.press("p");
+  const shownText = (await shown).text();
+  assert(
+    shownText.includes(`recipe=${record.recipeId}`)
+      && shownText.includes(`seed=${record.battleSeed}`)
+      && shownText.includes(`tick=${record.visualFrameTick}`)
+      && shownText.includes(`guards=${record.visualGuardCount}`),
+    `${runtime.label}: visible Splice probe diverged from runtime telemetry: ${shownText}`
+  );
+  await settleRuntime(runtime);
+  await screenshot(runtime, name);
+  const hidden = waitForConsole(runtime.page, "CALLACK_SPLICE_VIEW active=false");
+  await runtime.page.keyboard.press("p");
+  await hidden;
+  await settleRuntime(runtime);
+}
+
 function digest(buffer) {
   return createHash("sha256").update(buffer).digest("hex");
 }
@@ -418,8 +573,10 @@ async function completeMobile(runtime) {
   await firstRefitReached;
   await screenshot(runtime, "phone-refit-1.png");
   await screenshot(runtime, "phone-draft-scout.png");
+  await screenshot(runtime, "phone-draft.png");
   await inspectAction(runtime, "touch", 195, 180, "offer:", "choice");
   await screenshot(runtime, "phone-refit-inspection.png");
+  await screenshot(runtime, "phone-draft-inspection.png");
   await touchAction(runtime, 310, 664, "inspection_next");
   await screenshot(runtime, "phone-refit-rule-2.png");
   await touchAction(runtime, 80, 664, "inspection_prev");
@@ -453,6 +610,7 @@ async function completeMobile(runtime) {
   await waitForNewPhysics("phone", secondPhysicsBaseline);
   await waitForNewRuleCallout("phone", secondRuleBaseline);
   await screenshot(runtime, "phone-battle-trigger.png");
+  await screenshotSpliceProbe(runtime, "phone-splice-guard.png");
   await inspectAction(
     runtime,
     "touch",
@@ -565,8 +723,10 @@ async function completeDesktop(runtime) {
   await firstRefitReached;
   await screenshot(runtime, "desktop-refit-1.png");
   await screenshot(runtime, "desktop-draft-scout.png");
+  await screenshot(runtime, "desktop-draft.png");
   await inspectAction(runtime, "mouse", 456, 348, "offer:", "choice");
   await screenshot(runtime, "desktop-refit-inspection.png");
+  await screenshot(runtime, "desktop-draft-inspection.png");
   await mouseAction(runtime, 1016, 620, "inspection_next");
   await screenshot(runtime, "desktop-refit-rule-2.png");
   await mouseAction(runtime, 892, 620, "inspection_prev");
@@ -600,6 +760,7 @@ async function completeDesktop(runtime) {
   await waitForNewPhysics("desktop", secondPhysicsBaseline);
   await waitForNewRuleCallout("desktop", secondRuleBaseline);
   await screenshot(runtime, "desktop-battle-trigger.png");
+  await screenshotSpliceProbe(runtime, "desktop-splice-guard.png");
   await inspectAction(
     runtime,
     "mouse",
@@ -669,6 +830,11 @@ async function completeDesktop(runtime) {
 
 try {
   await mkdir(verificationRoot, { recursive: true });
+  for (const name of await readdir(verificationRoot)) {
+    if (/^(phone|desktop)-[a-z0-9-]+\.png$/.test(name)) {
+      await unlink(path.join(verificationRoot, name));
+    }
+  }
   await new Promise((resolve, reject) => {
     server.once("error", reject);
     server.listen(0, "127.0.0.1", resolve);
@@ -769,6 +935,19 @@ try {
     `${label}: packaged allied/enemy blowback evidence is incomplete: ${JSON.stringify(blowback)}`);
   }
   assert(runtimeErrors.length === 0, runtimeErrors.join("\n"));
+  for (const label of ["phone", "desktop"]) {
+    const linked = linkedCostEvidence.filter((sample) => sample.label === label);
+    assert(linked.length === 1,
+      `${label}: expected one packaged linked-cost proof, got ${linked.length}`);
+    assert(
+      /source=brick\.plain_block .*ability=bloodstone_relay .*cost_rule=fixture\.relay\.cost .*cost=1 .*target=setup_linked_allied_brick .*relation=allied .*cadence_index=1 .*charges=2_to_1 .*payoff_rule=fixture\.relay\.payoff .*payoff=2 .*ordered=true .*copy=COST/.test(linked[0].text),
+      `${label}: linked-cost proof omitted exact cost/target/cadence/payoff attribution: ${linked[0].text}`
+    );
+    assertSpliceGuardSequence(
+      spliceGuardEvidence.filter((sample) => sample.label === label),
+      label
+    );
+  }
 
   const motionEvidence = {};
   for (const label of ["phone", "desktop"]) {
@@ -783,12 +962,56 @@ try {
   const screenshotNames = (await readdir(verificationRoot))
     .filter((name) => name.endsWith(".png"))
     .sort();
-  assert(screenshotNames.length === 38,
-    `evidence must bind all 38 generated screenshots, got ${screenshotNames.length}`);
+  const surfaces = [
+    "battle-inspection", "battle-settings", "battle-trigger", "battle",
+    "draft-inspection", "draft-scout", "draft", "refit-1",
+    "refit-2", "refit-inspection", "refit-rule-2", "result-after-replay",
+    "result", "reward", "scout", "setup-start", "setup-terminal",
+    "setup", "splice-guard", "terminal-result",
+  ];
+  const expectedScreenshotNames = ["desktop", "phone"]
+    .flatMap((label) => surfaces.map((surface) => `${label}-${surface}.png`))
+    .sort();
+  assert(screenshotNames.length === 40,
+    `evidence must bind all 40 generated screenshots, got ${screenshotNames.length}`);
+  assert(JSON.stringify(screenshotNames) === JSON.stringify(expectedScreenshotNames),
+    `evidence screenshot set is stale, missing, or crossed: ${screenshotNames.join(",")}`);
   const screenshotHashes = {};
+  const screenshotRecords = [];
   for (const name of screenshotNames) {
-    screenshotHashes[name] = digest(await readFile(path.join(verificationRoot, name)));
+    const bytes = await readFile(path.join(verificationRoot, name));
+    screenshotHashes[name] = digest(bytes);
+    const label = name.startsWith("phone-") ? "phone" : "desktop";
+    const width = bytes.readUInt32BE(16);
+    const height = bytes.readUInt32BE(20);
+    const expected = label === "phone"
+      ? { width: 390, height: 844 }
+      : { width: 1280, height: 800 };
+    assert(width === expected.width && height === expected.height,
+      `${name} crossed viewport evidence: ${width}x${height}`);
+    screenshotRecords.push({
+      name,
+      label,
+      surface: name.replace(/^(phone|desktop)-/, "").replace(/\.png$/, ""),
+      width,
+      height,
+      sha256: screenshotHashes[name],
+    });
   }
+  const boundSpliceGuardEvidence = spliceGuardEvidence.map((record) => {
+    const name = `${record.label}-splice-guard.png`;
+    const screenshot = screenshotRecords.find((candidate) => candidate.name === name);
+    assert(screenshot, `${record.label}: Splice Guard proof screenshot is missing`);
+    return {
+      ...record,
+      screenshot: {
+        name: screenshot.name,
+        sha256: screenshot.sha256,
+        width: screenshot.width,
+        height: screenshot.height,
+      },
+    };
+  });
   assertSourceWorkingTreeClean(root);
   const sourceDigest = await evidenceSourceDigest(root);
   const provenance = expectedEvidenceProvenance(root);
@@ -809,8 +1032,11 @@ try {
     guidance: guidanceSamples,
     inspections: inspectionSamples,
     ruleCallouts,
+    linkedCostEvidence,
+    spliceGuardEvidence: boundSpliceGuardEvidence,
     settings: settingSamples,
     screenshotHashes,
+    screenshotRecords,
   });
   const manifestBytes = serializeEvidence(evidence);
   await writeFile(path.join(root, manifestName), manifestBytes);
@@ -819,6 +1045,7 @@ try {
   console.log(
     `[web-browser] OK: phone + desktop scout/draft, exact refit inspection, reward, `
       + `canonical battle trigger, terminal result, replay, and settings; `
+      + `real Splice Guard trigger → apply → prevent → expiry on both viewports; `
       + `${physicsSamples.length} canonical moving-physics samples; swept TOI + allied/enemy `
       + `blowback; screenshots and evidence manifest in dist/verification`
   );

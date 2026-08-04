@@ -188,29 +188,27 @@ function M.run(t)
     -- The catalog's selector projections are not a mutable shadow authority:
     -- component identities and shell order derive from the RuleSet itself.
     local geode_catalog = catalog.marble_by_id.geode_uncommon
-    local catalog_shells = geode_catalog.shells
     geode_catalog.shells = { "jade_lattice", "obsidian_shard" }
-    t:raises(function()
-        draft.instantiate_marble({ content_id = "geode_uncommon" }, 1, "catalog")
-    end, "catalog ordered shell projection diverges",
-    "mutable catalog shell reordering cannot change outer mechanics")
-    geode_catalog.shells = catalog_shells
+    local shell_isolated = draft.instantiate_marble(
+        { content_id = "geode_uncommon" }, 1, "catalog"
+    )
+    t:ok(util.deep_equal(shell_isolated.shells, {
+        "obsidian_shard", "jade_lattice",
+    }), "mutable catalog shell reordering is isolated from live construction")
 
-    local catalog_core = geode_catalog.core
     geode_catalog.core = "dull_quartz"
-    t:raises(function()
-        draft.instantiate_marble({ content_id = "geode_uncommon" }, 1, "catalog")
-    end, "catalog core projection diverges",
-    "mutable catalog core replacement cannot change live construction")
-    geode_catalog.core = catalog_core
+    local core_isolated = draft.instantiate_marble(
+        { content_id = "geode_uncommon" }, 1, "catalog"
+    )
+    t:eq(core_isolated.core, "shrapnel_geode",
+        "mutable catalog core replacement is isolated from live construction")
 
-    local catalog_rarity = geode_catalog.rarity
     geode_catalog.rarity = "legendary"
-    t:raises(function()
-        draft.instantiate_marble({ content_id = "geode_uncommon" }, 1, "catalog")
-    end, "catalog rarity projection diverges",
-    "mutable catalog rarity replacement cannot raise the shell cap")
-    geode_catalog.rarity = catalog_rarity
+    local rarity_isolated = draft.instantiate_marble(
+        { content_id = "geode_uncommon" }, 1, "catalog"
+    )
+    t:eq(rarity_isolated.rarity, "uncommon",
+        "mutable catalog rarity replacement cannot raise the shell cap")
 
     -- Missing, extra, replaced, duplicated, unknown, sparse, and reordered
     -- shell selectors all die at both mutable boundaries.
@@ -452,8 +450,15 @@ function M.run(t)
             entry.category .. ":" .. entry.id .. " keeps canonical compact copy")
         t:ok(util.deep_equal(item.inspection_copy, authority.inspection_copy),
             entry.category .. ":" .. entry.id .. " keeps canonical inspection")
-        t:ok(util.deep_equal(item.balance, authority.balance),
-            entry.category .. ":" .. entry.id .. " keeps canonical accounting")
+        if entry.category == "brick_kit" then
+            t:eq(item.balance.packaging_only, true,
+                entry.category .. ":" .. entry.id .. " keeps member-only accounting")
+            t:eq(#item.balance.members, 2,
+                entry.category .. ":" .. entry.id .. " reports both member ledgers")
+        else
+            t:ok(util.deep_equal(item.balance, authority.balance),
+                entry.category .. ":" .. entry.id .. " keeps canonical accounting")
+        end
     end
     t:eq(item_count, 17, "the live authority proof covers all seventeen items")
 
@@ -478,8 +483,9 @@ function M.run(t)
     end
     t:eq(brick_variants, 16, "all sixteen brick variants retain exact attribution")
 
-    -- Intentional valid edits to the canonical RuleSet change mechanics, copy,
-    -- identity, and accounting together; invalid edits still stop at budget.
+    -- Even a schema-valid edit to an exported RuleSet is only a caller-owned
+    -- projection. It cannot become canonical mechanics, copy, identity, or
+    -- accounting after validation. Invalid edits are isolated in the same way.
     local geode = catalog.marble_by_id.geode_uncommon
     local original_rules = geode.rule_set
     local edited_rules = mutate_rule(
@@ -500,25 +506,25 @@ function M.run(t)
             )
             local before = ast.player_authority(original_rules)
             local after = ast.player_authority(edited_entity.rule_set)
-            t:neq(after.canonical_rule_set, before.canonical_rule_set,
-                "valid edit changes canonical identity")
-            t:neq(table.concat(after.inspection_copy, "\n"),
+            t:eq(after.canonical_rule_set, before.canonical_rule_set,
+                "validated projection edit cannot change canonical identity")
+            t:eq(table.concat(after.inspection_copy, "\n"),
                 table.concat(before.inspection_copy, "\n"),
-                "valid edit changes inspection copy")
-            t:ok(not util.deep_equal(after.balance, before.balance),
-                "valid edit changes balance accounting")
-            t:ok(util.deep_equal(edited_entity.inspection_copy, after.inspection_copy),
-                "fresh entity copy derives from the edited RuleSet")
-            t:ok(util.deep_equal(edited_entity.balance, after.balance),
-                "fresh entity accounting derives from the edited RuleSet")
+                "validated projection edit cannot change inspection copy")
+            t:ok(util.deep_equal(after.balance, before.balance),
+                "validated projection edit cannot change balance accounting")
+            t:ok(util.deep_equal(edited_entity.inspection_copy, before.inspection_copy),
+                "fresh entity copy derives from protected canonical authority")
+            t:ok(util.deep_equal(edited_entity.balance, before.balance),
+                "fresh entity accounting derives from protected canonical authority")
             local live = require("battle.marble").build(
                 edited_entity,
                 draft.instantiate_sling({ content_id = "momentum" }),
                 "A",
                 true
             )
-            t:eq(live.shells[2].durability, 2.001,
-                "valid edit reaches live shell mechanics")
+            t:eq(live.shells[2].durability, 2,
+                "validated projection edit cannot reach live shell mechanics")
         end)
         geode.rule_set = original_rules
         if not edited_ok then error(edited_error) end
@@ -529,15 +535,15 @@ function M.run(t)
         "shell.jade_lattice.durability",
         999
     )
+    local over_budget_valid = ast.validate(over_budget)
+    t:eq(over_budget_valid, false,
+        "over-budget caller projection remains invalid under canonical validation")
     geode.rule_set = over_budget
-    local rejected_ok, rejected_error = pcall(function()
-        t:raises(function()
-            draft.instantiate_marble({ content_id = "geode_uncommon" }, 1, "invalid")
-        end, "exceeds rarity budget",
-        "budget-invalid canonical edit cannot materialize a live marble")
-    end)
-    geode.rule_set = original_rules
-    if not rejected_ok then error(rejected_error) end
+    local protected_entity = draft.instantiate_marble(
+        { content_id = "geode_uncommon" }, 1, "invalid"
+    )
+    t:eq(protected_entity.shells[2], "jade_lattice",
+        "budget-invalid projection cannot poison later canonical construction")
 end
 
 if arg and arg[0]

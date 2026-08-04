@@ -7,7 +7,7 @@ export const manifestName =
   "dist/verification/packaged-runtime-evidence.json";
 export const checksumName =
   "dist/verification/packaged-runtime-evidence.sha256";
-export const evidenceSchemaVersion = 3;
+export const evidenceSchemaVersion = 6;
 
 export function sha256(bytes) {
   return createHash("sha256").update(bytes).digest("hex");

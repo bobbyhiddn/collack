@@ -1,8 +1,8 @@
 {
-  "schemaVersion": 3,
-  "sourceDigest": "a341a179d59a7cda7bbaf58ff27847adb79ec6ae48a4c9743f9ead7289fa87ae",
-  "sourceCommit": "c533f9876a7809c459a15748f528f65e5c6dfc37",
-  "sourceTree": "362f6f1597d9b7aafffab6325ad539f592a9b23b",
+  "schemaVersion": 6,
+  "sourceDigest": "412e3dff1eab4f8ee4a331f10fa1b573f98064250b3a89788609a539e339e387",
+  "sourceCommit": "4e08d67bf5d195669e0a3ba8b4531fbc5212a71a",
+  "sourceTree": "dbd3bea521bcdea17099479ccee6caf178cf855e",
   "viewports": {
     "phone": {
       "width": 390,
@@ -18,24 +18,24 @@
   "executableEvidence": {
     "archive": {
       "path": "dist/collack-spike.love",
-      "size": 132678,
-      "sha256": "ed38d902c8eb6130f36a5583d36c6309190b58d46f116467066f46eb06b6ac9b"
+      "size": 165939,
+      "sha256": "511372c3a9c6d084f0cbf7927fcdb5b42d9ed2059cb29e635e632ce049dd5228"
     },
     "webFiles": [
       {
-        "path": "dist/web/game.6a04e82a3bfa1407.js",
+        "path": "dist/web/game.4f81595dd0c2f2d1.js",
         "size": 11516,
-        "sha256": "6a04e82a3bfa1407b4c0843862d10efded392845fd28b679604edfe553d8406a"
+        "sha256": "4f81595dd0c2f2d14c88d635808cec845f2bd9be5a620d0820c884dc643bc935"
       },
       {
-        "path": "dist/web/game.ed38d902c8eb6130.data",
-        "size": 132678,
-        "sha256": "ed38d902c8eb6130f36a5583d36c6309190b58d46f116467066f46eb06b6ac9b"
+        "path": "dist/web/game.511372c3a9c6d084.data",
+        "size": 165939,
+        "sha256": "511372c3a9c6d084f0cbf7927fcdb5b42d9ed2059cb29e635e632ce049dd5228"
       },
       {
         "path": "dist/web/index.html",
         "size": 8558,
-        "sha256": "07eab9849d6c021692f1ac8fcc0d6849f05dcb8982e3f95098e5b407aff38b2e"
+        "sha256": "fc03c78d237c63abd46777784a1083bef9d568f810c5c59108a2e0c87569f4b0"
       },
       {
         "path": "dist/web/love.cc23a2a709781e03.js",
@@ -58,7 +58,7 @@
         "sha256": "b991b00f74b61804d52f8e5590337f4ef1311fa8bb4315337a1bbc7c8bd262cd"
       }
     ],
-    "aggregateDigest": "b71c1444509b036974f9ca146490a7851ba31aba27d3790ee7302e95c94ba94d"
+    "aggregateDigest": "da377b18a8aaf669ad5f3aabf357a31a9dc226ea78e3021a0260af3a963f0d32"
   },
   "canonicalSweeps": [
     {
@@ -143,7 +143,7 @@
   "guidance": [
     {
       "label": "phone",
-      "text": "CALLACK_GUIDANCE screen=setup rival=Switchback_Scout scout=rebound,burst pressure=Ricochet_Sling build=absorptionx2,anglex1,depthx1,durablex4,forcex1,guardx2,mirror_lanex1,reboundx1,releasex1,tempox1 active_links=0"
+      "text": "CALLACK_GUIDANCE screen=setup rival=Switchback_Scout scout=rebound,burst pressure=Ricochet_Sling build=anglex1,depthx1,durablex3,forcex1,guardx3,reboundx1,releasex1,tempox1 active_links=0 ability_links=0"
     },
     {
       "label": "phone",
@@ -151,19 +151,19 @@
     },
     {
       "label": "phone",
-      "text": "CALLACK_GUIDANCE screen=setup rival=Fuse_Garden scout=field,release pressure=Effect_Amplifier build=absorptionx2,anglex1,burstx1,depthx1,durablex4,fieldx1,forcex1,guardx2,mirror_lanex1,reboundx1,releasex1,tempox1 active_links=0"
+      "text": "CALLACK_GUIDANCE screen=setup rival=Fuse_Garden scout=field,release pressure=Effect_Amplifier build=anglex1,chainx1,depthx1,durablex3,forcex1,guardx3,reboundx1,releasex2,tempox1 active_links=0 ability_links=0"
     },
     {
       "label": "phone",
-      "text": "CALLACK_GUIDANCE screen=draft rival=Brass_Bastion scout=guard,sustain pressure=Momentum_Sling counter_cards=2 mechanic_cards=3 offer=short-run-9125-001refit02"
+      "text": "CALLACK_GUIDANCE screen=draft rival=Brass_Bastion scout=guard,sustain pressure=Momentum_Sling counter_cards=1 mechanic_cards=3 offer=short-run-9125-001refit02"
     },
     {
       "label": "phone",
-      "text": "CALLACK_GUIDANCE screen=setup rival=Brass_Bastion scout=guard,sustain pressure=Momentum_Sling build=absorptionx1,anglex1,burstx1,deep_reservex1,depthx2,durablex3,fieldx1,forcex1,guardx1,mirror_lanex1,reboundx1,releasex1,sustainx1,tempox1 active_links=0"
+      "text": "CALLACK_GUIDANCE screen=setup rival=Brass_Bastion scout=guard,sustain pressure=Momentum_Sling build=anglex1,chainx1,durablex3,forcex1,guardx2,reboundx1,releasex2,tempox2 active_links=0 ability_links=0"
     },
     {
       "label": "desktop",
-      "text": "CALLACK_GUIDANCE screen=setup rival=Switchback_Scout scout=rebound,burst pressure=Ricochet_Sling build=absorptionx2,anglex1,depthx1,durablex4,forcex1,guardx2,mirror_lanex1,reboundx1,releasex1,tempox1 active_links=0"
+      "text": "CALLACK_GUIDANCE screen=setup rival=Switchback_Scout scout=rebound,burst pressure=Ricochet_Sling build=anglex1,depthx1,durablex3,forcex1,guardx3,reboundx1,releasex1,tempox1 active_links=0 ability_links=0"
     },
     {
       "label": "desktop",
@@ -171,41 +171,41 @@
     },
     {
       "label": "desktop",
-      "text": "CALLACK_GUIDANCE screen=setup rival=Fuse_Garden scout=field,release pressure=Effect_Amplifier build=absorptionx2,anglex1,burstx1,depthx1,durablex4,fieldx1,forcex1,guardx2,mirror_lanex1,reboundx1,releasex1,tempox1 active_links=0"
+      "text": "CALLACK_GUIDANCE screen=setup rival=Fuse_Garden scout=field,release pressure=Effect_Amplifier build=anglex1,chainx1,depthx1,durablex3,forcex1,guardx3,reboundx1,releasex2,tempox1 active_links=0 ability_links=0"
     },
     {
       "label": "desktop",
-      "text": "CALLACK_GUIDANCE screen=draft rival=Brass_Bastion scout=guard,sustain pressure=Momentum_Sling counter_cards=2 mechanic_cards=3 offer=short-run-9125-001refit02"
+      "text": "CALLACK_GUIDANCE screen=draft rival=Brass_Bastion scout=guard,sustain pressure=Momentum_Sling counter_cards=1 mechanic_cards=3 offer=short-run-9125-001refit02"
     },
     {
       "label": "desktop",
-      "text": "CALLACK_GUIDANCE screen=setup rival=Brass_Bastion scout=guard,sustain pressure=Momentum_Sling build=absorptionx1,anglex1,burstx1,deep_reservex1,depthx2,durablex3,fieldx1,forcex1,guardx1,mirror_lanex1,reboundx1,releasex1,sustainx1,tempox1 active_links=0"
+      "text": "CALLACK_GUIDANCE screen=setup rival=Brass_Bastion scout=guard,sustain pressure=Momentum_Sling build=anglex1,chainx1,durablex3,forcex1,guardx2,reboundx1,releasex2,tempox2 active_links=0 ability_links=0"
     }
   ],
   "inspections": [
     {
       "label": "phone",
-      "text": "CALLACK_INSPECTION type=choice source=touch name=Cinder mechanics=2 operation=add_marble cause=post_battle_choice counters=none links=none adds=burst,field rule=core.cinder_nucleus.trajectory page=1/30 trigger=launch target=launch icon=AIM verb=aim magnitude=0_count limit=EVERY_LAUNCH__NO_RULE_CAP drawback=RISK__CORE_RELEASE__1_DURABILITY"
+      "text": "CALLACK_INSPECTION type=choice source=touch name=Split_Geode mechanics=2 operation=add_marble cause=post_battle_choice counters=none links=release adds=chain rarity=uncommon beads=2 shells=2 passives=1/1 mcu=2/2 balance=35.120/100 copy_cap=2 rule=core.shrapnel_geode.trajectory page=1/18 trigger=launch target=launch icon=AIM verb=aim magnitude=0_count limit=EVERY_LAUNCH__NO_RULE_CAP drawback=RISK__CORE_RELEASE__1"
     },
     {
       "label": "phone",
-      "text": "CALLACK_INSPECTION type=entity source=touch id=brickplayer-b01 name=Basalt_Absorber owner=Collector mechanic=Absorb rule=brick.basalt_absorber.hp page=1/5 trigger=build target=self icon=GRD verb=protect magnitude=3_hp limit=EVERY_BUILD__NO_RULE_CAP drawback=NONE"
+      "text": "CALLACK_INSPECTION type=entity source=touch id=brickplayer-b01 name=Basalt_Absorber owner=Collector mechanic=Absorb rarity=common beads=1 shells=0 passives=0/0 mcu=0/0 balance=9.440/100 copy_cap=4 rule=brick.basalt_absorber.hp page=1/4 trigger=build target=self icon=GRD verb=protect magnitude=4_hp limit=EVERY_BUILD__NO_RULE_CAP drawback=NONE"
     },
     {
       "label": "phone",
-      "text": "CALLACK_INSPECTION type=choice source=touch name=Temporal_Anchor mechanics=1 operation=add_brick cause=post_battle_choice counters=sustain links=depth adds=sustain,deep_reserve rule=brick.temporal_anchor.hp page=1/4 trigger=build target=self icon=GRD verb=protect magnitude=3_hp limit=EVERY_BUILD__NO_RULE_CAP drawback=NONE"
+      "text": "CALLACK_INSPECTION type=choice source=touch name=Training_Dummy mechanics=2 operation=add_brick cause=post_battle_choice counters=none links=tempo adds=none rarity=common beads=1 shells=0 passives=0/0 mcu=0/0 balance=10.320/100 copy_cap=4 rule=brick.training_dummy.hp page=1/4 trigger=build target=self icon=GRD verb=protect magnitude=2_hp limit=EVERY_BUILD__NO_RULE_CAP drawback=NONE"
     },
     {
       "label": "desktop",
-      "text": "CALLACK_INSPECTION type=choice source=mouse name=Cinder mechanics=2 operation=add_marble cause=post_battle_choice counters=none links=none adds=burst,field rule=core.cinder_nucleus.trajectory page=1/30 trigger=launch target=launch icon=AIM verb=aim magnitude=0_count limit=EVERY_LAUNCH__NO_RULE_CAP drawback=RISK__CORE_RELEASE__1_DURABILITY"
+      "text": "CALLACK_INSPECTION type=choice source=mouse name=Split_Geode mechanics=2 operation=add_marble cause=post_battle_choice counters=none links=release adds=chain rarity=uncommon beads=2 shells=2 passives=1/1 mcu=2/2 balance=35.120/100 copy_cap=2 rule=core.shrapnel_geode.trajectory page=1/18 trigger=launch target=launch icon=AIM verb=aim magnitude=0_count limit=EVERY_LAUNCH__NO_RULE_CAP drawback=RISK__CORE_RELEASE__1"
     },
     {
       "label": "desktop",
-      "text": "CALLACK_INSPECTION type=entity source=mouse id=brickplayer-b01 name=Basalt_Absorber owner=Collector mechanic=Absorb rule=brick.basalt_absorber.hp page=1/5 trigger=build target=self icon=GRD verb=protect magnitude=3_hp limit=EVERY_BUILD__NO_RULE_CAP drawback=NONE"
+      "text": "CALLACK_INSPECTION type=entity source=mouse id=brickplayer-b01 name=Basalt_Absorber owner=Collector mechanic=Absorb rarity=common beads=1 shells=0 passives=0/0 mcu=0/0 balance=9.440/100 copy_cap=4 rule=brick.basalt_absorber.hp page=1/4 trigger=build target=self icon=GRD verb=protect magnitude=4_hp limit=EVERY_BUILD__NO_RULE_CAP drawback=NONE"
     },
     {
       "label": "desktop",
-      "text": "CALLACK_INSPECTION type=choice source=mouse name=Temporal_Anchor mechanics=1 operation=add_brick cause=post_battle_choice counters=sustain links=depth adds=sustain,deep_reserve rule=brick.temporal_anchor.hp page=1/4 trigger=build target=self icon=GRD verb=protect magnitude=3_hp limit=EVERY_BUILD__NO_RULE_CAP drawback=NONE"
+      "text": "CALLACK_INSPECTION type=choice source=mouse name=Training_Dummy mechanics=2 operation=add_brick cause=post_battle_choice counters=none links=tempo adds=none rarity=common beads=1 shells=0 passives=0/0 mcu=0/0 balance=10.320/100 copy_cap=4 rule=brick.training_dummy.hp page=1/4 trigger=build target=self icon=GRD verb=protect magnitude=2_hp limit=EVERY_BUILD__NO_RULE_CAP drawback=NONE"
     }
   ],
   "ruleCallouts": [
@@ -223,7 +223,7 @@
     },
     {
       "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.chain.splash source=Powder_Keg icon=SPL verb=splash target=orthogonal_neighbours magnitude=2 unit=damage"
+      "text": "CALLACK_RULE_CALLOUT rule=collision.chip.wear source=Chip icon=WER verb=wear target=current_shell magnitude=1 unit=durability"
     },
     {
       "label": "phone",
@@ -231,7 +231,7 @@
     },
     {
       "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.absorb.prevent source=Basalt_Absorber icon=PRV verb=prevent target=self magnitude=1 unit=damage"
+      "text": "CALLACK_RULE_CALLOUT rule=brick.chain.shell_wear source=Powder_Keg icon=WER verb=wear target=chain_enemy_marbles magnitude=1 unit=durability"
     },
     {
       "label": "phone",
@@ -251,19 +251,15 @@
     },
     {
       "label": "phone",
+      "text": "CALLACK_RULE_CALLOUT rule=status.poison.wear source=Poison icon=WER verb=wear target=current_shell magnitude=1 unit=durability"
+    },
+    {
+      "label": "phone",
       "text": "CALLACK_RULE_CALLOUT rule=release.baseline.radius source=Dull_Quartz icon=PSH verb=push target=nearby_marbles magnitude=1 unit=radius"
     },
     {
       "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.absorb.prevent source=Basalt_Absorber icon=PRV verb=prevent target=self magnitude=1 unit=damage"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.chain.splash source=Powder_Keg icon=SPL verb=splash target=orthogonal_neighbours magnitude=2 unit=damage"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=collision.cleave.damage source=obsidian icon=DMG verb=deal target=struck_brick magnitude=2 unit=damage"
+      "text": "CALLACK_RULE_CALLOUT rule=collision.chip.wear source=Chip icon=WER verb=wear target=current_shell magnitude=1 unit=durability"
     },
     {
       "label": "phone",
@@ -271,15 +267,23 @@
     },
     {
       "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=release.shrapnel.radius source=Shrapnel_Geode icon=PSH verb=push target=nearby_marbles magnitude=1 unit=radius"
+      "text": "CALLACK_RULE_CALLOUT rule=brick.chain.shell_wear source=Powder_Keg icon=WER verb=wear target=chain_enemy_marbles magnitude=1 unit=durability"
     },
     {
       "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=status.poison.wear source=Poison icon=WER verb=wear target=current_shell magnitude=1 unit=durability"
+      "text": "CALLACK_RULE_CALLOUT rule=collision.cleave.damage source=obsidian icon=DMG verb=deal target=struck_brick magnitude=2 unit=damage"
     },
     {
       "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=collision.splinter.damage source=flint icon=DMG verb=deal target=struck_brick magnitude=1 unit=damage"
+      "text": "CALLACK_RULE_CALLOUT rule=collision.cleave.wear source=Cleave icon=WER verb=wear target=current_shell magnitude=1 unit=durability"
+    },
+    {
+      "label": "phone",
+      "text": "CALLACK_RULE_CALLOUT rule=brick.reflect.rebound source=Mirror_Pane icon=RBD verb=rebound target=striking_marble magnitude=1.08 unit=multiplier"
+    },
+    {
+      "label": "phone",
+      "text": "CALLACK_RULE_CALLOUT rule=brick.void.break source=Void_Prism icon=BRK verb=break target=current_shell magnitude=true unit=flag"
     },
     {
       "label": "phone",
@@ -287,11 +291,15 @@
     },
     {
       "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.absorb.prevent source=Basalt_Absorber icon=PRV verb=prevent target=self magnitude=1 unit=damage"
+      "text": "CALLACK_RULE_CALLOUT rule=brick.fortify.protect source=Granite_Fortifier icon=GRD verb=protect target=orthogonal_neighbours magnitude=1 unit=damage"
     },
     {
       "label": "phone",
       "text": "CALLACK_RULE_CALLOUT rule=collision.chip.damage source=chalk icon=DMG verb=deal target=struck_brick magnitude=1 unit=damage"
+    },
+    {
+      "label": "phone",
+      "text": "CALLACK_RULE_CALLOUT rule=collision.chip.wear source=Chip icon=WER verb=wear target=current_shell magnitude=1 unit=durability"
     },
     {
       "label": "phone",
@@ -303,6 +311,10 @@
     },
     {
       "label": "phone",
+      "text": "CALLACK_RULE_CALLOUT rule=collision.ward.wear source=Ward icon=WER verb=wear target=current_shell magnitude=1 unit=durability"
+    },
+    {
+      "label": "phone",
       "text": "CALLACK_RULE_CALLOUT rule=brick.shatter.wear source=Shatter_Crystal icon=WER verb=wear target=current_shell magnitude=2 unit=durability"
     },
     {
@@ -311,27 +323,15 @@
     },
     {
       "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.chain.splash source=Powder_Keg icon=SPL verb=splash target=orthogonal_neighbours magnitude=2 unit=damage"
+      "text": "CALLACK_RULE_CALLOUT rule=collision.cleave.wear source=Cleave icon=WER verb=wear target=current_shell magnitude=1 unit=durability"
     },
     {
       "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.fortify.protect source=Granite_Fortifier icon=GRD verb=protect target=orthogonal_neighbours magnitude=1 unit=damage"
+      "text": "CALLACK_RULE_CALLOUT rule=brick.chain.shell_wear source=Powder_Keg icon=WER verb=wear target=chain_enemy_marbles magnitude=1 unit=durability"
     },
     {
       "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=collision.splinter.damage source=flint icon=DMG verb=deal target=struck_brick magnitude=1 unit=damage"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.regenerate.heal source=Moss_Regenerator icon=RST verb=heal target=self magnitude=1 unit=hp"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=collision.heavy.damage source=granite icon=DMG verb=deal target=struck_brick magnitude=2 unit=damage"
-    },
-    {
-      "label": "phone",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.temporal.rewind source=Temporal_Anchor icon=RWD verb=rewind target=self magnitude=true unit=flag"
+      "text": "CALLACK_RULE_CALLOUT rule=release.shrapnel.damage source=Shrapnel icon=SPL verb=splash target=nearest_enemy_brick_cluster magnitude=1 unit=damage"
     },
     {
       "label": "desktop",
@@ -347,7 +347,7 @@
     },
     {
       "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.chain.splash source=Powder_Keg icon=SPL verb=splash target=orthogonal_neighbours magnitude=2 unit=damage"
+      "text": "CALLACK_RULE_CALLOUT rule=collision.chip.wear source=Chip icon=WER verb=wear target=current_shell magnitude=1 unit=durability"
     },
     {
       "label": "desktop",
@@ -355,7 +355,7 @@
     },
     {
       "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.absorb.prevent source=Basalt_Absorber icon=PRV verb=prevent target=self magnitude=1 unit=damage"
+      "text": "CALLACK_RULE_CALLOUT rule=brick.chain.shell_wear source=Powder_Keg icon=WER verb=wear target=chain_enemy_marbles magnitude=1 unit=durability"
     },
     {
       "label": "desktop",
@@ -375,19 +375,15 @@
     },
     {
       "label": "desktop",
+      "text": "CALLACK_RULE_CALLOUT rule=status.poison.wear source=Poison icon=WER verb=wear target=current_shell magnitude=1 unit=durability"
+    },
+    {
+      "label": "desktop",
       "text": "CALLACK_RULE_CALLOUT rule=release.baseline.radius source=Dull_Quartz icon=PSH verb=push target=nearby_marbles magnitude=1 unit=radius"
     },
     {
       "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.absorb.prevent source=Basalt_Absorber icon=PRV verb=prevent target=self magnitude=1 unit=damage"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.chain.splash source=Powder_Keg icon=SPL verb=splash target=orthogonal_neighbours magnitude=2 unit=damage"
-    },
-    {
-      "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=collision.cleave.damage source=obsidian icon=DMG verb=deal target=struck_brick magnitude=2 unit=damage"
+      "text": "CALLACK_RULE_CALLOUT rule=collision.chip.wear source=Chip icon=WER verb=wear target=current_shell magnitude=1 unit=durability"
     },
     {
       "label": "desktop",
@@ -395,15 +391,23 @@
     },
     {
       "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=release.shrapnel.radius source=Shrapnel_Geode icon=PSH verb=push target=nearby_marbles magnitude=1 unit=radius"
+      "text": "CALLACK_RULE_CALLOUT rule=brick.chain.shell_wear source=Powder_Keg icon=WER verb=wear target=chain_enemy_marbles magnitude=1 unit=durability"
     },
     {
       "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=status.poison.wear source=Poison icon=WER verb=wear target=current_shell magnitude=1 unit=durability"
+      "text": "CALLACK_RULE_CALLOUT rule=collision.cleave.damage source=obsidian icon=DMG verb=deal target=struck_brick magnitude=2 unit=damage"
     },
     {
       "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=collision.splinter.damage source=flint icon=DMG verb=deal target=struck_brick magnitude=1 unit=damage"
+      "text": "CALLACK_RULE_CALLOUT rule=collision.cleave.wear source=Cleave icon=WER verb=wear target=current_shell magnitude=1 unit=durability"
+    },
+    {
+      "label": "desktop",
+      "text": "CALLACK_RULE_CALLOUT rule=brick.reflect.rebound source=Mirror_Pane icon=RBD verb=rebound target=striking_marble magnitude=1.08 unit=multiplier"
+    },
+    {
+      "label": "desktop",
+      "text": "CALLACK_RULE_CALLOUT rule=brick.void.break source=Void_Prism icon=BRK verb=break target=current_shell magnitude=true unit=flag"
     },
     {
       "label": "desktop",
@@ -411,11 +415,15 @@
     },
     {
       "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.absorb.prevent source=Basalt_Absorber icon=PRV verb=prevent target=self magnitude=1 unit=damage"
+      "text": "CALLACK_RULE_CALLOUT rule=brick.fortify.protect source=Granite_Fortifier icon=GRD verb=protect target=orthogonal_neighbours magnitude=1 unit=damage"
     },
     {
       "label": "desktop",
       "text": "CALLACK_RULE_CALLOUT rule=collision.chip.damage source=chalk icon=DMG verb=deal target=struck_brick magnitude=1 unit=damage"
+    },
+    {
+      "label": "desktop",
+      "text": "CALLACK_RULE_CALLOUT rule=collision.chip.wear source=Chip icon=WER verb=wear target=current_shell magnitude=1 unit=durability"
     },
     {
       "label": "desktop",
@@ -427,6 +435,10 @@
     },
     {
       "label": "desktop",
+      "text": "CALLACK_RULE_CALLOUT rule=collision.ward.wear source=Ward icon=WER verb=wear target=current_shell magnitude=1 unit=durability"
+    },
+    {
+      "label": "desktop",
       "text": "CALLACK_RULE_CALLOUT rule=brick.shatter.wear source=Shatter_Crystal icon=WER verb=wear target=current_shell magnitude=2 unit=durability"
     },
     {
@@ -435,27 +447,339 @@
     },
     {
       "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.chain.splash source=Powder_Keg icon=SPL verb=splash target=orthogonal_neighbours magnitude=2 unit=damage"
+      "text": "CALLACK_RULE_CALLOUT rule=collision.cleave.wear source=Cleave icon=WER verb=wear target=current_shell magnitude=1 unit=durability"
     },
     {
       "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.fortify.protect source=Granite_Fortifier icon=GRD verb=protect target=orthogonal_neighbours magnitude=1 unit=damage"
+      "text": "CALLACK_RULE_CALLOUT rule=brick.chain.shell_wear source=Powder_Keg icon=WER verb=wear target=chain_enemy_marbles magnitude=1 unit=durability"
     },
     {
       "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=collision.splinter.damage source=flint icon=DMG verb=deal target=struck_brick magnitude=1 unit=damage"
+      "text": "CALLACK_RULE_CALLOUT rule=release.shrapnel.damage source=Shrapnel icon=SPL verb=splash target=nearest_enemy_brick_cluster magnitude=1 unit=damage"
+    }
+  ],
+  "linkedCostEvidence": [
+    {
+      "label": "phone",
+      "text": "CALLACK_LINKED_COST source=brick.plain_block ability=bloodstone_relay activation=activation:A:relay:000001 cost_rule=fixture.relay.cost cost=1 cost_unit=damage target=setup_linked_allied_brick relation=allied target_uid=ally cadence_index=1 charges=2_to_1 payoff_rule=fixture.relay.payoff payoff=2 payoff_unit=durability ordered=true copy=COST_1_linked_allied_integrity_once_per_exchange_2_charges__wear_the_striking_shell_by_2_durability."
     },
     {
       "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.regenerate.heal source=Moss_Regenerator icon=RST verb=heal target=self magnitude=1 unit=hp"
+      "text": "CALLACK_LINKED_COST source=brick.plain_block ability=bloodstone_relay activation=activation:A:relay:000001 cost_rule=fixture.relay.cost cost=1 cost_unit=damage target=setup_linked_allied_brick relation=allied target_uid=ally cadence_index=1 charges=2_to_1 payoff_rule=fixture.relay.payoff payoff=2 payoff_unit=durability ordered=true copy=COST_1_linked_allied_integrity_once_per_exchange_2_charges__wear_the_striking_shell_by_2_durability."
+    }
+  ],
+  "spliceGuardEvidence": [
+    {
+      "label": "phone",
+      "stage": "triggered",
+      "order": 1,
+      "recipeId": "glass_cannon",
+      "battleSeed": 9125,
+      "eventType": "splice_triggered",
+      "eventId": "8",
+      "triggerCollisionEventId": "6",
+      "preventionCollisionEventId": "13",
+      "tick": 2,
+      "ruleId": "brick.splice.guard",
+      "sourceRuleSetId": "brick.splice_node",
+      "abilityId": "splice_guard",
+      "sourceUid": "opponent-b04",
+      "targetUid": "none",
+      "amount": 1,
+      "unit": "damage",
+      "magnitude": 1,
+      "cadenceUnit": "exchange",
+      "cadenceInterval": 1,
+      "durationTicks": 120,
+      "expiresTick": null,
+      "appliedCount": 3,
+      "expiredCount": 2,
+      "requestedDamage": null,
+      "appliedDamage": null,
+      "integrityBefore": null,
+      "integrityAfter": null,
+      "visualFrameTick": 3,
+      "visualGuardCount": 2,
+      "reason": "hostile_collision",
+      "screenshot": {
+        "name": "phone-splice-guard.png",
+        "sha256": "d0d2e6654ff7702146bed4a7153b2b1190f99fc0811ff807ea7889c7009196da",
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "label": "phone",
+      "stage": "applied",
+      "order": 2,
+      "recipeId": "glass_cannon",
+      "battleSeed": 9125,
+      "eventType": "guard_applied",
+      "eventId": "9",
+      "triggerCollisionEventId": "6",
+      "preventionCollisionEventId": "13",
+      "tick": 2,
+      "ruleId": "brick.splice.guard",
+      "sourceRuleSetId": "brick.splice_node",
+      "abilityId": "splice_guard",
+      "sourceUid": "opponent-b04",
+      "targetUid": "opponent-b01",
+      "amount": 1,
+      "unit": "damage",
+      "magnitude": 1,
+      "cadenceUnit": "exchange",
+      "cadenceInterval": 1,
+      "durationTicks": 120,
+      "expiresTick": 122,
+      "appliedCount": 3,
+      "expiredCount": 2,
+      "requestedDamage": null,
+      "appliedDamage": null,
+      "integrityBefore": null,
+      "integrityAfter": null,
+      "visualFrameTick": 3,
+      "visualGuardCount": 2,
+      "reason": "adjacent_allied_guard",
+      "screenshot": {
+        "name": "phone-splice-guard.png",
+        "sha256": "d0d2e6654ff7702146bed4a7153b2b1190f99fc0811ff807ea7889c7009196da",
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "label": "phone",
+      "stage": "prevented",
+      "order": 3,
+      "recipeId": "glass_cannon",
+      "battleSeed": 9125,
+      "eventType": "guard_prevented",
+      "eventId": "14",
+      "triggerCollisionEventId": "6",
+      "preventionCollisionEventId": "13",
+      "tick": 3,
+      "ruleId": "brick.splice.guard",
+      "sourceRuleSetId": "brick.splice_node",
+      "abilityId": "splice_guard",
+      "sourceUid": "opponent-b04",
+      "targetUid": "opponent-b05",
+      "amount": 1,
+      "unit": "damage",
+      "magnitude": 1,
+      "cadenceUnit": "exchange",
+      "cadenceInterval": 1,
+      "durationTicks": 120,
+      "expiresTick": null,
+      "appliedCount": 3,
+      "expiredCount": 2,
+      "requestedDamage": 2,
+      "appliedDamage": 1,
+      "integrityBefore": 2,
+      "integrityAfter": 1,
+      "visualFrameTick": 3,
+      "visualGuardCount": 2,
+      "reason": "hostile_damage",
+      "screenshot": {
+        "name": "phone-splice-guard.png",
+        "sha256": "d0d2e6654ff7702146bed4a7153b2b1190f99fc0811ff807ea7889c7009196da",
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "label": "phone",
+      "stage": "expired",
+      "order": 4,
+      "recipeId": "glass_cannon",
+      "battleSeed": 9125,
+      "eventType": "guard_expired",
+      "eventId": "22",
+      "triggerCollisionEventId": "6",
+      "preventionCollisionEventId": "13",
+      "tick": 122,
+      "ruleId": "brick.splice.guard",
+      "sourceRuleSetId": "brick.splice_node",
+      "abilityId": "splice_guard",
+      "sourceUid": "opponent-b04",
+      "targetUid": "opponent-b01",
+      "amount": 1,
+      "unit": "damage",
+      "magnitude": 1,
+      "cadenceUnit": "exchange",
+      "cadenceInterval": 1,
+      "durationTicks": 120,
+      "expiresTick": 122,
+      "appliedCount": 3,
+      "expiredCount": 2,
+      "requestedDamage": null,
+      "appliedDamage": null,
+      "integrityBefore": null,
+      "integrityAfter": null,
+      "visualFrameTick": 3,
+      "visualGuardCount": 2,
+      "reason": "duration",
+      "screenshot": {
+        "name": "phone-splice-guard.png",
+        "sha256": "d0d2e6654ff7702146bed4a7153b2b1190f99fc0811ff807ea7889c7009196da",
+        "width": 390,
+        "height": 844
+      }
     },
     {
       "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=collision.heavy.damage source=granite icon=DMG verb=deal target=struck_brick magnitude=2 unit=damage"
+      "stage": "triggered",
+      "order": 1,
+      "recipeId": "glass_cannon",
+      "battleSeed": 9125,
+      "eventType": "splice_triggered",
+      "eventId": "8",
+      "triggerCollisionEventId": "6",
+      "preventionCollisionEventId": "13",
+      "tick": 2,
+      "ruleId": "brick.splice.guard",
+      "sourceRuleSetId": "brick.splice_node",
+      "abilityId": "splice_guard",
+      "sourceUid": "opponent-b04",
+      "targetUid": "none",
+      "amount": 1,
+      "unit": "damage",
+      "magnitude": 1,
+      "cadenceUnit": "exchange",
+      "cadenceInterval": 1,
+      "durationTicks": 120,
+      "expiresTick": null,
+      "appliedCount": 3,
+      "expiredCount": 2,
+      "requestedDamage": null,
+      "appliedDamage": null,
+      "integrityBefore": null,
+      "integrityAfter": null,
+      "visualFrameTick": 3,
+      "visualGuardCount": 2,
+      "reason": "hostile_collision",
+      "screenshot": {
+        "name": "desktop-splice-guard.png",
+        "sha256": "a757e15a1aea0186f0084b09d2be849329392340982a570601d89ed7010b4fa8",
+        "width": 1280,
+        "height": 800
+      }
     },
     {
       "label": "desktop",
-      "text": "CALLACK_RULE_CALLOUT rule=brick.temporal.rewind source=Temporal_Anchor icon=RWD verb=rewind target=self magnitude=true unit=flag"
+      "stage": "applied",
+      "order": 2,
+      "recipeId": "glass_cannon",
+      "battleSeed": 9125,
+      "eventType": "guard_applied",
+      "eventId": "9",
+      "triggerCollisionEventId": "6",
+      "preventionCollisionEventId": "13",
+      "tick": 2,
+      "ruleId": "brick.splice.guard",
+      "sourceRuleSetId": "brick.splice_node",
+      "abilityId": "splice_guard",
+      "sourceUid": "opponent-b04",
+      "targetUid": "opponent-b01",
+      "amount": 1,
+      "unit": "damage",
+      "magnitude": 1,
+      "cadenceUnit": "exchange",
+      "cadenceInterval": 1,
+      "durationTicks": 120,
+      "expiresTick": 122,
+      "appliedCount": 3,
+      "expiredCount": 2,
+      "requestedDamage": null,
+      "appliedDamage": null,
+      "integrityBefore": null,
+      "integrityAfter": null,
+      "visualFrameTick": 3,
+      "visualGuardCount": 2,
+      "reason": "adjacent_allied_guard",
+      "screenshot": {
+        "name": "desktop-splice-guard.png",
+        "sha256": "a757e15a1aea0186f0084b09d2be849329392340982a570601d89ed7010b4fa8",
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "label": "desktop",
+      "stage": "prevented",
+      "order": 3,
+      "recipeId": "glass_cannon",
+      "battleSeed": 9125,
+      "eventType": "guard_prevented",
+      "eventId": "14",
+      "triggerCollisionEventId": "6",
+      "preventionCollisionEventId": "13",
+      "tick": 3,
+      "ruleId": "brick.splice.guard",
+      "sourceRuleSetId": "brick.splice_node",
+      "abilityId": "splice_guard",
+      "sourceUid": "opponent-b04",
+      "targetUid": "opponent-b05",
+      "amount": 1,
+      "unit": "damage",
+      "magnitude": 1,
+      "cadenceUnit": "exchange",
+      "cadenceInterval": 1,
+      "durationTicks": 120,
+      "expiresTick": null,
+      "appliedCount": 3,
+      "expiredCount": 2,
+      "requestedDamage": 2,
+      "appliedDamage": 1,
+      "integrityBefore": 2,
+      "integrityAfter": 1,
+      "visualFrameTick": 3,
+      "visualGuardCount": 2,
+      "reason": "hostile_damage",
+      "screenshot": {
+        "name": "desktop-splice-guard.png",
+        "sha256": "a757e15a1aea0186f0084b09d2be849329392340982a570601d89ed7010b4fa8",
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "label": "desktop",
+      "stage": "expired",
+      "order": 4,
+      "recipeId": "glass_cannon",
+      "battleSeed": 9125,
+      "eventType": "guard_expired",
+      "eventId": "22",
+      "triggerCollisionEventId": "6",
+      "preventionCollisionEventId": "13",
+      "tick": 122,
+      "ruleId": "brick.splice.guard",
+      "sourceRuleSetId": "brick.splice_node",
+      "abilityId": "splice_guard",
+      "sourceUid": "opponent-b04",
+      "targetUid": "opponent-b01",
+      "amount": 1,
+      "unit": "damage",
+      "magnitude": 1,
+      "cadenceUnit": "exchange",
+      "cadenceInterval": 1,
+      "durationTicks": 120,
+      "expiresTick": 122,
+      "appliedCount": 3,
+      "expiredCount": 2,
+      "requestedDamage": null,
+      "appliedDamage": null,
+      "integrityBefore": null,
+      "integrityAfter": null,
+      "visualFrameTick": 3,
+      "visualGuardCount": 2,
+      "reason": "duration",
+      "screenshot": {
+        "name": "desktop-splice-guard.png",
+        "sha256": "a757e15a1aea0186f0084b09d2be849329392340982a570601d89ed7010b4fa8",
+        "width": 1280,
+        "height": 800
+      }
     }
   ],
   "settings": [
@@ -485,44 +809,368 @@
     }
   ],
   "screenshotHashes": {
-    "desktop-battle-inspection.png": "4612d5588505458c982785c8aebf2cb87f57fa1caa6274df3aba6821f7e54eb9",
-    "desktop-battle-settings.png": "e3550b90299795e097efd37f5eb525f8c4ac38071199c18cc443de52a4140af1",
-    "desktop-battle-trigger.png": "c856383aa68b862f0fe598e3fef150cfe3952c41b63d45cd620b77eeb1437b1e",
-    "desktop-battle.png": "e3550b90299795e097efd37f5eb525f8c4ac38071199c18cc443de52a4140af1",
-    "desktop-draft-inspection.png": "4b7d802fcca1d7941e41710768af27c6729feb80c6831d2879a4bc79aff57535",
-    "desktop-draft-scout.png": "8117d2117ef985a9ae8a57a2914131b5ea536e2274b122ad0662f5d2b6b24da8",
-    "desktop-draft.png": "f27ac2fb1804707643126e9bebe5f9b13190a5b51194bc982ac757a4927b94a7",
-    "desktop-refit-1.png": "8117d2117ef985a9ae8a57a2914131b5ea536e2274b122ad0662f5d2b6b24da8",
-    "desktop-refit-2.png": "213d72f4e2b4189655f8bf43e9cb601d95e5a1bd46991c6ba7c94bf4a3f66161",
-    "desktop-refit-inspection.png": "ee87acaa46c7033d82dd514140353fcad5e720e153d73746cb50473b615fbc32",
-    "desktop-refit-rule-2.png": "25f2d047cee737f0a869dde22fb1c44e5d784eea562c615caf37b7e624722001",
-    "desktop-result-after-replay.png": "7357f5e556be9f29e598b3d80528a5551df12578d2d72aa86ad5efb5a7c8587c",
-    "desktop-result.png": "b9360d3842dca269f4a204e86b83aa225ea1bdd155bdc219dc47e3f0c1f70fb2",
-    "desktop-reward.png": "bb3faa0cf1d1ab58e4d9306cb98cbbc3c12b787e4c061a1c9204198f7b3051e3",
-    "desktop-scout.png": "2ec0318e439c6db459cfe4ea8472317ea074d30d485795cce263fea4f0581a6d",
-    "desktop-setup-start.png": "2ec0318e439c6db459cfe4ea8472317ea074d30d485795cce263fea4f0581a6d",
-    "desktop-setup-terminal.png": "6f1ec6109fe1f4c2cd524b9848cce23f5d293f27b3dbc5582af08d1f949d725e",
-    "desktop-setup.png": "8dc1df9b9929d330b70b3a4ee0f2455f449f1ffe4361ec44070a44312d229431",
-    "desktop-terminal-result.png": "b9360d3842dca269f4a204e86b83aa225ea1bdd155bdc219dc47e3f0c1f70fb2",
-    "phone-battle-inspection.png": "af1694da8c943538bdc10fe761fb3cf18764f982289e29ed5b5f5f29d0e0331a",
-    "phone-battle-settings.png": "d3f9ab626be23c3f28e812db14bd74aee797055034cd65755ff71c000e60723a",
-    "phone-battle-trigger.png": "f3e61095ec8b1b7bc4f3a0252d9c9d7117ca702e2454e991893783155aadf801",
-    "phone-battle.png": "d3f9ab626be23c3f28e812db14bd74aee797055034cd65755ff71c000e60723a",
-    "phone-draft-inspection.png": "cf5b93fe563d1427234eb43da1b4ee1a761a238ab5973a145d6c7d19721be9b3",
-    "phone-draft-scout.png": "f3ed15b714c6a39fb2a397b1e9f16344228c2037bbfa933570396304e623952e",
-    "phone-draft.png": "4bfd68ef8d8072b8fe40f023765320b38526f08605d99947c23d02e87429ff25",
-    "phone-refit-1.png": "f3ed15b714c6a39fb2a397b1e9f16344228c2037bbfa933570396304e623952e",
-    "phone-refit-2.png": "1b8450d7e1cbc1322529db03c21ec2766df521d1be943832ec9857bafb1f54e0",
-    "phone-refit-inspection.png": "cd68469c770bd8aa2033961a17421d6f4d14fe3669b27a9cd1f5b06c99860bcb",
-    "phone-refit-rule-2.png": "de7bf129a3d50b4e4035999bfaa8e394b3e43ba436b88a478d829a7e65a634b4",
-    "phone-result-after-replay.png": "5bd279448b361dae8f7b8b57bd25cd61faffbf8efa99b24c58f59db0a1c9c28a",
-    "phone-result.png": "c87662621cd42cf0072b40143127514144b85529455faa9f27d8d6d49d8db8b6",
-    "phone-reward.png": "4e7333b719804342e71c753c34f643241f57cb4a68d79569cd0a9beaa9319549",
-    "phone-scout.png": "1e5634496d10c59efe93014d59553490a8e6030ce70110407a3010b5a9c592d9",
-    "phone-setup-start.png": "1e5634496d10c59efe93014d59553490a8e6030ce70110407a3010b5a9c592d9",
-    "phone-setup-terminal.png": "5f02fb5b33a035a532889f02087ae2f4a0a8fe7c4989bedaf55ed55736324d9d",
-    "phone-setup.png": "8d38328122a34184a874e887160fcc03cb3f7efaa87aa2d64ec425357aa2f9e9",
-    "phone-terminal-result.png": "c87662621cd42cf0072b40143127514144b85529455faa9f27d8d6d49d8db8b6"
+    "desktop-battle-inspection.png": "584ef6215835f5ba09f736705bac4d6752dfbf91f2c6cf102e1691437738fe29",
+    "desktop-battle-settings.png": "57c458b67d53bb87e7860389ed1463287226136059f73de241d9df76b68ed351",
+    "desktop-battle-trigger.png": "bb3de26788d30c1ea14a53a0fc7d672f971c831581dccf037e739ed8cfde81cc",
+    "desktop-battle.png": "57c458b67d53bb87e7860389ed1463287226136059f73de241d9df76b68ed351",
+    "desktop-draft-inspection.png": "5028f2f41d67994a37138864643a0c014c5159c6bdaa3fb5c401a08cd9f8c10e",
+    "desktop-draft-scout.png": "ac9550cf2a3e7f6068745c14b3ac404d0e5e792646fbe714056fe769ff8c1f7a",
+    "desktop-draft.png": "ac9550cf2a3e7f6068745c14b3ac404d0e5e792646fbe714056fe769ff8c1f7a",
+    "desktop-refit-1.png": "ac9550cf2a3e7f6068745c14b3ac404d0e5e792646fbe714056fe769ff8c1f7a",
+    "desktop-refit-2.png": "9997fb03b026314b48416503e2adfd1b49d625f40b926459be08998c32c90159",
+    "desktop-refit-inspection.png": "5028f2f41d67994a37138864643a0c014c5159c6bdaa3fb5c401a08cd9f8c10e",
+    "desktop-refit-rule-2.png": "588b5ef3e88de8849b7532182f07f0c3c878cdea2d30cbe3bce4d540c508c5ae",
+    "desktop-result-after-replay.png": "29c5a4bf9889446bcded84254e96a9ac5aad2fa36bb920caa0f0fdcbc2121692",
+    "desktop-result.png": "8a4d0ca29456d3d16729e4f3af31ace23603afeca051a073f77f1bae78136bf4",
+    "desktop-reward.png": "17aecc2c6429e29dd5ad0fc7966a09e06b678e168353bf98a864362a8f84af6f",
+    "desktop-scout.png": "bc9fd45aa508d7691e7b0a7794f75806db8ab497871e8d00c4f8c04eacabc0c7",
+    "desktop-setup-start.png": "bc9fd45aa508d7691e7b0a7794f75806db8ab497871e8d00c4f8c04eacabc0c7",
+    "desktop-setup-terminal.png": "c9f951dd3dfe1fef84a1e557a944e5d92888e3ba7d6152fb6fe68dbfddb87d74",
+    "desktop-setup.png": "923be3ff5e13c7e66754ab478b2e8935f5a6c81098adb05dc468fd747f3a2d54",
+    "desktop-splice-guard.png": "a757e15a1aea0186f0084b09d2be849329392340982a570601d89ed7010b4fa8",
+    "desktop-terminal-result.png": "8a4d0ca29456d3d16729e4f3af31ace23603afeca051a073f77f1bae78136bf4",
+    "phone-battle-inspection.png": "9b975bba225c87caf133981c4d7265934d0cda52bdc92a4881d2100ced567992",
+    "phone-battle-settings.png": "6a08bfd5dc4bbbb729481e977917eefa56a0cce3068e8c9e78e3187dd9ce1901",
+    "phone-battle-trigger.png": "1801d812ecd6997d0125f86c77505d0773165a0248641d797cd0e87425066346",
+    "phone-battle.png": "6a08bfd5dc4bbbb729481e977917eefa56a0cce3068e8c9e78e3187dd9ce1901",
+    "phone-draft-inspection.png": "08d382911b4e6d5ded0c6edae8889d21cc8acc89fd7c531a960d62e46c4ef447",
+    "phone-draft-scout.png": "910d357b9475c0ad1d4da5174120a6086191dfa52061c8574f236fd82675cc3f",
+    "phone-draft.png": "910d357b9475c0ad1d4da5174120a6086191dfa52061c8574f236fd82675cc3f",
+    "phone-refit-1.png": "910d357b9475c0ad1d4da5174120a6086191dfa52061c8574f236fd82675cc3f",
+    "phone-refit-2.png": "4efc8a80b7badbf42ef568f13fbca549ba080507196bce75724e8eb2f70bc75a",
+    "phone-refit-inspection.png": "08d382911b4e6d5ded0c6edae8889d21cc8acc89fd7c531a960d62e46c4ef447",
+    "phone-refit-rule-2.png": "f06e2799a0cab2980f71068eb3ddd75968852fe77d7cbf956d20df06de857481",
+    "phone-result-after-replay.png": "77ecc2a3963e6e3c46ab74d1817330f3e9ac4f3f9256d369c52c1b8d8d18be4c",
+    "phone-result.png": "caaabbf5812cf2c556218ef7ef759fc1778afb6d917b466903f40629a48b1658",
+    "phone-reward.png": "903f1076d0b837d391a5637b3eb041a5daffbd024fa23b403a247caf632438c0",
+    "phone-scout.png": "5eb7f7c1aa141ec6c05a10ee8590873874eb868bdf871ca4a0906f66231bb574",
+    "phone-setup-start.png": "5eb7f7c1aa141ec6c05a10ee8590873874eb868bdf871ca4a0906f66231bb574",
+    "phone-setup-terminal.png": "e8ec3b08042a60bca55941a2cbbb832fd33a4f39d075c755ba888552c83aa5b6",
+    "phone-setup.png": "492fe44b93edd6c499456a6906d19c5ca7be38c7774ae30bfd44172245ab1987",
+    "phone-splice-guard.png": "d0d2e6654ff7702146bed4a7153b2b1190f99fc0811ff807ea7889c7009196da",
+    "phone-terminal-result.png": "caaabbf5812cf2c556218ef7ef759fc1778afb6d917b466903f40629a48b1658"
   },
-  "evidenceDigest": "6065e861b4df711da26cab565bfdf63cef5df0c6778f0388cccfe6564dc23f7f"
+  "screenshotRecords": [
+    {
+      "name": "desktop-battle-inspection.png",
+      "label": "desktop",
+      "surface": "battle-inspection",
+      "width": 1280,
+      "height": 800,
+      "sha256": "584ef6215835f5ba09f736705bac4d6752dfbf91f2c6cf102e1691437738fe29"
+    },
+    {
+      "name": "desktop-battle-settings.png",
+      "label": "desktop",
+      "surface": "battle-settings",
+      "width": 1280,
+      "height": 800,
+      "sha256": "57c458b67d53bb87e7860389ed1463287226136059f73de241d9df76b68ed351"
+    },
+    {
+      "name": "desktop-battle-trigger.png",
+      "label": "desktop",
+      "surface": "battle-trigger",
+      "width": 1280,
+      "height": 800,
+      "sha256": "bb3de26788d30c1ea14a53a0fc7d672f971c831581dccf037e739ed8cfde81cc"
+    },
+    {
+      "name": "desktop-battle.png",
+      "label": "desktop",
+      "surface": "battle",
+      "width": 1280,
+      "height": 800,
+      "sha256": "57c458b67d53bb87e7860389ed1463287226136059f73de241d9df76b68ed351"
+    },
+    {
+      "name": "desktop-draft-inspection.png",
+      "label": "desktop",
+      "surface": "draft-inspection",
+      "width": 1280,
+      "height": 800,
+      "sha256": "5028f2f41d67994a37138864643a0c014c5159c6bdaa3fb5c401a08cd9f8c10e"
+    },
+    {
+      "name": "desktop-draft-scout.png",
+      "label": "desktop",
+      "surface": "draft-scout",
+      "width": 1280,
+      "height": 800,
+      "sha256": "ac9550cf2a3e7f6068745c14b3ac404d0e5e792646fbe714056fe769ff8c1f7a"
+    },
+    {
+      "name": "desktop-draft.png",
+      "label": "desktop",
+      "surface": "draft",
+      "width": 1280,
+      "height": 800,
+      "sha256": "ac9550cf2a3e7f6068745c14b3ac404d0e5e792646fbe714056fe769ff8c1f7a"
+    },
+    {
+      "name": "desktop-refit-1.png",
+      "label": "desktop",
+      "surface": "refit-1",
+      "width": 1280,
+      "height": 800,
+      "sha256": "ac9550cf2a3e7f6068745c14b3ac404d0e5e792646fbe714056fe769ff8c1f7a"
+    },
+    {
+      "name": "desktop-refit-2.png",
+      "label": "desktop",
+      "surface": "refit-2",
+      "width": 1280,
+      "height": 800,
+      "sha256": "9997fb03b026314b48416503e2adfd1b49d625f40b926459be08998c32c90159"
+    },
+    {
+      "name": "desktop-refit-inspection.png",
+      "label": "desktop",
+      "surface": "refit-inspection",
+      "width": 1280,
+      "height": 800,
+      "sha256": "5028f2f41d67994a37138864643a0c014c5159c6bdaa3fb5c401a08cd9f8c10e"
+    },
+    {
+      "name": "desktop-refit-rule-2.png",
+      "label": "desktop",
+      "surface": "refit-rule-2",
+      "width": 1280,
+      "height": 800,
+      "sha256": "588b5ef3e88de8849b7532182f07f0c3c878cdea2d30cbe3bce4d540c508c5ae"
+    },
+    {
+      "name": "desktop-result-after-replay.png",
+      "label": "desktop",
+      "surface": "result-after-replay",
+      "width": 1280,
+      "height": 800,
+      "sha256": "29c5a4bf9889446bcded84254e96a9ac5aad2fa36bb920caa0f0fdcbc2121692"
+    },
+    {
+      "name": "desktop-result.png",
+      "label": "desktop",
+      "surface": "result",
+      "width": 1280,
+      "height": 800,
+      "sha256": "8a4d0ca29456d3d16729e4f3af31ace23603afeca051a073f77f1bae78136bf4"
+    },
+    {
+      "name": "desktop-reward.png",
+      "label": "desktop",
+      "surface": "reward",
+      "width": 1280,
+      "height": 800,
+      "sha256": "17aecc2c6429e29dd5ad0fc7966a09e06b678e168353bf98a864362a8f84af6f"
+    },
+    {
+      "name": "desktop-scout.png",
+      "label": "desktop",
+      "surface": "scout",
+      "width": 1280,
+      "height": 800,
+      "sha256": "bc9fd45aa508d7691e7b0a7794f75806db8ab497871e8d00c4f8c04eacabc0c7"
+    },
+    {
+      "name": "desktop-setup-start.png",
+      "label": "desktop",
+      "surface": "setup-start",
+      "width": 1280,
+      "height": 800,
+      "sha256": "bc9fd45aa508d7691e7b0a7794f75806db8ab497871e8d00c4f8c04eacabc0c7"
+    },
+    {
+      "name": "desktop-setup-terminal.png",
+      "label": "desktop",
+      "surface": "setup-terminal",
+      "width": 1280,
+      "height": 800,
+      "sha256": "c9f951dd3dfe1fef84a1e557a944e5d92888e3ba7d6152fb6fe68dbfddb87d74"
+    },
+    {
+      "name": "desktop-setup.png",
+      "label": "desktop",
+      "surface": "setup",
+      "width": 1280,
+      "height": 800,
+      "sha256": "923be3ff5e13c7e66754ab478b2e8935f5a6c81098adb05dc468fd747f3a2d54"
+    },
+    {
+      "name": "desktop-splice-guard.png",
+      "label": "desktop",
+      "surface": "splice-guard",
+      "width": 1280,
+      "height": 800,
+      "sha256": "a757e15a1aea0186f0084b09d2be849329392340982a570601d89ed7010b4fa8"
+    },
+    {
+      "name": "desktop-terminal-result.png",
+      "label": "desktop",
+      "surface": "terminal-result",
+      "width": 1280,
+      "height": 800,
+      "sha256": "8a4d0ca29456d3d16729e4f3af31ace23603afeca051a073f77f1bae78136bf4"
+    },
+    {
+      "name": "phone-battle-inspection.png",
+      "label": "phone",
+      "surface": "battle-inspection",
+      "width": 390,
+      "height": 844,
+      "sha256": "9b975bba225c87caf133981c4d7265934d0cda52bdc92a4881d2100ced567992"
+    },
+    {
+      "name": "phone-battle-settings.png",
+      "label": "phone",
+      "surface": "battle-settings",
+      "width": 390,
+      "height": 844,
+      "sha256": "6a08bfd5dc4bbbb729481e977917eefa56a0cce3068e8c9e78e3187dd9ce1901"
+    },
+    {
+      "name": "phone-battle-trigger.png",
+      "label": "phone",
+      "surface": "battle-trigger",
+      "width": 390,
+      "height": 844,
+      "sha256": "1801d812ecd6997d0125f86c77505d0773165a0248641d797cd0e87425066346"
+    },
+    {
+      "name": "phone-battle.png",
+      "label": "phone",
+      "surface": "battle",
+      "width": 390,
+      "height": 844,
+      "sha256": "6a08bfd5dc4bbbb729481e977917eefa56a0cce3068e8c9e78e3187dd9ce1901"
+    },
+    {
+      "name": "phone-draft-inspection.png",
+      "label": "phone",
+      "surface": "draft-inspection",
+      "width": 390,
+      "height": 844,
+      "sha256": "08d382911b4e6d5ded0c6edae8889d21cc8acc89fd7c531a960d62e46c4ef447"
+    },
+    {
+      "name": "phone-draft-scout.png",
+      "label": "phone",
+      "surface": "draft-scout",
+      "width": 390,
+      "height": 844,
+      "sha256": "910d357b9475c0ad1d4da5174120a6086191dfa52061c8574f236fd82675cc3f"
+    },
+    {
+      "name": "phone-draft.png",
+      "label": "phone",
+      "surface": "draft",
+      "width": 390,
+      "height": 844,
+      "sha256": "910d357b9475c0ad1d4da5174120a6086191dfa52061c8574f236fd82675cc3f"
+    },
+    {
+      "name": "phone-refit-1.png",
+      "label": "phone",
+      "surface": "refit-1",
+      "width": 390,
+      "height": 844,
+      "sha256": "910d357b9475c0ad1d4da5174120a6086191dfa52061c8574f236fd82675cc3f"
+    },
+    {
+      "name": "phone-refit-2.png",
+      "label": "phone",
+      "surface": "refit-2",
+      "width": 390,
+      "height": 844,
+      "sha256": "4efc8a80b7badbf42ef568f13fbca549ba080507196bce75724e8eb2f70bc75a"
+    },
+    {
+      "name": "phone-refit-inspection.png",
+      "label": "phone",
+      "surface": "refit-inspection",
+      "width": 390,
+      "height": 844,
+      "sha256": "08d382911b4e6d5ded0c6edae8889d21cc8acc89fd7c531a960d62e46c4ef447"
+    },
+    {
+      "name": "phone-refit-rule-2.png",
+      "label": "phone",
+      "surface": "refit-rule-2",
+      "width": 390,
+      "height": 844,
+      "sha256": "f06e2799a0cab2980f71068eb3ddd75968852fe77d7cbf956d20df06de857481"
+    },
+    {
+      "name": "phone-result-after-replay.png",
+      "label": "phone",
+      "surface": "result-after-replay",
+      "width": 390,
+      "height": 844,
+      "sha256": "77ecc2a3963e6e3c46ab74d1817330f3e9ac4f3f9256d369c52c1b8d8d18be4c"
+    },
+    {
+      "name": "phone-result.png",
+      "label": "phone",
+      "surface": "result",
+      "width": 390,
+      "height": 844,
+      "sha256": "caaabbf5812cf2c556218ef7ef759fc1778afb6d917b466903f40629a48b1658"
+    },
+    {
+      "name": "phone-reward.png",
+      "label": "phone",
+      "surface": "reward",
+      "width": 390,
+      "height": 844,
+      "sha256": "903f1076d0b837d391a5637b3eb041a5daffbd024fa23b403a247caf632438c0"
+    },
+    {
+      "name": "phone-scout.png",
+      "label": "phone",
+      "surface": "scout",
+      "width": 390,
+      "height": 844,
+      "sha256": "5eb7f7c1aa141ec6c05a10ee8590873874eb868bdf871ca4a0906f66231bb574"
+    },
+    {
+      "name": "phone-setup-start.png",
+      "label": "phone",
+      "surface": "setup-start",
+      "width": 390,
+      "height": 844,
+      "sha256": "5eb7f7c1aa141ec6c05a10ee8590873874eb868bdf871ca4a0906f66231bb574"
+    },
+    {
+      "name": "phone-setup-terminal.png",
+      "label": "phone",
+      "surface": "setup-terminal",
+      "width": 390,
+      "height": 844,
+      "sha256": "e8ec3b08042a60bca55941a2cbbb832fd33a4f39d075c755ba888552c83aa5b6"
+    },
+    {
+      "name": "phone-setup.png",
+      "label": "phone",
+      "surface": "setup",
+      "width": 390,
+      "height": 844,
+      "sha256": "492fe44b93edd6c499456a6906d19c5ca7be38c7774ae30bfd44172245ab1987"
+    },
+    {
+      "name": "phone-splice-guard.png",
+      "label": "phone",
+      "surface": "splice-guard",
+      "width": 390,
+      "height": 844,
+      "sha256": "d0d2e6654ff7702146bed4a7153b2b1190f99fc0811ff807ea7889c7009196da"
+    },
+    {
+      "name": "phone-terminal-result.png",
+      "label": "phone",
+      "surface": "terminal-result",
+      "width": 390,
+      "height": 844,
+      "sha256": "caaabbf5812cf2c556218ef7ef759fc1778afb6d917b466903f40629a48b1658"
+    }
+  ],
+  "evidenceDigest": "cbb75e73b1fa5ac91186b4d93ebd7917d02deeb61f82835897eaafd3c7fe57e7"
 }

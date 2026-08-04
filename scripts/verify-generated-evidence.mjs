@@ -81,6 +81,151 @@ function assertPayloadMutationRejected(evidence, label, mutate) {
   assert(rejected, `evidence integrity accepted ${label}`);
 }
 
+const spliceRecordKeys = [
+  "label",
+  "stage",
+  "order",
+  "recipeId",
+  "battleSeed",
+  "eventType",
+  "eventId",
+  "triggerCollisionEventId",
+  "preventionCollisionEventId",
+  "tick",
+  "ruleId",
+  "sourceRuleSetId",
+  "abilityId",
+  "sourceUid",
+  "targetUid",
+  "amount",
+  "unit",
+  "magnitude",
+  "cadenceUnit",
+  "cadenceInterval",
+  "durationTicks",
+  "expiresTick",
+  "appliedCount",
+  "expiredCount",
+  "requestedDamage",
+  "appliedDamage",
+  "integrityBefore",
+  "integrityAfter",
+  "visualFrameTick",
+  "visualGuardCount",
+  "reason",
+  "screenshot",
+];
+
+function validateSpliceGuardEvidence(evidence) {
+  assert(Array.isArray(evidence.spliceGuardEvidence)
+      && evidence.spliceGuardEvidence.length === 8,
+    `generated evidence must contain eight Splice Guard records, got ${
+      evidence.spliceGuardEvidence?.length
+    }`);
+  const semanticByViewport = {};
+  for (const label of ["phone", "desktop"]) {
+    const records = evidence.spliceGuardEvidence.filter((record) => record.label === label);
+    assert(records.length === 4,
+      `${label} evidence must contain four Splice Guard stages, got ${records.length}`);
+    const stages = ["triggered", "applied", "prevented", "expired"];
+    const types = ["splice_triggered", "guard_applied", "guard_prevented", "guard_expired"];
+    records.forEach((record, index) => {
+      exactKeys(record, spliceRecordKeys, `${label} Splice Guard record ${index + 1}`);
+      exactKeys(record.screenshot, ["name", "sha256", "width", "height"],
+        `${label} Splice Guard screenshot binding ${index + 1}`);
+      assert(record.order === index + 1
+          && record.stage === stages[index]
+          && record.eventType === types[index],
+        `${label} Splice Guard stages are missing or out of order`);
+      assert(record.recipeId === "glass_cannon"
+          && record.battleSeed === 9125
+          && record.ruleId === "brick.splice.guard"
+          && record.sourceRuleSetId === "brick.splice_node"
+          && record.abilityId === "splice_guard"
+          && record.magnitude === 1
+          && record.cadenceUnit === "exchange"
+          && record.cadenceInterval === 1
+          && record.durationTicks === 120
+          && record.appliedCount === 3
+          && record.expiredCount === 2
+          && record.visualGuardCount === 2,
+        `${label} Splice Guard identity/rule semantics changed`);
+      const expectedViewport = evidence.viewports[label];
+      assert(record.screenshot.name === `${label}-splice-guard.png`
+          && record.screenshot.sha256 === evidence.screenshotHashes[record.screenshot.name]
+          && record.screenshot.width === expectedViewport.width
+          && record.screenshot.height === expectedViewport.height,
+        `${label} Splice Guard record lost its exact screenshot/viewport binding`);
+      const screenshotRecord = evidence.screenshotRecords.find(
+        (candidate) => candidate.name === record.screenshot.name
+      );
+      assert(screenshotRecord
+          && screenshotRecord.label === label
+          && screenshotRecord.surface === "splice-guard"
+          && screenshotRecord.sha256 === record.screenshot.sha256,
+        `${label} Splice Guard semantic screenshot record is missing or stale`);
+    });
+    assert(records[0].reason === "hostile_collision"
+        && records[0].amount === 1
+        && records[0].unit === "damage"
+        && records[0].targetUid === "none",
+      `${label} Splice did not originate from the packaged hostile collision`);
+    assert(records[1].amount === 1
+        && records[1].unit === "damage"
+        && records[1].expiresTick === records[3].tick
+        && records[1].targetUid !== "none"
+        && records[1].reason === "adjacent_allied_guard",
+      `${label} Splice did not apply bounded Guard to an adjacent ally`);
+    assert(records[2].amount === 1
+        && records[2].requestedDamage === 2
+        && records[2].appliedDamage === 1
+        && records[2].integrityBefore - records[2].integrityAfter === 1
+        && records[2].targetUid !== "none"
+        && records[2].reason === "hostile_damage",
+      `${label} Splice Guard did not prevent exactly one hostile damage`);
+    assert(records[3].amount === 1
+        && records[3].unit === "damage"
+        && records[3].reason === "duration"
+        && records[3].expiresTick === records[3].tick
+        && records[3].tick - records[0].tick === 120
+        && records[3].targetUid !== records[2].targetUid,
+      `${label} untouched Splice Guard did not expire after 120 canonical ticks`);
+    assert(Number(records[0].triggerCollisionEventId) < Number(records[0].eventId)
+        && Number(records[1].eventId) < Number(records[0].preventionCollisionEventId)
+        && Number(records[0].preventionCollisionEventId) < Number(records[2].eventId)
+        && records[0].visualFrameTick === records[2].tick
+        && records.every((record, index) =>
+          record.triggerCollisionEventId === records[0].triggerCollisionEventId
+            && record.preventionCollisionEventId
+              === records[0].preventionCollisionEventId
+            && record.visualFrameTick === records[0].visualFrameTick
+            && record.visualGuardCount === records[0].visualGuardCount
+            && record.sourceUid === records[0].sourceUid
+            && (index === 0 || Number(record.eventId) > Number(records[index - 1].eventId))
+        ),
+      `${label} Splice Guard events lost their physical roots or visible frame binding`);
+    semanticByViewport[label] = records.map(({ label: _label, screenshot: _screenshot, ...record }) =>
+      record
+    );
+  }
+  assert(JSON.stringify(semanticByViewport.phone) === JSON.stringify(semanticByViewport.desktop),
+    "phone and desktop Splice Guard evidence diverged for the same build and seed");
+}
+
+function assertResealedSemanticMutationRejected(evidence, label, mutate) {
+  const changed = deepClone(evidence);
+  mutate(changed);
+  const resealed = sealEvidence(payloadWithoutDigest(changed));
+  validatePayloadDigest(resealed);
+  let rejected = false;
+  try {
+    validateSpliceGuardEvidence(resealed);
+  } catch {
+    rejected = true;
+  }
+  assert(rejected, `Splice Guard semantic validation accepted resealed ${label}`);
+}
+
 function runMutationControls(evidence, manifestBytes, checksumBytes, expectedDigest, provenance) {
   const text = manifestBytes.toString("utf8");
   assert(text.includes("magnitude=3"),
@@ -129,6 +274,53 @@ function runMutationControls(evidence, manifestBytes, checksumBytes, expectedDig
   assertPayloadMutationRejected(evidence, "changed executable bytes", (changed) => {
     changed.executableEvidence.archive.sha256 = "0".repeat(64);
   });
+  assertPayloadMutationRejected(evidence, "missing linked-cost evidence", (changed) => {
+    changed.linkedCostEvidence.pop();
+  });
+  assertPayloadMutationRejected(evidence, "crossed viewport evidence", (changed) => {
+    changed.screenshotRecords[0].label =
+      changed.screenshotRecords[0].label === "phone" ? "desktop" : "phone";
+  });
+  assertPayloadMutationRejected(evidence, "tampered screenshot binding", (changed) => {
+    changed.screenshotRecords[0].sha256 = "0".repeat(64);
+  });
+  const spliceMutationControls = [
+    ["stage removal", (changed) => changed.spliceGuardEvidence.splice(2, 1)],
+    ["stage order", (changed) => {
+      [changed.spliceGuardEvidence[1], changed.spliceGuardEvidence[2]] =
+        [changed.spliceGuardEvidence[2], changed.spliceGuardEvidence[1]];
+    }],
+    ["event type", (changed) => { changed.spliceGuardEvidence[0].eventType = "guard_applied"; }],
+    ["recipe", (changed) => { changed.spliceGuardEvidence[0].recipeId = "forged_recipe"; }],
+    ["seed", (changed) => { changed.spliceGuardEvidence[0].battleSeed = 7; }],
+    ["rule", (changed) => { changed.spliceGuardEvidence[0].ruleId = "forged.rule"; }],
+    ["source", (changed) => { changed.spliceGuardEvidence[0].sourceUid = "forged-source"; }],
+    ["magnitude", (changed) => { changed.spliceGuardEvidence[1].magnitude = 99; }],
+    ["cadence", (changed) => { changed.spliceGuardEvidence[1].cadenceInterval = 2; }],
+    ["duration", (changed) => { changed.spliceGuardEvidence[3].durationTicks = 121; }],
+    ["visible frame tick", (changed) => {
+      changed.spliceGuardEvidence[0].visualFrameTick += 1;
+    }],
+    ["visible Guard count", (changed) => {
+      changed.spliceGuardEvidence[0].visualGuardCount = 1;
+    }],
+    ["prevention", (changed) => { changed.spliceGuardEvidence[2].appliedDamage = 2; }],
+    ["expiry", (changed) => { changed.spliceGuardEvidence[3].reason = "forged"; }],
+    ["target", (changed) => {
+      changed.spliceGuardEvidence[3].targetUid = changed.spliceGuardEvidence[2].targetUid;
+    }],
+    ["viewport", (changed) => { changed.spliceGuardEvidence[0].label = "desktop"; }],
+    ["screenshot removal", (changed) => { delete changed.spliceGuardEvidence[0].screenshot; }],
+    ["screenshot hash", (changed) => {
+      changed.spliceGuardEvidence[0].screenshot.sha256 = "0".repeat(64);
+    }],
+    ["screenshot dimensions", (changed) => {
+      changed.spliceGuardEvidence[0].screenshot.width = 1280;
+    }],
+  ];
+  for (const [label, mutate] of spliceMutationControls) {
+    assertResealedSemanticMutationRejected(evidence, label, mutate);
+  }
 
   // Preserve the inherited aa5bf74 stale-evidence control even if all of its
   // internal integrity fields are honestly recomputed.
@@ -168,8 +360,11 @@ exactKeys(evidence, [
   "guidance",
   "inspections",
   "ruleCallouts",
+  "linkedCostEvidence",
+  "spliceGuardEvidence",
   "settings",
   "screenshotHashes",
+  "screenshotRecords",
   "evidenceDigest",
 ], "generated evidence");
 validateRawChecksum(manifestBytes, checksumBytes);
@@ -199,8 +394,8 @@ for (const label of ["phone", "desktop"]) {
 }
 
 const screenshotEntries = Object.entries(evidence.screenshotHashes ?? {});
-assert(screenshotEntries.length === 38,
-  `generated evidence must bind all 38 screenshots, got ${screenshotEntries.length}`);
+assert(screenshotEntries.length === 40,
+  `generated evidence must bind all 40 screenshots, got ${screenshotEntries.length}`);
 for (const [name, expected] of screenshotEntries) {
   assert(/^(phone|desktop)-[a-z0-9-]+\.png$/.test(name),
     `generated evidence contains an unexpected screenshot path: ${name}`);
@@ -209,6 +404,25 @@ for (const [name, expected] of screenshotEntries) {
   assert(actual === expected,
     `stale generated screenshot ${name}: ${actual}, expected ${expected}`);
 }
+assert(evidence.screenshotRecords?.length === 40,
+  "generated evidence must carry one semantic record per screenshot");
+for (const record of evidence.screenshotRecords) {
+  const expectedViewport = evidence.viewports[record.label];
+  assert(expectedViewport
+      && record.name.startsWith(`${record.label}-`)
+      && record.width === expectedViewport.width
+      && record.height === expectedViewport.height
+      && record.sha256 === evidence.screenshotHashes[record.name],
+    `missing, crossed, stale, or tampered screenshot record: ${JSON.stringify(record)}`);
+}
+for (const label of ["phone", "desktop"]) {
+  const linked = evidence.linkedCostEvidence?.filter((sample) => sample.label === label) ?? [];
+  assert(linked.length === 1 && linked[0].text.includes("ordered=true")
+      && linked[0].text.includes("cost=1")
+      && linked[0].text.includes("payoff=2"),
+    `${label} linked-cost evidence is missing or incorrect`);
+}
+validateSpliceGuardEvidence(evidence);
 
 runMutationControls(
   evidence,
@@ -236,6 +450,7 @@ console.log(
   `[generated-evidence] OK: ${workingTree ? "working tree" : "tracked HEAD"} `
     + `${expectedSourceDigest}; payload ${evidence.evidenceDigest}; `
     + `${evidence.ruleCallouts.length} ordered callouts; `
+    + `${evidence.spliceGuardEvidence.length} ordered Splice Guard records; `
     + `${screenshotEntries.length} bound screenshots; `
     + `${evidence.executableEvidence.webFiles.length + 1} executable files; `
     + `aa5bf74 + direct tamper controls rejected`

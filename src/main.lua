@@ -39,6 +39,9 @@ local last_guidance_signature
 local last_action_state_signature
 local battle_rule_telemetry_seen = {}
 local verification_mode = false
+local verification_splice_evidence
+local verification_splice_frame
+local verification_splice_view = false
 
 local COLORS = {
     shadow = P.shadow.rgb,
@@ -253,6 +256,34 @@ local function telemetry_rule(inspection)
     )
 end
 
+local function telemetry_rarity(item)
+    item = item or {}
+    local rule_set = item.rule_set or {}
+    local telegraph = item.telegraph or {}
+    local balance = item.balance or {}
+    local details = item.details or {}
+    local shell_count = item.shell_count or details.shell_count
+    if shell_count == nil and type(details.shells) == "table" then
+        shell_count = #details.shells
+    end
+    return string.format(
+        "rarity=%s beads=%d shells=%d passives=%d/%d mcu=%d/%d balance=%.3f/%s copy_cap=%d",
+        telemetry_value(rule_set.rarity or item.rarity),
+        tonumber(telegraph.beads) or 0,
+        tonumber(shell_count) or 0,
+        tonumber(telegraph.passive_count) or 0,
+        tonumber(telegraph.passive_ceiling) or 0,
+        tonumber(telegraph.mcu) or 0,
+        tonumber(telegraph.mcu_ceiling) or 0,
+        tonumber(balance.spent) or 0,
+        telemetry_value(balance.budget or telegraph.balance_budget),
+        tonumber(telegraph.copy_cap
+            or (item.compatibility and item.compatibility.max_copies)
+            or (rule_set.compatibility and rule_set.compatibility.max_copies))
+            or 0
+    )
+end
+
 local function report_guidance()
     local signature
     if view.screen == "draft" and view.draft then
@@ -282,7 +313,7 @@ local function report_guidance()
             if link.active_synergy then active_links = active_links + 1 end
         end
         signature = string.format(
-            "screen=setup rival=%s scout=%s pressure=%s build=%s active_links=%d",
+            "screen=setup rival=%s scout=%s pressure=%s build=%s active_links=%d ability_links=%d",
             telemetry_value(view.opponent and view.opponent.name),
             telemetry_tags(view.opponent and view.opponent.scout_tags),
             telemetry_value(view.opponent
@@ -290,7 +321,8 @@ local function report_guidance()
                 and view.opponent.pressure[1]
                 and view.opponent.pressure[1].name),
             telemetry_tags(view.setup.build_tags, true),
-            active_links
+            active_links,
+            #(view.setup.ability_links or {})
         )
     end
     if signature and signature ~= last_guidance_signature then
@@ -384,7 +416,7 @@ local function activate(action_id, source)
         and view.draft and view.draft.inspected or nil
     if inspected_choice then
         print(string.format(
-            "CALLACK_INSPECTION type=choice source=%s name=%s mechanics=%d operation=%s cause=%s counters=%s links=%s adds=%s %s",
+            "CALLACK_INSPECTION type=choice source=%s name=%s mechanics=%d operation=%s cause=%s counters=%s links=%s adds=%s %s %s",
             telemetry_value(source),
             telemetry_value(inspected_choice.name),
             #(inspected_choice.mechanics or {}),
@@ -395,6 +427,7 @@ local function activate(action_id, source)
             telemetry_tags(inspected_choice.synergy and inspected_choice.synergy.counters),
             telemetry_tags(inspected_choice.synergy and inspected_choice.synergy.matched),
             telemetry_tags(inspected_choice.synergy and inspected_choice.synergy.introduced),
+            telemetry_rarity(inspected_choice),
             telemetry_rule(inspected_choice.rule_inspection)
         ))
     end
@@ -402,7 +435,7 @@ local function activate(action_id, source)
         and view.battle and view.battle.inspected or nil
     if inspected_entity then
         print(string.format(
-            "CALLACK_INSPECTION type=entity source=%s id=%s name=%s owner=%s mechanic=%s %s",
+            "CALLACK_INSPECTION type=entity source=%s id=%s name=%s owner=%s mechanic=%s %s %s",
             telemetry_value(source),
             telemetry_value(inspected_entity.entity_id),
             telemetry_value(inspected_entity.name),
@@ -410,6 +443,7 @@ local function activate(action_id, source)
             telemetry_value(inspected_entity.mechanic
                 or inspected_entity.core
                 or inspected_entity.state),
+            telemetry_rarity(inspected_entity),
             telemetry_rule(inspected_entity.rule_inspection)
         ))
     end
@@ -486,7 +520,7 @@ local function panel(x, y, width, height, surface, radius)
 end
 
 local function draw_beads(rarity, x, y, direction)
-    local rarity_token = art.rarity[rarity] or art.rarity.common
+    local rarity_token = art.rarity_token(rarity) or art.rarity_token("common")
     local color = COLORS[rarity] or COLORS.common
     for index = 1, rarity_token.beads do
         set_color(color)
@@ -523,7 +557,7 @@ local function draw_marble(x, y, radius, rarity, mineral, shell_ratio, statuses,
     set_color(base, art.material.glass.body_alpha * (0.48 + shell_ratio * 0.52))
     love.graphics.circle("fill", x, y, radius)
     set_color(rarity_color, art.material.glass.edge_alpha)
-    love.graphics.setLineWidth((art.rarity[rarity] or art.rarity.common).rim_width)
+    love.graphics.setLineWidth((art.rarity_token(rarity) or art.rarity_token("common")).rim_width)
     love.graphics.circle("line", x, y, radius - 1)
     set_color(COLORS.chalk, art.material.glass.inner_alpha)
     love.graphics.circle("line", x, y, radius * 0.68)
@@ -669,7 +703,7 @@ local function draw_button(id, label, accent)
     love.graphics.printf(string.upper(label or action.label), x + 6, y + height / 2 - 8, width - 12, "center")
 end
 
-local function draw_chrome()
+local function draw_chrome(phase_label, seed_label)
     local desktop = mode() == "desktop"
     local x, y, width, height = desktop and 24 or 12, desktop and 16 or 12,
         desktop and 1232 or 366, desktop and 64 or 52
@@ -683,9 +717,21 @@ local function draw_chrome()
     love.graphics.setLineWidth(1)
     love.graphics.setFont(fonts.micro)
     set_color(COLORS.brass)
-    love.graphics.printf(view.labels.phase, x + width - 210, y + 12, 194, "right")
+    love.graphics.printf(
+        phase_label or view.labels.phase,
+        x + width - 210,
+        y + 12,
+        194,
+        "right"
+    )
     set_color(COLORS.muted)
-    love.graphics.printf(view.labels.seed, x + width - 210, y + 34, 194, "right")
+    love.graphics.printf(
+        seed_label or view.labels.seed,
+        x + width - 210,
+        y + 34,
+        194,
+        "right"
+    )
 end
 
 local function draw_tag_chips(tags, x, y, width)
@@ -912,6 +958,62 @@ local function draw_draft_card(card, x, y, width, height, large, index)
     love.graphics.printf(lines[2] or "",
         text_x, text_y + (large and 116 or 91), text_width,
         large and "center" or "left")
+    local telegraph = card.telegraph or {}
+    local authority_line = ""
+    if telegraph.packaging_only then
+        authority_line = string.format(
+            "%d BRICKS / MEMBER LEDGERS / %s OFFER",
+            #(telegraph.members or {}),
+            string.upper(telegraph.offer_tier or rarity or "")
+        )
+    elseif telegraph.rarity then
+        local passive
+        if category == "marble" then
+            passive = telegraph.passive_count == 0
+                and "BASELINE RELEASE"
+                or string.format(
+                    "BONUS RELEASE %d/%d",
+                    telegraph.passive_count or 0,
+                    telegraph.passive_ceiling or 0
+                )
+        else
+            passive = telegraph.passive_count == 0
+                and "NO PASSIVE"
+                or string.format(
+                    "PASSIVE %d/%d",
+                    telegraph.passive_count or 0,
+                    telegraph.passive_ceiling or 0
+                )
+        end
+        local shell_copy = category == "marble"
+            and string.format(
+                " / SHELLS %d/%d",
+                card.details and card.details.shell_count or 0,
+                telegraph.shell_cap or 0
+            )
+            or ""
+        local balance_spent = card.balance and card.balance.spent or 0
+        authority_line = string.format(
+            "%s%s / MCU %d/%d / BAL %.3g/100 / COPY %d",
+            passive,
+            shell_copy,
+            telegraph.mcu or 0,
+            telegraph.mcu_ceiling or 0,
+            balance_spent,
+            telegraph.copy_cap or 1
+        )
+    end
+    if authority_line ~= "" then
+        love.graphics.setFont(fonts.micro)
+        set_color(COLORS.muted, alpha)
+        love.graphics.printf(
+            authority_line,
+            text_x,
+            y + height - (large and 92 or 48),
+            text_width,
+            large and "left" or "left"
+        )
+    end
     if large then
         local summary, summary_color = synergy_summary(card)
         if summary_color == COLORS.brass then summary_color = COLORS.brass_dark end
@@ -924,6 +1026,23 @@ local function draw_draft_card(card, x, y, width, height, large, index)
     end
     draw_tag_chips(card.tags, text_x, large and y + height - 48 or y + height - 30, text_width)
     draw_beads(rarity or "common", x + width - 16, y + 16, -1)
+    if category == "marble" then
+        local shell_count = card.details and card.details.shell_count or 0
+        love.graphics.setFont(fonts.micro)
+        set_color(COLORS.ink, 0.74 * alpha)
+        love.graphics.printf("SHELL", x + width - 70, y + 31, 52, "right")
+        for shell_index = 1, shell_count do
+            love.graphics.rectangle(
+                "fill",
+                x + width - 18 - shell_index * 8,
+                y + 45,
+                5,
+                3,
+                1,
+                1
+            )
+        end
+    end
     if card.selected then
         set_color(COLORS.focus)
         love.graphics.setFont(fonts.label)
@@ -1294,6 +1413,23 @@ local function draw_setup_links(origin_x, origin_y, step, cell_size)
                 love.graphics.setLineWidth(4)
                 love.graphics.line(left.x, left.y, right.x, right.y)
             end
+        end
+    end
+    for _, link in ipairs(view.setup.ability_links or {}) do
+        local source = positions[link.source_uid]
+        local target = positions[link.target_uid]
+        if source and target then
+            set_color(COLORS.focus, 0.92)
+            love.graphics.setLineWidth(3)
+            love.graphics.line(source.x, source.y, target.x, target.y)
+            love.graphics.setFont(fonts.micro)
+            love.graphics.printf(
+                "COST " .. tostring(link.cost_amount),
+                (source.x + target.x) / 2 - 34,
+                (source.y + target.y) / 2 - 16,
+                68,
+                "center"
+            )
         end
     end
     love.graphics.setLineWidth(1)
@@ -1684,6 +1820,28 @@ local function draw_battle_world(frame)
             local brick = side_brick(frame, entity.owner, entity.id)
             draw_brick(x - width / 2, y - height / 2, width, height,
                 entity.family, entity.behaviour, entity.hp_ratio, false)
+            if entity.guard and (entity.guard.amount or 0) > 0 then
+                set_color(COLORS.restore)
+                love.graphics.setLineWidth(3)
+                local pad = 5
+                love.graphics.line(
+                    x - width / 2 - pad, y - height / 2,
+                    x - width / 2 - pad, y + height / 2
+                )
+                love.graphics.line(
+                    x + width / 2 + pad, y - height / 2,
+                    x + width / 2 + pad, y + height / 2
+                )
+                love.graphics.setLineWidth(1)
+                love.graphics.setFont(fonts.micro)
+                love.graphics.printf(
+                    "GUARD " .. tostring(entity.guard.amount),
+                    x - width / 2,
+                    y - height / 2 - 13,
+                    width,
+                    "center"
+                )
+            end
             if brick and brick.status then
                 set_color(COLORS.focus)
                 love.graphics.circle("line", x, y, math.min(width, height) * 0.34)
@@ -1980,10 +2138,97 @@ local function draw_battle_overlay(replay)
     -- shared trigger/target/effect identity.
 end
 
+local function splice_stage(name)
+    for _, stage in ipairs(
+        verification_splice_evidence and verification_splice_evidence.stages or {}
+    ) do
+        if stage.stage == name then return stage end
+    end
+    return {}
+end
+
+local function draw_verification_splice_card()
+    if not verification_mode
+        or not verification_splice_evidence
+        or not verification_splice_view
+        or view.battle.inspected then
+        return
+    end
+    local applied = splice_stage("applied")
+    local prevented = splice_stage("prevented")
+    local expired = splice_stage("expired")
+    local phone = mode() == "phone"
+    local x, y, width, height = phone
+        and 24 or 418,
+        phone and 334 or 190,
+        phone and 342 or 444,
+        phone and 148 or 292
+    panel(x, y, width, height, "paper", phone and 10 or 16)
+    love.graphics.setFont(phone and fonts.micro or fonts.meta)
+    set_color(COLORS.brass_ink)
+    love.graphics.printf("PACKAGED CANONICAL PROBE  /  REAL BATTLE",
+        x + 12, y + 10, width - 24, "center")
+    love.graphics.setFont(phone and fonts.meta or fonts.section)
+    set_color(COLORS.ink)
+    love.graphics.printf(string.format("SPLICE GUARD  •  %s  •  SEED %d",
+        tostring(verification_splice_evidence.recipe_id):upper():gsub("_", " "),
+        verification_splice_evidence.battle_seed),
+        x + 12, y + (phone and 28 or 40), width - 24, "center")
+    love.graphics.setFont(phone and fonts.micro or fonts.body)
+    local lines = {
+        string.format("1  TRIGGER  HOSTILE COLLISION  •  %s",
+            verification_splice_evidence.rule_id),
+        string.format("2  APPLY    GUARD %s  •  %d ADJACENT ALLIES",
+            tostring(applied.amount),
+            verification_splice_evidence.applied_count),
+        string.format("3  PREVENT  %s OF %s DAMAGE  •  %s TO %s INTEGRITY",
+            tostring(prevented.amount),
+            tostring(prevented.requested_damage),
+            tostring(prevented.integrity_before),
+            tostring(prevented.integrity_after)),
+        string.format("4  EXPIRE   %d UNTOUCHED  •  +%d TICKS  •  TICK %s",
+            verification_splice_evidence.expired_count,
+            verification_splice_evidence.duration_ticks,
+            tostring(expired.tick)),
+    }
+    local line_y = y + (phone and 48 or 86)
+    local line_step = phone and 18 or 39
+    for index, line in ipairs(lines) do
+        set_color(index == 3 and COLORS.restore or COLORS.ink)
+        love.graphics.printf(line, x + 14, line_y + (index - 1) * line_step,
+            width - 28, phone and "left" or "center")
+    end
+    love.graphics.setFont(fonts.micro)
+    set_color(COLORS.brass_ink)
+    local footer = phone
+        and string.format("%s  /  X%d  /  G%d  /  %dT",
+            verification_splice_evidence.source_rule_set_id,
+            verification_splice_evidence.cadence_interval,
+            verification_splice_evidence.magnitude,
+            verification_splice_evidence.duration_ticks)
+        or string.format(
+            "RULESET %s  /  EXCHANGE/%d  /  MAGNITUDE %d  /  DURATION %d",
+            verification_splice_evidence.source_rule_set_id,
+            verification_splice_evidence.cadence_interval,
+            verification_splice_evidence.magnitude,
+            verification_splice_evidence.duration_ticks)
+    love.graphics.printf(footer,
+        x + 12, y + height - (phone and 17 or 30), width - 24, "center")
+end
+
 local function draw_battle()
-    draw_chrome()
-    draw_battle_world(view.battle.frame)
-    draw_battle_overlay(false)
+    if verification_splice_view then
+        draw_chrome(
+            "PACKAGED CANONICAL PROBE",
+            "SEED " .. tostring(verification_splice_evidence.battle_seed)
+        )
+        draw_battle_world(verification_splice_frame)
+    else
+        draw_chrome()
+        draw_battle_world(view.battle.frame)
+        draw_battle_overlay(false)
+    end
+    draw_verification_splice_card()
 end
 
 local function result_side(frame)
@@ -2197,6 +2442,13 @@ local function spawn_event_particles(event)
         brick_destroyed = { 6, 0.20, "triangle", COLORS.brass_dark },
         shell_break = { 9, 0.22, "line", COLORS.chalk },
         core_release = { 6, 0.28, "dot", COLORS.brass_light },
+        chain_targeted = { 5, 0.24, "line", COLORS.damage },
+        guard_applied = { 4, 0.28, "triangle", COLORS.restore },
+        guard_prevented = { 4, 0.20, "triangle", COLORS.restore },
+        guard_expired = { 3, 0.18, "line", COLORS.muted },
+        ability_triggered = { 4, 0.20, "dot", COLORS.focus },
+        ability_cost_paid = { 5, 0.24, "line", COLORS.damage },
+        ability_payoff_applied = { 6, 0.28, "dot", COLORS.brass_light },
         battle_end = { 8, 0.40, "triangle", COLORS.brass },
     }
     local recipe = recipes[event.type]
@@ -2352,6 +2604,12 @@ function love.load(args)
     if verification_mode then
         local runtime_verification = require("battle.runtime_verification")
         local evidence = runtime_verification.run()
+        verification_splice_evidence = evidence.splice_guard
+        verification_splice_frame = battle_presentation.project_battle(
+            evidence.splice_guard.visual_frame,
+            evidence.splice_guard.visual_frame,
+            1
+        )
         print(string.format(
             "CALLACK_CANONICAL_SWEEP kind=%s speed=%.3f toi=%.6f reflected=%s tunneled=%s substeps=%d iterations=%d",
             evidence.sweep.kind,
@@ -2373,6 +2631,61 @@ function love.load(args)
             evidence.blowback.iterations,
             evidence.blowback.tick
         ))
+        print(string.format(
+            "CALLACK_LINKED_COST source=%s ability=%s activation=%s cost_rule=%s cost=%d cost_unit=%s target=%s relation=%s target_uid=%s cadence_index=%d charges=%d_to_%d payoff_rule=%s payoff=%d payoff_unit=%s ordered=%s copy=%s",
+            evidence.linked_cost.source_rule_set_id,
+            evidence.linked_cost.ability_id,
+            evidence.linked_cost.activation_id,
+            evidence.linked_cost.cost_rule_id,
+            evidence.linked_cost.cost_amount,
+            evidence.linked_cost.cost_unit,
+            evidence.linked_cost.target_selector,
+            evidence.linked_cost.target_relation,
+            evidence.linked_cost.target_uid,
+            evidence.linked_cost.cadence_index,
+            evidence.linked_cost.charges_before,
+            evidence.linked_cost.charges_after,
+            evidence.linked_cost.payoff_rule_id,
+            evidence.linked_cost.payoff_amount,
+            evidence.linked_cost.payoff_unit,
+            tostring(evidence.linked_cost.ordered),
+            telemetry_value(evidence.linked_cost.compact_copy)
+        ))
+        for _, stage in ipairs(evidence.splice_guard.stages) do
+            print(string.format(
+                "CALLACK_SPLICE_GUARD stage=%s order=%d recipe=%s seed=%d type=%s event_id=%s trigger_collision_event_id=%s prevention_collision_event_id=%s tick=%d rule=%s source_rule_set=%s ability=%s source_uid=%s target_uid=%s amount=%s unit=%s magnitude=%d cadence=%s/%d duration_ticks=%d expires_tick=%s applied_count=%d expired_count=%d requested_damage=%s applied_damage=%s integrity=%s_to_%s visual_tick=%d visual_guards=%d reason=%s",
+                stage.stage,
+                stage.order,
+                evidence.splice_guard.recipe_id,
+                evidence.splice_guard.battle_seed,
+                stage.type,
+                tostring(stage.event_id),
+                tostring(evidence.splice_guard.trigger_collision_event_id),
+                tostring(evidence.splice_guard.prevention_collision_event_id),
+                stage.tick,
+                evidence.splice_guard.rule_id,
+                evidence.splice_guard.source_rule_set_id,
+                evidence.splice_guard.ability_id,
+                evidence.splice_guard.source_uid,
+                stage.target_uid,
+                tostring(stage.amount),
+                tostring(stage.unit or "none"),
+                evidence.splice_guard.magnitude,
+                evidence.splice_guard.cadence_unit,
+                evidence.splice_guard.cadence_interval,
+                evidence.splice_guard.duration_ticks,
+                tostring(stage.expires_tick or "none"),
+                evidence.splice_guard.applied_count,
+                evidence.splice_guard.expired_count,
+                tostring(stage.requested_damage or "none"),
+                tostring(stage.applied_damage or "none"),
+                tostring(stage.integrity_before or "none"),
+                tostring(stage.integrity_after or "none"),
+                evidence.splice_guard.visual_frame_tick,
+                evidence.splice_guard.visual_guard_count,
+                stage.reason
+            ))
+        end
     end
     if not touch and not desktop and love.system.getOS() ~= "Web" then
         local desktop_width, desktop_height = love.window.getDesktopDimensions()
@@ -2475,6 +2788,19 @@ function love.keypressed(key)
         if focused_action_id then activate(focused_action_id, "keyboard") end
     elseif key == "space" and view.screen == "battle" then
         activate("battle_pause", "keyboard")
+    elseif key == "p"
+        and verification_mode
+        and verification_splice_frame
+        and view.screen == "battle" then
+        verification_splice_view = not verification_splice_view
+        print(string.format(
+            "CALLACK_SPLICE_VIEW active=%s recipe=%s seed=%d tick=%d guards=%d",
+            tostring(verification_splice_view),
+            verification_splice_evidence.recipe_id,
+            verification_splice_evidence.battle_seed,
+            verification_splice_evidence.visual_frame_tick,
+            verification_splice_evidence.visual_guard_count
+        ))
     elseif key == "right" and view.screen == "battle" then
         if not app.model.ui.paused then activate("battle_pause", "keyboard") end
         run_loop.advance(app, 1)

@@ -129,7 +129,9 @@ function M.project_battle(current, previous, alpha)
                 type = "brick", owner = side_id, id = brick.body_id,
                 name = brick.name, content_id = brick.id,
                 art_id = "brick." .. brick.id, behaviour = brick.behaviour,
-                family = brick.family, hp = brick.hp, max_hp = brick.max_hp,
+                family = brick.family, rarity = brick.rarity,
+                hp = brick.hp, max_hp = brick.max_hp,
+                guard = copy(brick.guard),
                 x = brick.x, y = brick.y,
                 width = brick.width, height = brick.height,
                 hp_ratio = brick.hp_ratio, alive = brick.alive,
@@ -182,6 +184,26 @@ function M.event_text(event, names)
         return string.format("%s release pushes %d marble(s)", actor, #(event.affected or {}))
     elseif event.type == "status_applied" then
         return string.format("%s gains %s", actor, readable(event.status))
+    elseif event.type == "chain_targeted" then
+        return string.format("%s Chain targets enemy marble %s",
+            actor, readable(event.target_entity_id))
+    elseif event.type == "guard_applied" then
+        return string.format("%s grants Guard 1 to %s",
+            actor, readable(event.target_entity_id))
+    elseif event.type == "guard_prevented" then
+        return string.format("%s Splice Guard prevents %d hostile damage to %s",
+            actor, event.prevented or 0, readable(event.target_entity_id))
+    elseif event.type == "guard_expired" then
+        return string.format("%s Splice Guard expires on %s (%s)",
+            actor, readable(event.target_entity_id), readable(event.reason))
+    elseif event.type == "ability_triggered" then
+        return string.format("%s triggers %s", actor, readable(event.ability_id))
+    elseif event.type == "ability_cost_paid" then
+        return string.format("%s pays %d linked allied integrity",
+            actor, event.applied_damage or 0)
+    elseif event.type == "ability_payoff_applied" then
+        return string.format("%s applies %s payoff for %d",
+            actor, readable(event.ability_id), event.amount or 0)
     elseif event.type == "battle_end" then
         if event.outcome == "draw" then return "Draw: " .. readable(event.reason) end
         return string.format("%s wins", names[event.winner] or event.winner)
@@ -206,6 +228,15 @@ function M.cues(events)
         elseif event.type == "shell_break" then cue.effect = "shell_break"
         elseif event.type == "core_release" or event.type == "blowback" then cue.effect = "release"
         elseif event.type == "status_applied" then cue.effect = event.status
+        elseif event.type == "chain_targeted" then cue.effect = "chain_target"
+        elseif event.type == "guard_applied"
+            or event.type == "guard_prevented"
+            or event.type == "guard_expired" then
+            cue.effect = "guard"
+        elseif event.type == "ability_triggered"
+            or event.type == "ability_cost_paid"
+            or event.type == "ability_payoff_applied" then
+            cue.effect = "ability_cost"
         elseif event.type == "wall_collision" or event.type == "ricochet" then cue.effect = "ricochet"
         elseif event.type == "battle_end" then cue.effect = "result"
         else cue.effect = "audit" end

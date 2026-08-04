@@ -66,12 +66,21 @@ momentum changes launch speed and mass, core trajectory changes launch angle,
 and ricochet/reflect change physical rebound. Poison, freeze, and magnetism
 advance in fixed ticks.
 
-Collision impulse activates shell and brick rules in `effects.lua`: absorb,
-reflect, regenerate, fortify, poison, freeze, magnetic, shatter, chain, vault,
-splice, dummy, aegis, void, mirror, and temporal. A final shell break removes
-the marble body and releases its core at that exact transform. Release
+Collision impulse activates canonical shell and brick RuleSet abilities.
+Powder Keg Chain wears only enemy marble shells; Splice grants bounded,
+non-stacking Guard to adjacent allied bricks. Basalt and Training Dummy are
+common raw bodies with no passive. Every brick integrity mutation crosses the
+deny-by-default ownership boundary; only a setup-linked, single-use
+`allied_brick_cost` authorization may pay exact allied integrity. A final shell
+break removes the marble body and releases its core at that exact transform. Release
 blowback is a radial impulse against every qualifying body, regardless of
 owner; nearby queued bodies wake into the same exchange.
+
+Marble and brick rarity is canonical RuleSet data, not an ID suffix or visual
+inference. The five tiers share a fixed 100-point envelope and impose shell,
+ability-group, MCU, and copy ceilings. Draft and refit tier tickets, availability,
+setup legality, inspection copy, rarity beads, and balance ledgers all project
+that same authority.
 
 An exchange ends only after its dynamic bodies sleep and transient fields
 expire, or after the explicit simulated-time cap. Survivors return to the bag

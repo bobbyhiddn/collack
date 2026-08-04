@@ -96,17 +96,14 @@ function M.run(t)
 
     do
         local expected = {
-            basalt_absorber = "absorb",
             mirror_pane = "reflect",
             moss_regenerator = "regenerate",
             venom_glass = "status_applied",
             rime_block = "status_applied",
             lodestone_block = "magnetic",
             shatter_crystal = "shatter",
-            powder_keg = "chain_detonate",
+            powder_keg = "chain_retaliate",
             vault_arch = "vault",
-            splice_node = "splice",
-            training_dummy = "dummy",
             aegis_keystone = "aegis",
             void_prism = "void",
             prismatic_mirror = "mirror",
@@ -120,6 +117,24 @@ function M.run(t)
             t:ok(has_event(battle, expected[id]),
                 id .. " resolves its behaviour from a physical contact")
         end
+
+        for _, id in ipairs({ "basalt_absorber", "training_dummy" }) do
+            local battle = simple_target(id)
+            t:ok(has_event(battle, "collision"),
+                id .. " remains a physical common baseline")
+            t:eq(has_event(battle, id == "basalt_absorber" and "absorb" or "dummy"), nil,
+                id .. " has no legacy common passive")
+        end
+
+        local spliced = simple_target("splice_node", {
+            columns = 2,
+            lane = 1,
+            second_brick = "plain_block",
+        })
+        t:ok(has_event(spliced, "splice_triggered"),
+            "physical Splice contact emits its attributed trigger")
+        t:ok(has_event(spliced, "guard_applied"),
+            "Splice grants bounded Guard to an adjacent physical brick")
 
         local fortified = simple_target("granite_fortifier", {
             columns = 2,
