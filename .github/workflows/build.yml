@@ -121,6 +121,8 @@ jobs:
         env:
           PLAYWRIGHT_BROWSERS_PATH: .playwright-browsers
         run: |
+          npm run test:shore-browser
+          npm run verify:shore-local
           npm run verify:web
           npm run verify:evidence -- --working-tree --compare-tracked
 
