@@ -5,8 +5,10 @@
   "type": "module",
   "scripts": {
     "browser:install": "PLAYWRIGHT_BROWSERS_PATH=.playwright-browsers playwright install chromium",
+    "test:shore-browser": "node --test deploy/shore/verify-live-route.test.mjs",
     "test:evidence-provenance": "node scripts/test-evidence-provenance.mjs",
     "verify:evidence": "npm run test:evidence-provenance && node scripts/verify-generated-evidence.mjs",
+    "verify:shore-local": "node scripts/verify-live-route-local.mjs",
     "verify:web": "PLAYWRIGHT_BROWSERS_PATH=.playwright-browsers node scripts/verify-web-browser.mjs",
     "verify:web:reproducible": "bash scripts/verify-web-reproducible.sh"
   },
