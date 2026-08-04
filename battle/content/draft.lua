@@ -408,4 +408,20 @@ end
 M.COMPREHENSION_POOL_SIZE = #M.COMPREHENSION_POOL
 assert(M.COMPREHENSION_POOL_SIZE == 17, "the approved comprehension pool must stay at 17 items")
 
-return M
+-- Catalogs are compatibility projections, never construction authority.
+-- Return a fresh recursive value for every exported table read so list, alias,
+-- by-id, reward, tag, and RuleSet mutations cannot survive into a later read
+-- (or cross-poison another exported view).  Keep the module itself as userdata
+-- so neither ordinary assignment nor rawset can replace an accessor or scalar.
+local module = newproxy(true)
+local module_metatable = getmetatable(module)
+module_metatable.__index = function(_, key)
+    local value = M[key]
+    if type(value) == "table" then return ast.copy(value) end
+    return value
+end
+module_metatable.__newindex = function(_, key)
+    error("draft catalog facade is read-only (" .. tostring(key) .. ")", 2)
+end
+module_metatable.__metatable = "isolated draft catalog projections"
+return module

@@ -28,6 +28,7 @@ harness.run({
     require("battle.tests.test_rule_migration"),
     require("battle.tests.test_canonical_rule_identity"),
     require("battle.tests.test_runtime_rule_authority"),
+    require("battle.tests.test_authority_facades"),
     require("battle.tests.test_marble_setup_authority"),
     require("battle.tests.test_short_run_state"),
     require("battle.tests.test_short_run_economy"),

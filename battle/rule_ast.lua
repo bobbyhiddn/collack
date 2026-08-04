@@ -2471,4 +2471,17 @@ function M.callout(event)
     return source .. " " .. verb .. amount_copy .. " on " .. target
 end
 
-return M
+-- Keep the AST implementation behind a non-table facade.  The functions in
+-- this module are part of the canonical authority boundary: replacing one of
+-- them after content validation would otherwise change later validation,
+-- compilation, balance, copy, and runtime reads in the same Lua process.
+-- `newproxy` is available in the Lua 5.1/LuaJIT runtimes supported by Callack
+-- and, unlike a table with __newindex, cannot be bypassed with rawset.
+local module = newproxy(true)
+local module_metatable = getmetatable(module)
+module_metatable.__index = M
+module_metatable.__newindex = function(_, key)
+    error("canonical RuleSet/AST facade is read-only (" .. tostring(key) .. ")", 2)
+end
+module_metatable.__metatable = "protected canonical RuleSet/AST facade"
+return module
