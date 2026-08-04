@@ -38,6 +38,39 @@ local TABLE_EXPORTS = {
     "COMPREHENSION_POOL",
 }
 
+local TIER_CASES = {
+    {
+        rarity = "common", marble_id = "chalk_common", rank = 1,
+        shell_cap = 1, bonus_release_groups = 0, bonus_release_mcu = 0,
+        brick_passive_groups = 0, brick_passive_mcu = 0,
+        brick_copy_cap = 4, marble_copy_cap = 3, authored_releases = 0,
+    },
+    {
+        rarity = "uncommon", marble_id = "geode_uncommon", rank = 2,
+        shell_cap = 2, bonus_release_groups = 1, bonus_release_mcu = 2,
+        brick_passive_groups = 1, brick_passive_mcu = 2,
+        brick_copy_cap = 3, marble_copy_cap = 2, authored_releases = 1,
+    },
+    {
+        rarity = "rare", marble_id = "warden_rare", rank = 3,
+        shell_cap = 3, bonus_release_groups = 1, bonus_release_mcu = 4,
+        brick_passive_groups = 1, brick_passive_mcu = 4,
+        brick_copy_cap = 2, marble_copy_cap = 2, authored_releases = 1,
+    },
+    {
+        rarity = "epic", marble_id = "lodestone_epic", rank = 4,
+        shell_cap = 4, bonus_release_groups = 2, bonus_release_mcu = 6,
+        brick_passive_groups = 2, brick_passive_mcu = 6,
+        brick_copy_cap = 1, marble_copy_cap = 1, authored_releases = 1,
+    },
+    {
+        rarity = "legendary", marble_id = "cinder_legendary", rank = 5,
+        shell_cap = 5, bonus_release_groups = 2, bonus_release_mcu = 8,
+        brick_passive_groups = 2, brick_passive_mcu = 8,
+        brick_copy_cap = 1, marble_copy_cap = 1, authored_releases = 1,
+    },
+}
+
 local function poison(value, seen)
     if type(value) ~= "table" then return end
     seen = seen or {}
@@ -59,6 +92,71 @@ end
 
 local function swap(view, left, right)
     view[left], view[right] = view[right], view[left]
+end
+
+local function assert_tier_contracts(t, prefix)
+    for _, expected in ipairs(TIER_CASES) do
+        local tier = assert(ast.tier(expected.rarity))
+        t:eq(tier.rank, expected.rank,
+            prefix .. " " .. expected.rarity .. " rank remains canonical")
+        t:eq(tier.shell_cap, expected.shell_cap,
+            prefix .. " " .. expected.rarity .. " shell cap remains canonical")
+        t:eq(tier.bonus_release_groups, expected.bonus_release_groups,
+            prefix .. " " .. expected.rarity .. " release allowance remains canonical")
+        t:eq(tier.bonus_release_mcu, expected.bonus_release_mcu,
+            prefix .. " " .. expected.rarity .. " release MCU remains canonical")
+        t:eq(tier.brick_passive_groups, expected.brick_passive_groups,
+            prefix .. " " .. expected.rarity .. " passive allowance remains canonical")
+        t:eq(tier.brick_passive_mcu, expected.brick_passive_mcu,
+            prefix .. " " .. expected.rarity .. " passive MCU remains canonical")
+        t:eq(tier.brick_copy_cap, expected.brick_copy_cap,
+            prefix .. " " .. expected.rarity .. " brick copy cap remains canonical")
+        t:eq(tier.marble_copy_cap, expected.marble_copy_cap,
+            prefix .. " " .. expected.rarity .. " marble copy cap remains canonical")
+
+        local marble = draft.instantiate_marble(
+            { content_id = expected.marble_id }, expected.rank, "player"
+        )
+        local summary = ast.ability_summary(marble.rule_set)
+        t:eq(marble.rarity, expected.rarity,
+            prefix .. " " .. expected.marble_id .. " rarity remains canonical")
+        t:eq(#marble.shells, expected.shell_cap,
+            prefix .. " " .. expected.marble_id .. " has its exact shell cap")
+        t:eq(marble.telegraph.beads, expected.rank,
+            prefix .. " " .. expected.marble_id .. " beads remain canonical")
+        t:eq(marble.telegraph.shell_cap, expected.shell_cap,
+            prefix .. " " .. expected.marble_id .. " presents its exact shell cap")
+        t:eq(marble.telegraph.passive_ceiling, expected.bonus_release_groups,
+            prefix .. " " .. expected.marble_id .. " presents its release ceiling")
+        t:eq(marble.telegraph.mcu_ceiling, expected.bonus_release_mcu,
+            prefix .. " " .. expected.marble_id .. " presents its release MCU")
+        t:eq(marble.compatibility.max_copies, expected.marble_copy_cap,
+            prefix .. " " .. expected.marble_id .. " copy cap remains canonical")
+        t:eq(summary.count, expected.authored_releases,
+            prefix .. " " .. expected.marble_id .. " release count remains canonical")
+        t:ok(summary.count <= expected.bonus_release_groups,
+            prefix .. " " .. expected.marble_id .. " stays within release allowance")
+        t:ok(summary.mcu <= expected.bonus_release_mcu,
+            prefix .. " " .. expected.marble_id .. " stays within release MCU")
+        if expected.rarity == "common" then
+            t:eq(summary.count, 0,
+                prefix .. " common remains baseline-only")
+        else
+            t:ok(summary.count > 0,
+                prefix .. " " .. expected.rarity .. " retains a bonus release")
+        end
+        t:eq(marble.compact_copy, ast.compact(marble.rule_set),
+            prefix .. " " .. expected.marble_id .. " compact copy remains canonical")
+        t:ok(util.deep_equal(marble.inspection_copy,
+            ast.expanded_lines(marble.rule_set)),
+            prefix .. " " .. expected.marble_id .. " inspection remains canonical")
+        t:ok(util.deep_equal(marble.balance, ast.balance(marble.rule_set)),
+            prefix .. " " .. expected.marble_id .. " balance remains canonical")
+        t:eq(marble.rule_set.availability.player_draft, true,
+            prefix .. " " .. expected.marble_id .. " remains player-legal")
+        t:eq(marble.rule_set.availability.legacy_only, false,
+            prefix .. " " .. expected.marble_id .. " remains non-legacy")
+    end
 end
 
 local function assert_canonical_construction(t)
@@ -160,6 +258,7 @@ function M.run(t)
     local baseline_evidence = runtime_verification.run()
     local baseline_model = controller.new({ run_seed = 8768 })
     local baseline_presentation = controller.project(baseline_model)
+    assert_tier_contracts(t, "before projection attacks")
 
     for _, key in ipairs({
         "SCHEMA_VERSION",
@@ -239,6 +338,20 @@ function M.run(t)
     t:eq(catalog.brick_kit_for.basalt_absorber, "guard_pair",
         "reward provenance alias swap cannot persist")
 
+    -- Every adjacent rarity alias pair is attacked in both directions. Each
+    -- lookup is its own value, so none of the swaps may survive into either
+    -- endpoint of a later read.
+    for index = 1, #TIER_CASES - 1 do
+        local lower = TIER_CASES[index]
+        local higher = TIER_CASES[index + 1]
+        local aliases = catalog.marble_by_id
+        swap(aliases, lower.marble_id, higher.marble_id)
+        t:eq(catalog.marble_by_id[lower.marble_id].id, lower.marble_id,
+            lower.rarity .. "-to-" .. higher.rarity .. " alias swap is isolated")
+        t:eq(catalog.marble_by_id[higher.marble_id].id, higher.marble_id,
+            higher.rarity .. "-to-" .. lower.rarity .. " alias swap is isolated")
+    end
+
     -- Mutate every reachable table/scalar in every exported catalog surface.
     -- A new read must reproduce the complete pre-attack value byte-for-value.
     for _, key in ipairs(TABLE_EXPORTS) do
@@ -275,6 +388,45 @@ function M.run(t)
     low.balance.spent = 999
     low.compact_copy = "FORGED COMMON LEGENDARY"
 
+    -- For all five rarity representatives, attack independent projections in
+    -- both directions: inflate them to a forged five-shell/passive-bearing
+    -- legendary and collapse them to a forged one-shell/common baseline.
+    -- Availability, balance, and copy/presentation caches are attacked too.
+    local legendary_projection = catalog.marble_by_id.cinder_legendary
+    for _, expected in ipairs(TIER_CASES) do
+        local raised = catalog.marble_by_id[expected.marble_id]
+        raised.rarity = "legendary"
+        raised.rule_set.rarity = "legendary"
+        raised.shells = util.deep_copy(legendary_projection.shells)
+        raised.rule_set.abilities = util.deep_copy(
+            legendary_projection.rule_set.abilities
+        )
+        raised.telegraph.beads = 5
+        raised.telegraph.shell_cap = 5
+        raised.telegraph.passive_ceiling = 99
+        raised.telegraph.mcu_ceiling = 99
+        raised.compatibility.max_copies = 1
+        raised.rule_set.compatibility.max_copies = 1
+        raised.balance.spent = -999
+        raised.availability.player_draft = false
+        raised.rule_set.availability.player_draft = false
+
+        local lowered = catalog.marble_by_id[expected.marble_id]
+        lowered.rarity = "common"
+        lowered.rule_set.rarity = "common"
+        lowered.shells = { "chalk_plain" }
+        lowered.rule_set.abilities = {}
+        lowered.telegraph.beads = 1
+        lowered.telegraph.shell_cap = 1
+        lowered.telegraph.passive_ceiling = 0
+        lowered.telegraph.mcu_ceiling = 0
+        lowered.compatibility.max_copies = 3
+        lowered.rule_set.compatibility.max_copies = 3
+        lowered.balance.spent = 999
+        lowered.availability.legacy_only = true
+        lowered.rule_set.availability.legacy_only = true
+    end
+
     local splice_high = catalog.brick_kit_by_id.splice_keg
     splice_high.rarity = "common"
     splice_high.telegraph.passive_ceiling = 99
@@ -309,27 +461,49 @@ function M.run(t)
         rule_ids = { "brick.splice.guard" },
     }
 
-    local tier_high = ast.tier("common")
-    tier_high.shell_cap = 5
-    tier_high.brick_passive_groups = 99
-    local tier_low = ast.tier("legendary")
-    tier_low.shell_cap = 1
-    tier_low.brick_passive_groups = 0
-    local economy = ast.economy()
-    economy.tiers.common.shell_cap = 5
-    economy.tiers.legendary.shell_cap = 1
-    economy.acquisition.short_run_win_1.common = 0
-    economy.acquisition.short_run_win_1.legendary = 100
-    t:eq(ast.tier("common").shell_cap, 1,
-        "high tier projection mutation cannot raise the common shell cap")
-    t:eq(ast.tier("legendary").shell_cap, 5,
-        "low tier projection mutation cannot lower the legendary shell cap")
-    t:eq(ast.tier("common").brick_passive_groups, 0,
-        "tier projection cannot create a common brick passive")
+    -- Every rule_ast and draft economy tier view is independently attacked in
+    -- both numerical directions, including all shell, release, passive, and
+    -- copy allowances. The rarity order and reward weights are detached too.
+    for _, expected in ipairs(TIER_CASES) do
+        local tier_high = ast.tier(expected.rarity)
+        local tier_low = ast.tier(expected.rarity)
+        local ast_economy_high = ast.economy()
+        local ast_economy_low = ast.economy()
+        local draft_economy_high = catalog.economy()
+        local draft_economy_low = catalog.economy()
+        for _, field in ipairs({
+            "rank", "shell_cap", "bonus_release_groups", "bonus_release_mcu",
+            "brick_passive_groups", "brick_passive_mcu", "brick_copy_cap",
+            "marble_copy_cap",
+        }) do
+            tier_high[field] = 99
+            tier_low[field] = 0
+            ast_economy_high.tiers[expected.rarity][field] = 99
+            ast_economy_low.tiers[expected.rarity][field] = 0
+            draft_economy_high.tiers[expected.rarity][field] = 99
+            draft_economy_low.tiers[expected.rarity][field] = 0
+        end
+        for acquisition_id in pairs(ast_economy_high.acquisition) do
+            ast_economy_high.acquisition[acquisition_id][expected.rarity] = 999
+            ast_economy_low.acquisition[acquisition_id][expected.rarity] = 0
+            draft_economy_high.acquisition[acquisition_id][expected.rarity] = 999
+            draft_economy_low.acquisition[acquisition_id][expected.rarity] = 0
+        end
+    end
+    local reversed_order = ast.rarity_order()
+    for index = 1, math.floor(#reversed_order / 2) do
+        swap(reversed_order, index, #reversed_order - index + 1)
+    end
+    local canonical_order = ast.rarity_order()
+    for index, expected in ipairs(TIER_CASES) do
+        t:eq(canonical_order[index], expected.rarity,
+            "rarity-order projection mutation cannot move " .. expected.rarity)
+    end
     t:eq(ast.economy().acquisition.short_run_win_1.legendary, 0,
         "economy projection cannot inject a win-one legendary reward")
 
     assert_canonical_construction(t)
+    assert_tier_contracts(t, "after high/low projection attacks")
 
     local momentum = draft.instantiate_sling({ content_id = "momentum" })
     t:eq(momentum.id, "momentum",

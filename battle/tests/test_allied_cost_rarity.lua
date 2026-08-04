@@ -857,7 +857,10 @@ function M.run(t)
                     "field",
                     "status",
                     "destroyed",
+                    "destruction",
                     "chain",
+                    "splice",
+                    "shatter",
                     "generation_three",
                 }) do
                     engine.apply_brick_harm(roster_battle, roster_owner, brick, 1, {
