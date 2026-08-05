@@ -20,7 +20,7 @@ function assert(value, message) { checks += 1; if (!value) throw new Error(messa
 function sha256(bytes) { return createHash("sha256").update(bytes).digest("hex"); }
 
 const fakeDocker = `#!/usr/bin/env node
-const fs=require("node:fs"), path=require("node:path");
+import fs from "node:fs"; import path from "node:path"; import { createHash } from "node:crypto";
 const statePath=process.env.CALLACK_FAKE_DOCKER_STATE;
 const state=JSON.parse(fs.readFileSync(statePath,"utf8"));
 const args=process.argv.slice(2), command=args.shift();
@@ -33,8 +33,8 @@ if(command==="build") {
   const index=path.join(state.canonical,"index.html"), manifestPath=path.join(state.canonical,"callack-build-manifest.json");
   fs.appendFileSync(index,"\\n<!-- POST_PREFLIGHT_REPLACEMENT -->\\n");
   const bytes=fs.readFileSync(index), manifest=JSON.parse(fs.readFileSync(manifestPath));
-  const record=manifest.assets.find(x=>x.path==="index.html"); record.bytes=bytes.length; record.sha256=require("node:crypto").createHash("sha256").update(bytes).digest("hex");
-  manifest.assetSetSha256=require("node:crypto").createHash("sha256").update(JSON.stringify(manifest.assets)).digest("hex");
+  const record=manifest.assets.find(x=>x.path==="index.html"); record.bytes=bytes.length; record.sha256=createHash("sha256").update(bytes).digest("hex");
+  manifest.assetSetSha256=createHash("sha256").update(JSON.stringify(manifest.assets)).digest("hex");
   fs.writeFileSync(manifestPath,JSON.stringify(manifest,null,2)+"\\n");
   fs.rmSync(state.imageRoot,{recursive:true,force:true}); fs.cpSync(state.canonical,state.imageRoot,{recursive:true}); save(); process.exit(0);
 }
@@ -50,7 +50,7 @@ if(command==="manifest"&&args[0]==="inspect") { console.log(JSON.stringify({sche
 console.error("unexpected fake docker command",command,args); process.exit(91);
 `;
 const fakeFly = `#!/usr/bin/env node
-require("node:fs").writeFileSync(process.env.CALLACK_FAKE_FLY_LOG,JSON.stringify(process.argv.slice(2)));`;
+import fs from "node:fs"; fs.writeFileSync(process.env.CALLACK_FAKE_FLY_LOG,JSON.stringify(process.argv.slice(2)));`;
 
 await mkdir(fakeBin);
 await writeFile(path.join(fakeBin, "docker"), fakeDocker);
@@ -77,6 +77,8 @@ try {
   const state = { canonical, imageRoot, imageId, remoteDigest, labels, builds: 0 };
   await writeFile(statePath, JSON.stringify(state));
   const env = { ...process.env, PATH: `${fakeBin}:${process.env.PATH}`, CALLACK_CONTAINER_ENGINE: "docker", CALLACK_FAKE_DOCKER_STATE: statePath, CALLACK_FAKE_FLY_LOG: flyLog };
+  const fakeInfo = spawnSync(path.join(fakeBin, "docker"), ["info"], { env, encoding: "utf8" });
+  assert(fakeInfo.status === 0, `fake Docker preflight failed: ${fakeInfo.stderr}`);
 
   const racedBuild = spawnSync("bash", [path.join(root, "scripts", "build-paddle-release-image.sh"), "fake:race"], { cwd: root, env, encoding: "utf8" });
   assert(racedBuild.status !== 0, "post-preflight artifact replacement silently became the image candidate");
