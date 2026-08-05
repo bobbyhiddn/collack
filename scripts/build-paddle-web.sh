@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# build-web.sh — package the LÖVE client plus canonical battle engine for love.js.
+# build-paddle-web.sh — package the candidate-owned paddle target for love.js.
 #
 # Pinned versions:
 #   LÖVE         : 11.4 (see src/conf.lua — runtime parity with love.js)
@@ -11,19 +11,19 @@
 #                            here, build Davidobot/love.js master against
 #                            LÖVE 11.5 (requires Emscripten in build image).
 #
-# Output: dist/web/{index.html, *.<content-hash>.js,
+# Output: dist/paddle-web/{index.html, *.<content-hash>.js,
 #                  *.<content-hash>.wasm, *.<content-hash>.data}
 #
 # Run locally:
-#   ./scripts/build-web.sh
-#   (cd dist/web && python3 -m http.server 8000) → http://localhost:8000
+#   ./scripts/build-paddle-web.sh
+#   (cd dist/paddle-web && python3 -m http.server 8000) → http://localhost:8000
 
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-SRC="$ROOT/src"
-FINAL_OUT="$ROOT/dist/web"
-FINAL_LOVE_ARCHIVE="$ROOT/dist/collack-spike.love"
+SRC="$ROOT/targets/paddle/src"
+FINAL_OUT="$ROOT/dist/paddle-web"
+FINAL_LOVE_ARCHIVE="$ROOT/dist/collack-paddle.love"
 TOOLCHAIN_CACHE="${CALLACK_NODE_CACHE_DIR:-$ROOT/.love_cache/lovejs-11.4.1}"
 ARCHIVE_TIMESTAMP="200001010000.00"
 
@@ -47,11 +47,14 @@ fail() {
     exit 1
 }
 
+# Outputs are fixed candidate-owned paths. Refuse path substitution and remove
+# all prior evidence before authenticating or invoking the toolchain, so a
+# rejected cache cannot leave a stale manifest available to a verifier.
 [ ! -L "$ROOT/dist" ] || fail "dist path must not be a symbolic link"
 mkdir -p "$ROOT/dist"
 [ -d "$ROOT/dist" ] || fail "dist path is not a directory"
-[ ! -L "$FINAL_OUT" ] || fail "web output path must not be a symbolic link"
-[ ! -L "$FINAL_LOVE_ARCHIVE" ] || fail "web archive path must not be a symbolic link"
+[ ! -L "$FINAL_OUT" ] || fail "paddle output path must not be a symbolic link"
+[ ! -L "$FINAL_LOVE_ARCHIVE" ] || fail "paddle archive path must not be a symbolic link"
 rm -rf "$FINAL_OUT"
 rm -f "$FINAL_LOVE_ARCHIVE"
 
@@ -61,20 +64,13 @@ rm -f "$FINAL_LOVE_ARCHIVE"
 # retain their battle/ module paths.
 BUILD_TMP="$(mktemp -d "$ROOT/dist/.web-build.XXXXXX")"
 OUT="$BUILD_TMP/output"
-LOVE_ARCHIVE="$BUILD_TMP/collack-spike.love"
+LOVE_ARCHIVE="$BUILD_TMP/collack-paddle.love"
 ARCHIVE_ROOT="$BUILD_TMP/archive"
 ARCHIVE_FILE_LIST="$BUILD_TMP/archive-files.txt"
 ARCHIVE_ACTUAL_LIST="$BUILD_TMP/archive-actual.txt"
 
 mkdir -p "$ARCHIVE_ROOT"
 cp -R "$SRC/." "$ARCHIVE_ROOT/"
-mkdir -p "$ARCHIVE_ROOT/battle"
-cp -R "$ROOT/battle/." "$ARCHIVE_ROOT/battle/"
-if [ -d "$ROOT/assets" ]; then
-    cp -R "$ROOT/assets" "$ARCHIVE_ROOT/assets"
-fi
-rm -rf "$ARCHIVE_ROOT/battle/tests"
-rm -f "$ARCHIVE_ROOT/battle/cli.lua" "$ARCHIVE_ROOT/battle/README.md"
 find "$ARCHIVE_ROOT" -name '.DS_Store' -delete
 find "$ARCHIVE_ROOT" -type d -exec chmod 0755 {} +
 find "$ARCHIVE_ROOT" -type f -exec chmod 0644 {} +
@@ -102,29 +98,11 @@ if ! cmp -s "$ARCHIVE_FILE_LIST" "$ARCHIVE_ACTUAL_LIST"; then
     exit 1
 fi
 
-# Fail the build if an integration module or the data-only art contract falls
-# out of the archive. Tests and the CLI are deliberately not shipped.
+# Fail the build if any candidate-owned paddle runtime input falls out.
 REQUIRED_RUNTIME_FILES=(
     "main.lua"
+    "logic.lua"
     "conf.lua"
-    "presentation.lua"
-    "run_controller.lua"
-    "run_presentation.lua"
-    "run_loop.lua"
-    "ui/art_tokens.lua"
-    "ui/procedural_audio.lua"
-    "battle/engine.lua"
-    "battle/physics.lua"
-    "battle/runtime_verification.lua"
-    "battle/checkpoints.lua"
-    "battle/run.lua"
-    "battle/short_run.lua"
-    "battle/draft.lua"
-    "battle/rule_ast.lua"
-    "battle/content/rules.lua"
-    "battle/opponent.lua"
-    "battle/setup.lua"
-    "battle/setup_rules.lua"
 )
 for required in "${REQUIRED_RUNTIME_FILES[@]}"; do
     grep -Fxq "$required" "$ARCHIVE_ACTUAL_LIST" || {
@@ -132,12 +110,11 @@ for required in "${REQUIRED_RUNTIME_FILES[@]}"; do
         exit 1
     }
 done
-if grep -Eq '^battle/(tests/|cli\.lua$)' "$ARCHIVE_ACTUAL_LIST"; then
-    echo "[web] ERROR: quarantined headless/demo paths entered the runtime archive" >&2
-    exit 1
-fi
 echo "[web] built $LOVE_ARCHIVE ($(du -h "$LOVE_ARCHIVE" | cut -f1))"
 
+# CALLACK_NODE_CACHE_DIR selects storage only. The candidate-owned packager
+# authenticates the pinned archive before extraction, never executes cache
+# content, and emits exact toolchain identity into the staged output.
 node "$ROOT/scripts/package-lovejs.mjs" \
     --root "$ROOT" \
     --cache "$TOOLCHAIN_CACHE" \
@@ -214,7 +191,7 @@ mv "$OUT/love.js" "$OUT/$LOVE_JS_NAME"
 # Our web-shell/index.html is viewport-aware, centers both canvases via flex,
 # uses a solid black background, and replaces the loadingCanvas progress with
 # a DOM-rendered "Loading…" overlay.
-SHELL_HTML="$ROOT/web-shell/index.html"
+SHELL_HTML="$ROOT/targets/paddle/web-shell/index.html"
 if [ -f "$SHELL_HTML" ]; then
     cp "$SHELL_HTML" "$OUT/index.html"
     rewrite_reference "__GAME_JS__" "$GAME_JS_NAME" "$OUT/index.html"
@@ -229,13 +206,15 @@ find "$OUT" -type d -exec chmod 0755 {} +
 find "$OUT" -type f -exec chmod 0644 {} +
 
 bash "$ROOT/scripts/verify-web-assets.sh" "$OUT"
-node "$ROOT/scripts/generate-web-build-manifest.mjs" "$OUT" "$ROOT"
+node "$ROOT/scripts/generate-web-build-manifest.mjs" "$OUT" "$ROOT" "paddle-web"
 
+# Publish only the completely validated staged archive/output. All generation,
+# hashing, and manifest work above is isolated from stale final paths.
 if [ -e "$FINAL_LOVE_ARCHIVE" ] || [ -L "$FINAL_LOVE_ARCHIVE" ]; then
-    fail "web archive path changed during the authenticated build"
+    fail "paddle archive path changed during the authenticated build"
 fi
 if [ -e "$FINAL_OUT" ] || [ -L "$FINAL_OUT" ]; then
-    fail "web output path changed during the authenticated build"
+    fail "paddle output path changed during the authenticated build"
 fi
 mv "$LOVE_ARCHIVE" "$FINAL_LOVE_ARCHIVE"
 mv "$OUT" "$FINAL_OUT"

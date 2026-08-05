@@ -1,8 +1,8 @@
 {
   "schemaVersion": 6,
-  "sourceDigest": "b9b320a11dc78b96458e00580df9a2af48099028e56e47538eb4539234f077eb",
-  "sourceCommit": "5168f09b64f9e28157ef84c3c5fa8cc29985394a",
-  "sourceTree": "450f6f6f012827e64d855f5274ff353200b8708a",
+  "sourceDigest": "cce036f5c237504fc33ca570639d412cb38c37902a7bc277c8bba1eb4358c053",
+  "sourceCommit": "0e41ac43bc6adfa75de0a2651c29fba564b785b8",
+  "sourceTree": "3d65f51ef033574ab1420df84f2bbb48e1632232",
   "viewports": {
     "phone": {
       "width": 390,
@@ -22,6 +22,11 @@
       "sha256": "511372c3a9c6d084f0cbf7927fcdb5b42d9ed2059cb29e635e632ce049dd5228"
     },
     "webFiles": [
+      {
+        "path": "dist/web/callack-toolchain-identity.json",
+        "size": 1915,
+        "sha256": "22a6109cb423dffd2deacf78a5a9910ffa364eb21e4474f7708ad4b901abcd10"
+      },
       {
         "path": "dist/web/game.4f81595dd0c2f2d1.js",
         "size": 11516,
@@ -58,7 +63,7 @@
         "sha256": "b991b00f74b61804d52f8e5590337f4ef1311fa8bb4315337a1bbc7c8bd262cd"
       }
     ],
-    "aggregateDigest": "da377b18a8aaf669ad5f3aabf357a31a9dc226ea78e3021a0260af3a963f0d32"
+    "aggregateDigest": "cc6f1d2a3753bc35367efdecb7df2a90670c3fd7d010908182387f1f530cee45"
   },
   "canonicalSweeps": [
     {
@@ -1172,5 +1177,5 @@
       "sha256": "caaabbf5812cf2c556218ef7ef759fc1778afb6d917b466903f40629a48b1658"
     }
   ],
-  "evidenceDigest": "eab6c3f9cb123d3bb819ffc6016ff45603e1a96fa4ad9b1982a5d17d89006f2b"
+  "evidenceDigest": "5a040d660c04e04c70dff8be2fc49056aab5c4d2f054227dbfd068504debf7c0"
 }

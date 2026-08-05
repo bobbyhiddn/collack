@@ -2,65 +2,56 @@
 # build-ios.sh — wrap the love.js web bundle in a Capacitor iOS project.
 #
 # Steps performed locally (Linux-safe):
-#   1. Run build-web.sh to produce dist/web/.
-#   2. Copy dist/web/ → capacitor/dist/ (Capacitor's webDir).
-#   3. Install npm deps under capacitor/.
-#   4. If capacitor/ios/ does not exist, copy the iOS template from capacitor/ios-template/.
-#      (Generating the iOS native project from scratch requires CocoaPods + macOS;
-#       the GHA macos-latest job re-runs `npx cap add ios` cleanly. Locally we mirror
-#       the capacitor-asteroids reference iOS scaffold.)
+#   1. Rebuild the candidate-owned paddle target into dist/paddle-web/.
+#   2. Copy dist/paddle-web/ → capacitor/dist/ (Capacitor's webDir).
+#   3. Install the lockfile-pinned npm deps under capacitor/.
+#   4. Re-seed capacitor/ios/ from the tracked template so stale generated files
+#      cannot influence a build.
 #   5. Run `npx cap sync ios` — copies web assets into ios/App/App/public/.
 #
 # After this script:
 #   - capacitor/dist/        : web bundle Capacitor will ship
 #   - capacitor/ios/         : Xcode project (App.xcworkspace, App.xcodeproj, fastlane/, Podfile)
-#   - GHA pipeline (.github/workflows/build.yml) does the .ipa build via Fastlane Match.
+#   - The unsigned smoke workflow builds and launches this project in Simulator.
+#   - The separately gated signed job can still build an .ipa via Fastlane Match.
 
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-WEB_OUT="$ROOT/dist/web"
+WEB_OUT="$ROOT/dist/paddle-web"
 CAP="$ROOT/capacitor"
 
-# 1. Ensure web bundle exists.
-if [ ! -f "$WEB_OUT/index.html" ]; then
-    echo "[ios] running build-web.sh first..."
-    "$ROOT/scripts/build-web.sh"
-fi
+# 1. Always regenerate the trusted paddle package. A stale or caller-selected
+# bundle must never enter the native wrapper.
+echo "[ios] rebuilding candidate-owned paddle web target"
+"$ROOT/scripts/build-paddle-web.sh"
 
 # 2. Mirror web bundle into capacitor/dist (Capacitor webDir).
 mkdir -p "$CAP/dist"
 rm -rf "$CAP/dist"/*
 cp -r "$WEB_OUT/." "$CAP/dist/"
-echo "[ios] copied web bundle to $CAP/dist"
+node "$ROOT/scripts/verify-paddle-package.mjs" "$CAP/dist"
+echo "[ios] copied candidate paddle bundle to $CAP/dist"
 
-# 3. Install Capacitor deps.
+# 3. Install the exact Capacitor dependency graph.
 pushd "$CAP" >/dev/null
-if [ ! -d node_modules ]; then
-    npm install --no-audit --no-fund --silent
-fi
+npm ci --no-audit --no-fund --silent
 popd >/dev/null
 
-# 4. Copy iOS scaffold from template if not present.
-if [ ! -d "$CAP/ios" ]; then
-    if [ -d "$CAP/ios-template" ]; then
-        cp -r "$CAP/ios-template" "$CAP/ios"
-        echo "[ios] seeded $CAP/ios from ios-template/"
-    else
-        echo "[ios] WARN: no $CAP/ios and no ios-template. On macOS, run: cd capacitor && npx cap add ios"
-    fi
+# 4. Re-seed the generated project from the tracked source of truth.
+if [ ! -d "$CAP/ios-template" ]; then
+    echo "[ios] ERROR: tracked iOS template is missing: $CAP/ios-template" >&2
+    exit 1
 fi
+rm -rf "$CAP/ios"
+cp -R "$CAP/ios-template" "$CAP/ios"
+echo "[ios] seeded $CAP/ios from ios-template/"
 
 # 5. cap sync — copies web assets into ios/App/App/public.
 pushd "$CAP" >/dev/null
-if [ -d ios ]; then
-    npx cap sync ios || {
-        echo "[ios] cap sync ios failed (likely missing CocoaPods on Linux). Project files are still staged."
-        echo "[ios] In the GHA macos-latest job this step succeeds automatically."
-    }
-else
-    echo "[ios] no ios/ directory yet — skipping cap sync."
-fi
+npx cap sync ios
 popd >/dev/null
 
-echo "[ios] OK. Capacitor project at $CAP — open with Xcode on macOS."
+test -f "$CAP/ios/App/App/public/index.html"
+node "$ROOT/scripts/verify-paddle-package.mjs" "$CAP/ios/App/App/public" --allow-extra-files
+echo "[ios] OK. Synced Capacitor project at $CAP/ios/App."

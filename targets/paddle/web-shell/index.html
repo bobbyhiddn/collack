@@ -1,0 +1,259 @@
+<!doctype html>
+<!--
+  Responsive shell for the Collack love.js bundle.
+  Replaces the stock love.js index.html (which uses a fixed 800x600 loadingCanvas
+  that renders offscreen on mobile portrait viewports). This template is copied
+  into dist/paddle-web/ by scripts/build-paddle-web.sh AFTER love.js generates its output, so
+  it intentionally overrides theme/love.css via inline <style>.
+-->
+<html lang="en-us">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#000000">
+    <title>Collack Paddle</title>
+
+    <!-- love.js still ships theme/love.css; override the bits that fight responsiveness. -->
+    <link rel="stylesheet" type="text/css" href="theme/love.css">
+    <style>
+      /* Reset stock love.js theme background (pink/cyan triangle bg.png) and
+         center-align flow that pushes the canvas offscreen on mobile portrait. */
+      html, body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        background: #000;
+        background-image: none !important;
+        color: #ddd;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        overflow: hidden;
+      }
+
+      body {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+        min-height: 100dvh; /* dynamic viewport, dodges iOS Safari URL-bar jank */
+        padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+      }
+
+      h1 {
+        font-size: 1.1rem;
+        font-weight: 600;
+        margin: 0 0 0.5rem 0;
+        color: #ddd;
+      }
+
+      /* The canvas stage: takes the available viewport, locked to the game's 4:3
+         logical resolution (800x600). Both canvases share the slot. */
+      #stage {
+        position: relative;
+        width: min(100vw, calc(100vh * 4 / 3));
+        height: min(100vh, calc(100vw * 3 / 4));
+        max-width: 100vw;
+        max-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #000;
+      }
+
+      /* Stock love.js gives #canvas { visibility: hidden }. We keep that, but
+         size it responsively so when love.js flips it visible on init it fills
+         the stage. */
+      #canvas, #loadingCanvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+        max-width: 100%;
+        max-height: 100%;
+        aspect-ratio: 4 / 3;
+        background: #000;
+        border: 0;
+        padding: 0;
+        margin: 0;
+        outline: none;
+        /* Without this iOS treats a paddle drag as a scroll/pinch gesture and
+           swallows the touchmove stream before SDL ever sees it. */
+        touch-action: none;
+        -webkit-user-select: none;
+        user-select: none;
+        -webkit-touch-callout: none;
+      }
+
+      /* Hide the stock loadingCanvas — it draws offscreen text on mobile.
+         We render loading state via DOM (#loading) instead. */
+      #loadingCanvas {
+        display: none !important;
+      }
+
+      /* DOM-rendered loading overlay. Sits on top of the stage until love.js
+         flips #canvas visible. */
+      #loading {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 0.75rem;
+        font-size: 1rem;
+        color: #aaa;
+        background: #000;
+        text-align: center;
+        padding: 1rem;
+        pointer-events: none;
+      }
+      #loading.hidden { display: none; }
+      #loading-spinner {
+        width: 28px;
+        height: 28px;
+        border: 3px solid #333;
+        border-top-color: #8ec3e3;
+        border-radius: 50%;
+        animation: spin 0.9s linear infinite;
+      }
+      @keyframes spin { to { transform: rotate(360deg); } }
+
+      footer {
+        position: fixed;
+        bottom: env(safe-area-inset-bottom);
+        left: 0;
+        right: 0;
+        font-size: 11px;
+        color: #666;
+        text-align: center;
+        padding: 6px 10px;
+        background: rgba(0,0,0,0.4);
+        line-height: 1.3;
+      }
+      footer a { color: #8ec3e3; text-decoration: none; }
+      footer button {
+        font-size: 11px;
+        padding: 2px 8px;
+        margin-left: 6px;
+        background: #222;
+        color: #ddd;
+        border: 1px solid #444;
+        border-radius: 3px;
+        cursor: pointer;
+      }
+      footer button:hover { background: #333; }
+
+      /* Tighter on narrow portrait. */
+      @media (max-width: 480px) {
+        h1 { font-size: 0.95rem; margin-bottom: 0.35rem; }
+        footer { font-size: 10px; padding: 4px 8px; }
+      }
+      /* On short landscape (typical phone landscape), drop the title to give
+         the canvas the whole viewport. */
+      @media (max-height: 480px) {
+        h1 { display: none; }
+        footer { font-size: 9px; padding: 2px 6px; }
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Collack Paddle</h1>
+
+    <div id="stage">
+      <!-- love.js expects both canvases in the DOM. loadingCanvas is hidden via CSS;
+           we use the DOM #loading element for progress instead. -->
+      <canvas id="loadingCanvas" oncontextmenu="event.preventDefault()"></canvas>
+      <canvas id="canvas" oncontextmenu="event.preventDefault()"></canvas>
+      <div id="loading">
+        <div id="loading-spinner"></div>
+        <div id="loading-text">Loading…</div>
+      </div>
+    </div>
+
+    <script type='text/javascript'>
+      function goFullScreen(){
+        var canvas = document.getElementById("canvas");
+        if(canvas.requestFullScreen)        canvas.requestFullScreen();
+        else if(canvas.webkitRequestFullScreen) canvas.webkitRequestFullScreen();
+        else if(canvas.mozRequestFullScreen)    canvas.mozRequestFullScreen();
+      }
+
+      // Stock love.js shell expects drawLoadingText() on the loadingCanvas.
+      // We redirect it to the DOM #loading-text element so progress is visible
+      // on mobile (the original 800x600 loadingCanvas drew offscreen-right).
+      function drawLoadingText(text) {
+        var el = document.getElementById('loading-text');
+        if (el) el.textContent = text || 'Loading…';
+      }
+
+      window.onload  = function () { window.focus(); };
+      window.onclick = function () { window.focus(); };
+
+      // Block default scroll for game-relevant keys.
+      window.addEventListener("keydown", function(e) {
+        if ([32, 37, 38, 39, 40].indexOf(e.keyCode) > -1) e.preventDefault();
+      }, false);
+
+      // Tell the game whether this device has a touchscreen, so it can show
+      // "drag / tap" hints instead of keyboard ones on the very first frame.
+      // The game cannot work this out for itself: love.system.getOS() reports
+      // "Web" under love.js, including inside the Capacitor iOS wrapper.
+      var HAS_TOUCH = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+      var LOVE_ARGS = ["./game.love"];
+      if (HAS_TOUCH) LOVE_ARGS.push("--touch");
+
+      var Module = {
+        arguments: LOVE_ARGS,
+        INITIAL_MEMORY: 67108864,
+        printErr: console.error.bind(console),
+        canvas: (function() {
+          var canvas = document.getElementById('canvas');
+          canvas.addEventListener("webglcontextlost", function(e) {
+            alert('WebGL context lost. You will need to reload the page.');
+            e.preventDefault();
+          }, false);
+          return canvas;
+        })(),
+        setStatus: function(text) {
+          if (text) {
+            drawLoadingText(text);
+          } else if (Module.remainingDependencies === 0) {
+            // love.js init done — hide the DOM loader, reveal the canvas.
+            var loading = document.getElementById('loading');
+            if (loading) loading.classList.add('hidden');
+            document.getElementById('canvas').style.visibility = 'visible';
+          }
+        },
+        totalDependencies: 0,
+        remainingDependencies: 0,
+        monitorRunDependencies: function(left) {
+          this.remainingDependencies = left;
+          this.totalDependencies = Math.max(this.totalDependencies, left);
+          Module.setStatus(left
+            ? 'Preparing... (' + (this.totalDependencies-left) + '/' + this.totalDependencies + ')'
+            : 'All downloads complete.');
+        }
+      };
+      Module.setStatus('Downloading…');
+
+      window.onerror = function(event) {
+        Module.setStatus('Exception thrown — see JavaScript console');
+        Module.setStatus = function(text) {
+          if (text) Module.printErr('[post-exception status] ' + text);
+        };
+      };
+
+      var applicationLoad = function(e) { Love(Module); }
+    </script>
+    <script type="text/javascript" src="__GAME_JS__"></script>
+    <script async type="text/javascript" src="__LOVE_JS__" onload="applicationLoad(this)"></script>
+
+    <footer>
+      Built with <a href="https://github.com/Davidobot/love.js">love.js</a>
+      <button onclick="goFullScreen();">Fullscreen</button>
+    </footer>
+  </body>
+</html>

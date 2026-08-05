@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Build two isolated source snapshots with deliberately different paths, mtimes,
-# modes, timezones, and umasks, then compare every production web artifact.
+# modes, timezones, and umasks, then compare every candidate paddle web artifact.
 
 set -euo pipefail
 
@@ -11,12 +11,12 @@ SOURCE_REVISION="$(git -C "$ROOT" rev-parse HEAD)"
 SOURCE_TREE="$(git -C "$ROOT" rev-parse 'HEAD^{tree}')"
 
 fail() {
-    echo "[web-repro] FAIL: $*" >&2
+    echo "[paddle-web-repro] FAIL: $*" >&2
     exit 1
 }
 
 mkdir -p "$ROOT/dist"
-TEMP_ROOT="$(mktemp -d "$ROOT/dist/.web-repro.XXXXXX")"
+TEMP_ROOT="$(mktemp -d "$ROOT/dist/.paddle-web-repro.XXXXXX")"
 cleanup() {
     if [ -d "$TEMP_ROOT" ]; then
         rm -rf "$TEMP_ROOT"
@@ -56,25 +56,25 @@ attach_candidate_identity "$SOURCE_A"
 attach_candidate_identity "$SOURCE_B"
 
 # A deterministic archive must ignore checkout mtime and mode differences.
-find "$SOURCE_A/src" "$SOURCE_A/battle" -exec touch -t 200101010101.02 {} +
-find "$SOURCE_B/src" "$SOURCE_B/battle" -exec touch -t 203012312359.58 {} +
-find "$SOURCE_A/src" "$SOURCE_A/battle" -type f -exec chmod 0644 {} +
-find "$SOURCE_B/src" "$SOURCE_B/battle" -type f -exec chmod 0600 {} +
+find "$SOURCE_A/targets/paddle" -exec touch -t 200101010101.02 {} +
+find "$SOURCE_B/targets/paddle" -exec touch -t 203012312359.58 {} +
+find "$SOURCE_A/targets/paddle" -type f -exec chmod 0644 {} +
+find "$SOURCE_B/targets/paddle" -type f -exec chmod 0600 {} +
 
 TOOLCHAIN_CACHE="$ROOT/.love_cache/lovejs-11.4.1"
 
-echo "[web-repro] build A: short path, old mtimes, mode 0644, restrictive umask"
+echo "[paddle-web-repro] build A: short path, old mtimes, mode 0644, restrictive umask"
 (
     umask 077
     TZ=Pacific/Honolulu CALLACK_NODE_CACHE_DIR="$TOOLCHAIN_CACHE" \
-        bash "$SOURCE_A/scripts/build-web.sh"
+        bash "$SOURCE_A/scripts/build-paddle-web.sh"
 )
 
-echo "[web-repro] build B: different path, new mtimes, mode 0600, permissive umask"
+echo "[paddle-web-repro] build B: different path, new mtimes, mode 0600, permissive umask"
 (
     umask 002
     TZ=Etc/GMT-14 CALLACK_NODE_CACHE_DIR="$TOOLCHAIN_CACHE" \
-        bash "$SOURCE_B/scripts/build-web.sh"
+        bash "$SOURCE_B/scripts/build-paddle-web.sh"
 )
 
 NAMES_A="$TEMP_ROOT/names-a.txt"
@@ -86,7 +86,7 @@ create_manifest() {
     local source_root="$1"
     local names_path="$2"
     local hashes_path="$3"
-    local web_root="$source_root/dist/web"
+    local web_root="$source_root/dist/paddle-web"
     local relative_path
 
     (
@@ -96,8 +96,8 @@ create_manifest() {
 
     : > "$hashes_path"
     printf '%s  %s\n' \
-        "$(shasum -a 256 "$source_root/dist/collack-spike.love" | awk '{print $1}')" \
-        "collack-spike.love" >> "$hashes_path"
+        "$(shasum -a 256 "$source_root/dist/collack-paddle.love" | awk '{print $1}')" \
+        "collack-paddle.love" >> "$hashes_path"
     while IFS= read -r relative_path; do
         printf '%s  %s\n' \
             "$(shasum -a 256 "$web_root/$relative_path" | awk '{print $1}')" \
@@ -110,17 +110,17 @@ create_manifest "$SOURCE_B" "$NAMES_B" "$HASHES_B"
 
 DIFFERENT=0
 if ! diff -u "$NAMES_A" "$NAMES_B"; then
-    echo "[web-repro] generated asset filenames differ" >&2
+    echo "[paddle-web-repro] generated asset filenames differ" >&2
     DIFFERENT=1
 fi
 if ! diff -u "$HASHES_A" "$HASHES_B"; then
-    echo "[web-repro] generated artifact bytes differ" >&2
+    echo "[paddle-web-repro] generated artifact bytes differ" >&2
     DIFFERENT=1
 fi
 [ "$DIFFERENT" -eq 0 ] || fail "independent clean builds are not reproducible"
 
-echo "[web-repro] build A hashes:"
-sed 's/^/[web-repro]   /' "$HASHES_A"
-echo "[web-repro] build B hashes:"
-sed 's/^/[web-repro]   /' "$HASHES_B"
-echo "[web-repro] OK: independent clean builds have identical filenames and bytes"
+echo "[paddle-web-repro] build A hashes:"
+sed 's/^/[paddle-web-repro]   /' "$HASHES_A"
+echo "[paddle-web-repro] build B hashes:"
+sed 's/^/[paddle-web-repro]   /' "$HASHES_B"
+echo "[paddle-web-repro] OK: independent clean builds have identical filenames and bytes"

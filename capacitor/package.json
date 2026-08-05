@@ -1,7 +1,7 @@
 {
   "name": "collack-spike-capacitor",
   "version": "0.1.0",
-  "description": "Capacitor wrapper for the love.js web bundle.",
+  "description": "Capacitor wrapper for the candidate-owned Collack paddle love.js target.",
   "type": "module",
   "private": true,
   "scripts": {
@@ -9,11 +9,11 @@
     "ios:open": "cap open ios"
   },
   "dependencies": {
-    "@capacitor/core": "^6.2.0",
-    "@capacitor/ios": "^6.2.0",
-    "@capacitor/splash-screen": "^6.0.2"
+    "@capacitor/core": "6.2.0",
+    "@capacitor/ios": "6.2.0",
+    "@capacitor/splash-screen": "6.0.2"
   },
   "devDependencies": {
-    "@capacitor/cli": "^6.2.0"
+    "@capacitor/cli": "6.2.0"
   }
 }

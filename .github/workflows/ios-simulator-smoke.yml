@@ -1,0 +1,60 @@
+name: iOS Simulator smoke
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/ios-simulator-smoke.yml'
+      - 'assets/**'
+      - 'battle/**'
+      - 'capacitor/**'
+      - 'scripts/build-ios.sh'
+      - 'scripts/build-paddle-web.sh'
+      - 'scripts/build-web.sh'
+      - 'scripts/generate-web-build-manifest.mjs'
+      - 'scripts/lovejs-toolchain-lock.json'
+      - 'scripts/package-lovejs.mjs'
+      - 'scripts/paddle-verification-policy.mjs'
+      - 'scripts/test-lovejs-cache-boundary.mjs'
+      - 'scripts/web-build-identity.mjs'
+      - 'scripts/verify-paddle-package.mjs'
+      - 'scripts/verify-ios-simulator.sh'
+      - 'src/**'
+      - 'targets/paddle/**'
+      - 'web-shell/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-simulator-smoke-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  simulator-smoke:
+    name: unsigned build + launch
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Build, install, and launch in iOS Simulator
+        run: bash scripts/verify-ios-simulator.sh
+
+      - name: Upload inspectable Simulator evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-simulator-smoke-${{ github.event.pull_request.head.sha || github.sha }}
+          path: dist/ios-simulator-smoke
+          if-no-files-found: error
+          retention-days: 14

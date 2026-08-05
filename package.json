@@ -4,7 +4,14 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "build:paddle:web": "bash scripts/build-paddle-web.sh",
+    "test:paddle": "lua5.1 targets/paddle/tests/test_logic.lua",
     "browser:install": "PLAYWRIGHT_BROWSERS_PATH=.playwright-browsers playwright install chromium",
+    "verify:deployed": "PLAYWRIGHT_BROWSERS_PATH=.playwright-browsers node scripts/verify-deployed-spike.mjs",
+    "verify:web:identity": "node scripts/test-web-build-identity.mjs",
+    "verify:paddle:identity": "node scripts/test-paddle-build-identity.mjs && node scripts/test-web-build-identity.mjs dist/paddle-web paddle-web",
+    "verify:lovejs-cache": "node scripts/test-lovejs-cache-boundary.mjs",
+    "verify:paddle:browser": "PLAYWRIGHT_BROWSERS_PATH=.playwright-browsers bash scripts/verify-paddle-local.sh",
     "test:shore-browser": "node --test deploy/shore/verify-live-route.test.mjs",
     "test:evidence-provenance": "node scripts/test-evidence-provenance.mjs",
     "verify:evidence": "npm run test:evidence-provenance && node scripts/verify-generated-evidence.mjs",
@@ -13,6 +20,7 @@
     "verify:web:reproducible": "bash scripts/verify-web-reproducible.sh"
   },
   "devDependencies": {
-    "playwright": "1.54.1"
+    "playwright": "1.54.1",
+    "pngjs": "7.0.0"
   }
 }

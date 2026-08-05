@@ -1,8 +1,7 @@
 {
   "appId": "io.bobbyhiddn.collack",
-  "appName": "Collack Spike",
+  "appName": "Collack Paddle",
   "webDir": "dist",
-  "bundledWebRuntime": false,
   "server": {
     "iosScheme": "file",
     "androidScheme": "file",

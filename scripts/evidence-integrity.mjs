@@ -228,6 +228,10 @@ export async function executableEvidence(root) {
   const archive = await fileRecord(root, "dist/collack-spike.love");
   const webFiles = [];
   for (const name of await filesBelow(root, "dist/web")) {
+    // The build manifest names HEAD, so an evidence-only commit necessarily
+    // changes its bytes. Seal the executable payload here and verify the
+    // manifest independently against exact HEAD to avoid recursive evidence.
+    if (name === "dist/web/callack-build-manifest.json") continue;
     webFiles.push(await fileRecord(root, name));
   }
   const aggregateDigest = sha256(
