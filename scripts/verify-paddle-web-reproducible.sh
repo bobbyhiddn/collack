@@ -39,35 +39,41 @@ copy_tracked_tree() {
 copy_tracked_tree "$SOURCE_A"
 copy_tracked_tree "$SOURCE_B"
 
+attach_candidate_identity() {
+    local destination="$1"
+    git -C "$destination" init -q
+    git -C "$destination" fetch -q --no-tags "$ROOT" "$SOURCE_REVISION"
+    git -C "$destination" update-ref HEAD "$SOURCE_REVISION"
+    git -C "$destination" read-tree "$SOURCE_REVISION"
+    git -C "$destination" config core.fileMode false
+    [ "$(git -C "$destination" rev-parse HEAD)" = "$SOURCE_REVISION" ] \
+        || fail "isolated source revision does not match the candidate"
+    [ "$(git -C "$destination" rev-parse 'HEAD^{tree}')" = "$SOURCE_TREE" ] \
+        || fail "isolated source tree does not match the candidate"
+}
+
+attach_candidate_identity "$SOURCE_A"
+attach_candidate_identity "$SOURCE_B"
+
 # A deterministic archive must ignore checkout mtime and mode differences.
 find "$SOURCE_A/targets/paddle" -exec touch -t 200101010101.02 {} +
 find "$SOURCE_B/targets/paddle" -exec touch -t 203012312359.58 {} +
 find "$SOURCE_A/targets/paddle" -type f -exec chmod 0644 {} +
 find "$SOURCE_B/targets/paddle" -type f -exec chmod 0600 {} +
 
-if [ -x "$ROOT/.node_cache/node_modules/.bin/love.js" ]; then
-    NODE_CACHE="$ROOT/.node_cache"
-else
-    NODE_CACHE="$TEMP_ROOT/node-cache"
-fi
+TOOLCHAIN_CACHE="$ROOT/.love_cache"
 
 echo "[paddle-web-repro] build A: short path, old mtimes, mode 0644, restrictive umask"
 (
     umask 077
-    TZ=Pacific/Honolulu CALLACK_NODE_CACHE_DIR="$NODE_CACHE" \
-        CALLACK_ALLOW_EXTERNAL_BUILD_IDENTITY=1 \
-        CALLACK_BUILD_REVISION="$SOURCE_REVISION" \
-        CALLACK_BUILD_TREE="$SOURCE_TREE" \
+    TZ=Pacific/Honolulu CALLACK_NODE_CACHE_DIR="$TOOLCHAIN_CACHE" \
         bash "$SOURCE_A/scripts/build-paddle-web.sh"
 )
 
 echo "[paddle-web-repro] build B: different path, new mtimes, mode 0600, permissive umask"
 (
     umask 002
-    TZ=Etc/GMT-14 CALLACK_NODE_CACHE_DIR="$NODE_CACHE" \
-        CALLACK_ALLOW_EXTERNAL_BUILD_IDENTITY=1 \
-        CALLACK_BUILD_REVISION="$SOURCE_REVISION" \
-        CALLACK_BUILD_TREE="$SOURCE_TREE" \
+    TZ=Etc/GMT-14 CALLACK_NODE_CACHE_DIR="$TOOLCHAIN_CACHE" \
         bash "$SOURCE_B/scripts/build-paddle-web.sh"
 )
 

@@ -504,6 +504,7 @@ try {
     recipe: expectedBuild.manifest.recipe,
     sourceSetSha256: expectedBuild.manifest.sourceSetSha256,
     sourceCount: expectedBuild.manifest.sources.length,
+    toolchain: expectedBuild.manifest.toolchain,
   };
   browser = await chromium.launch({ headless: true });
   evidence.browser = await browser.version();

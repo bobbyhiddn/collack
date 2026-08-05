@@ -22,8 +22,9 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SRC="$ROOT/src"
-OUT="$ROOT/dist/web"
-LOVE_JS_VERSION="11.4.1"  # latest published on npm (see header note)
+FINAL_OUT="$ROOT/dist/web"
+FINAL_LOVE_ARCHIVE="$ROOT/dist/collack-spike.love"
+TOOLCHAIN_CACHE="${CALLACK_NODE_CACHE_DIR:-$ROOT/.love_cache}"
 ARCHIVE_TIMESTAMP="200001010000.00"
 
 # Keep archive ordering, timestamps, permissions, and locale-dependent tool
@@ -41,16 +42,26 @@ cleanup() {
 }
 trap cleanup EXIT
 
-rm -rf "$OUT"
-mkdir -p "$OUT"
+fail() {
+    echo "[web] ERROR: $*" >&2
+    exit 1
+}
+
+[ ! -L "$ROOT/dist" ] || fail "dist path must not be a symbolic link"
+mkdir -p "$ROOT/dist"
+[ -d "$ROOT/dist" ] || fail "dist path is not a directory"
+[ ! -L "$FINAL_OUT" ] || fail "web output path must not be a symbolic link"
+[ ! -L "$FINAL_LOVE_ARCHIVE" ] || fail "web archive path must not be a symbolic link"
+rm -rf "$FINAL_OUT"
+rm -f "$FINAL_LOVE_ARCHIVE"
 
 # Build the .love archive from normalized staging files. Info-ZIP otherwise
 # records checkout mtimes, modes, UID/GID extra fields, and filesystem traversal
 # order. src/ owns presentation only; the canonical pure-Lua rules and content
 # retain their battle/ module paths.
-LOVE_ARCHIVE="$ROOT/dist/collack-spike.love"
-mkdir -p "$ROOT/dist"
 BUILD_TMP="$(mktemp -d "$ROOT/dist/.web-build.XXXXXX")"
+OUT="$BUILD_TMP/output"
+LOVE_ARCHIVE="$BUILD_TMP/collack-spike.love"
 ARCHIVE_ROOT="$BUILD_TMP/archive"
 ARCHIVE_FILE_LIST="$BUILD_TMP/archive-files.txt"
 ARCHIVE_ACTUAL_LIST="$BUILD_TMP/archive-actual.txt"
@@ -127,24 +138,15 @@ if grep -Eq '^battle/(tests/|cli\.lua$)' "$ARCHIVE_ACTUAL_LIST"; then
 fi
 echo "[web] built $LOVE_ARCHIVE ($(du -h "$LOVE_ARCHIVE" | cut -f1))"
 
-# Install love.js once into a local node_modules cache.
-NODE_CACHE="${CALLACK_NODE_CACHE_DIR:-$ROOT/.node_cache}"
-if [ ! -x "$NODE_CACHE/node_modules/.bin/love.js" ]; then
-    mkdir -p "$NODE_CACHE"
-    pushd "$NODE_CACHE" >/dev/null
-    if [ ! -f package.json ]; then echo '{}' > package.json; fi
-    npm install --no-audit --no-fund --silent "love.js@${LOVE_JS_VERSION}"
-    popd >/dev/null
-fi
+node "$ROOT/scripts/package-lovejs.mjs" \
+    --root "$ROOT" \
+    --cache "$TOOLCHAIN_CACHE" \
+    --archive "$LOVE_ARCHIVE" \
+    --output "$OUT" \
+    --scratch "$BUILD_TMP/toolchain"
 
-LOVE_JS_BIN="$NODE_CACHE/node_modules/.bin/love.js"
-
-# love.js flags reference:
-#   -c                  compatibility build (no SharedArrayBuffer; works on file://, GH Pages, plain http servers)
-#   -t <title>          window title
-#   -m <bytes>          memory quota (default 16MB; 64MB safe for placeholder, bump for full Collack)
-# Use -c for max portability — Capacitor file:// scheme requires it; SharedArrayBuffer requires COOP/COEP headers.
-"$LOVE_JS_BIN" -c -t "Callack Auto-Battler" -m 67108864 "$LOVE_ARCHIVE" "$OUT" >/dev/null
+cmp -s "$LOVE_ARCHIVE" "$OUT/game.data" \
+    || fail "authenticated packager output game.data differs from the candidate archive"
 
 echo "[web] love.js compile complete → $OUT"
 
@@ -229,5 +231,12 @@ find "$OUT" -type f -exec chmod 0644 {} +
 bash "$ROOT/scripts/verify-web-assets.sh" "$OUT"
 node "$ROOT/scripts/generate-web-build-manifest.mjs" "$OUT" "$ROOT"
 
-ls -lh "$OUT"
-echo "[web] OK. Serve with: (cd $OUT && python3 -m http.server 8000)"
+[ ! -e "$FINAL_LOVE_ARCHIVE" ] && [ ! -L "$FINAL_LOVE_ARCHIVE" ] \
+    || fail "web archive path changed during the authenticated build"
+[ ! -e "$FINAL_OUT" ] && [ ! -L "$FINAL_OUT" ] \
+    || fail "web output path changed during the authenticated build"
+mv "$LOVE_ARCHIVE" "$FINAL_LOVE_ARCHIVE"
+mv "$OUT" "$FINAL_OUT"
+
+ls -lh "$FINAL_OUT"
+echo "[web] OK. Serve with: (cd $FINAL_OUT && python3 -m http.server 8000)"

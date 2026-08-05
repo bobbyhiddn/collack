@@ -68,6 +68,16 @@ expectFailure("caller-selected canonical manifest", () => {
   });
 }, /CALLACK_EXPECTED_BUILD_MANIFEST is forbidden/);
 
+for (const forbidden of [
+  "CALLACK_BUILD_REVISION",
+  "CALLACK_BUILD_TREE",
+  "CALLACK_ALLOW_EXTERNAL_BUILD_IDENTITY",
+]) {
+  expectFailure(`caller-selected build identity ${forbidden}`, () => {
+    trustedPaddleBuild(root, { [forbidden]: "candidate-looking-metadata" });
+  }, new RegExp(`${forbidden} is forbidden`));
+}
+
 for (const [name, environment, pattern] of [
   ["candidate label over old revision", { CALLACK_TARGET_SOURCE_COMMIT: oldRevision }, /caller revision/],
   ["changed tree label", { CALLACK_TARGET_SOURCE_TREE: oldTree }, /caller tree/],
@@ -85,6 +95,17 @@ assert(expected.manifest.recipe.path === trusted.recipePath,
 assert(expected.manifest.sources.every(
   (source) => source.path.startsWith("targets/paddle/"),
 ), "manifest source identity escaped the candidate-owned paddle target");
+assert(expected.manifest.toolchain?.schema === "callack-lovejs-toolchain-v1",
+  "manifest is missing authenticated love.js toolchain identity");
+assert(expected.manifest.toolchain.package?.name === "love.js"
+    && expected.manifest.toolchain.package?.version === "11.4.1",
+"manifest toolchain package is not the candidate-pinned love.js version");
+const packagedArchive = expected.manifest.assets.find(
+  (asset) => /^game\.[0-9a-f]{16}\.data$/.test(asset.path),
+);
+assert(packagedArchive.sha256 === expected.manifest.toolchain.candidateArchive.sha256
+    && packagedArchive.bytes === expected.manifest.toolchain.candidateArchive.bytes,
+"manifest game data is not the authenticated candidate archive byte-for-byte");
 assertExactManifestBytes(expected.bytes, expected.bytes);
 
 const baseUrl = "http://127.0.0.1:4173/";
@@ -122,6 +143,22 @@ for (const [name, mutate, pattern] of [
     manifest.sourceSetSha256 = "3".repeat(64);
   }, /source-set digest mismatch/],
   ["missing source identity", (manifest) => { delete manifest.sources; }, /source set is missing/],
+  ["missing toolchain identity", (manifest) => { delete manifest.toolchain; }, /toolchain identity is missing/],
+  ["mutated toolchain archive", (manifest) => {
+    manifest.toolchain.package.archive.sha256 = "4".repeat(64);
+  }, /toolchain package identity disagrees/],
+  ["mutated toolchain packager", (manifest) => {
+    manifest.toolchain.packager.sha256 = "5".repeat(64);
+  }, /toolchain packager mismatch/],
+  ["missing toolchain runtime identity", (manifest) => {
+    manifest.toolchain.runtimeFiles.pop();
+  }, /toolchain runtime files disagree/],
+  ["cross-build toolchain evidence", (manifest) => {
+    manifest.toolchain.candidateArchive.path = "collack-spike.love";
+  }, /candidate archive path/],
+  ["mutated candidate archive identity", (manifest) => {
+    manifest.toolchain.candidateArchive.sha256 = "6".repeat(64);
+  }, /game data does not match/],
 ]) {
   expectFailure(name, () => {
     const changed = structuredClone(expected.manifest);

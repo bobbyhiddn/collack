@@ -1,0 +1,42 @@
+{
+  "schema": "callack-lovejs-toolchain-lock-v1",
+  "package": {
+    "name": "love.js",
+    "version": "11.4.1",
+    "archive": {
+      "name": "love.js-11.4.1.tgz",
+      "url": "https://registry.npmjs.org/love.js/-/love.js-11.4.1.tgz",
+      "bytes": 6560275,
+      "sha256": "9eb2db1f789254faed8e5cf7eeeded46a7e56ecbc931c88be809526c448d25fb",
+      "sha512": "34b303d86a481ce0ac7e582e96bd7ca78f82ae2cdf8b1828e5931b2660eba95b91ee37647ad6d40cbed7f8b091da8dae324554f19c179d1c13f3a4bb03be7284",
+      "integrity": "sha512-NLMD2GpIHOCsflgulr18p4+Crizfixgo5ZMbJmDrqVuR7jdketbUDL7X+LCR2o2uMkVU8ZwXnRwT86S7A75yhA=="
+    }
+  },
+  "runtimeFiles": [
+    {
+      "path": "src/compat/love.js",
+      "bytes": 325454,
+      "sha256": "12db012a5cf4e0661f9eaf154c4c10c3cba7a7db31e6a36856028bbaf5f942f0"
+    },
+    {
+      "path": "src/compat/love.wasm",
+      "bytes": 4720726,
+      "sha256": "ecc9e098bb8af918d20fbe3f26d23495c5184ff6b5d203d2e4b27bf17a771d6f"
+    },
+    {
+      "path": "src/compat/theme/bg.png",
+      "bytes": 7161,
+      "sha256": "e27c96716772b0ac44145ee7a93e51a7d2f9f03bbf8600d055e20c1a93594f6f"
+    },
+    {
+      "path": "src/compat/theme/love.css",
+      "bytes": 860,
+      "sha256": "b991b00f74b61804d52f8e5590337f4ef1311fa8bb4315337a1bbc7c8bd262cd"
+    },
+    {
+      "path": "src/game.js",
+      "bytes": 11280,
+      "sha256": "223c6f5ca7d2bbe47e039f4101f51bab96ccc7e5ad02d4d3281162b28b6ec2c5"
+    }
+  ]
+}

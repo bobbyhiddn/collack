@@ -10,6 +10,7 @@
     "verify:deployed": "PLAYWRIGHT_BROWSERS_PATH=.playwright-browsers node scripts/verify-deployed-spike.mjs",
     "verify:web:identity": "node scripts/test-web-build-identity.mjs",
     "verify:paddle:identity": "node scripts/test-paddle-build-identity.mjs && node scripts/test-web-build-identity.mjs dist/paddle-web paddle-web",
+    "verify:lovejs-cache": "node scripts/test-lovejs-cache-boundary.mjs",
     "verify:paddle:browser": "PLAYWRIGHT_BROWSERS_PATH=.playwright-browsers bash scripts/verify-paddle-local.sh",
     "test:shore-browser": "node --test deploy/shore/verify-live-route.test.mjs",
     "test:evidence-provenance": "node scripts/test-evidence-provenance.mjs",

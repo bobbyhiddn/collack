@@ -112,6 +112,7 @@ jobs:
         run: |
           npm run verify:web:identity
           npm run verify:paddle:identity
+          npm run verify:lovejs-cache
 
       - name: Verify tracked browser evidence freshness
         if: matrix.target == 'web'

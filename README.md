@@ -29,6 +29,7 @@ lua5.1 battle/cli.lua --seed 9125
 ./scripts/build-web.sh
 ./scripts/build-paddle-web.sh
 lua5.1 targets/paddle/tests/test_logic.lua
+npm run verify:lovejs-cache
 ./scripts/verify-release-container.sh
 npm ci && npm run browser:install
 npm run verify:web
@@ -48,8 +49,14 @@ overwrites or relabels the other. Both use content-addressed JavaScript, data,
 and WebAssembly filenames.
 
 Each `callack-build-manifest.json` binds the exact Git revision/tree, explicit
-runtime target/path, source-file set, build recipe, and SHA-256 of every served
-asset. The paddle browser verifier completes
+runtime target/path, source-file set, build recipe, authenticated toolchain, the
+exact packaged `.love` archive, and SHA-256 of every served asset. The
+candidate lock in `scripts/lovejs-toolchain-lock.json` pins the love.js npm
+archive by URL, byte count, SHA-256, SHA-512/SRI, and every extracted runtime
+file used by the candidate-owned packager. `CALLACK_NODE_CACHE_DIR` can select
+only the archive storage directory: cache entries are authenticated before
+extraction, cached executables are never run, and stale, mixed, altered, or
+symlinked entries fail closed. The paddle browser verifier completes
 the full flow at both 390×844 and 1280×800, validates moving canonical physics,
 and writes review captures to `dist/verification/`.
 

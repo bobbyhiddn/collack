@@ -21,8 +21,15 @@ function git(root, ...args) {
 }
 
 export function trustedPaddleBuild(root, environment = process.env) {
-  assert(!Object.hasOwn(environment, "CALLACK_EXPECTED_BUILD_MANIFEST"),
-    "CALLACK_EXPECTED_BUILD_MANIFEST is forbidden: the trusted paddle manifest is rebuilt from the checked-out candidate");
+  for (const forbidden of [
+    "CALLACK_EXPECTED_BUILD_MANIFEST",
+    "CALLACK_BUILD_REVISION",
+    "CALLACK_BUILD_TREE",
+    "CALLACK_ALLOW_EXTERNAL_BUILD_IDENTITY",
+  ]) {
+    assert(!Object.hasOwn(environment, forbidden),
+      `${forbidden} is forbidden: trusted paddle identity comes only from the checked-out candidate`);
+  }
 
   const claims = Object.freeze({
     revision: git(root, "rev-parse", "HEAD"),

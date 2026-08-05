@@ -6,6 +6,10 @@ import path from "node:path";
 export const buildManifestName = "callack-build-manifest.json";
 export const buildManifestSchema = "callack-web-build-v2";
 export const buildTarget = "web";
+export const toolchainEvidenceName = "callack-toolchain-identity.json";
+export const toolchainEvidenceSchema = "callack-lovejs-toolchain-v1";
+export const toolchainLockPath = "scripts/lovejs-toolchain-lock.json";
+export const toolchainPackagerPath = "scripts/package-lovejs.mjs";
 export const buildProfiles = Object.freeze({
   web: Object.freeze({
     target: "web",
@@ -13,6 +17,7 @@ export const buildProfiles = Object.freeze({
     runtimePath: "src",
     shellPath: "web-shell/index.html",
     recipePath: "scripts/build-web.sh",
+    archiveName: "collack-spike.love",
     sourcePaths: Object.freeze(["battle", "src", "web-shell"]),
   }),
   "paddle-web": Object.freeze({
@@ -21,6 +26,7 @@ export const buildProfiles = Object.freeze({
     runtimePath: "targets/paddle/src",
     shellPath: "targets/paddle/web-shell/index.html",
     recipePath: "scripts/build-paddle-web.sh",
+    archiveName: "collack-paddle.love",
     sourcePaths: Object.freeze([
       "targets/paddle/src",
       "targets/paddle/web-shell",
@@ -83,24 +89,14 @@ export async function sourceIdentity(
   const local = await localGitIdentity(sourceRoot);
   const declaredRevision = environment.CALLACK_BUILD_REVISION ?? null;
   const declaredTree = environment.CALLACK_BUILD_TREE ?? null;
-
-  if (local) {
-    assert(local.trackedStatus === "",
-      `build manifest requires a clean tracked source tree; found ${local.trackedStatus}`);
-    assert(!declaredRevision || declaredRevision === local.revision,
-      `CALLACK_BUILD_REVISION ${declaredRevision} disagrees with source HEAD ${local.revision}`);
-    assert(!declaredTree || declaredTree === local.tree,
-      `CALLACK_BUILD_TREE ${declaredTree} disagrees with source tree ${local.tree}`);
-    return { revision: local.revision, tree: local.tree, target: profile.target };
-  }
-
-  assert(environment.CALLACK_ALLOW_EXTERNAL_BUILD_IDENTITY === "1",
-    "build manifest source is not a Git worktree; external identity was not authorized");
-  assert(/^[0-9a-f]{40}$/.test(declaredRevision ?? ""),
-    "external build manifest requires a full CALLACK_BUILD_REVISION");
-  assert(/^[0-9a-f]{40}$/.test(declaredTree ?? ""),
-    "external build manifest requires a full CALLACK_BUILD_TREE");
-  return { revision: declaredRevision, tree: declaredTree, target: profile.target };
+  assert(local,
+    "build manifest source must be a real Git worktree; caller-declared external identity is forbidden");
+  assert(local.trackedStatus === "",
+    `build manifest requires a clean tracked source tree; found ${local.trackedStatus}`);
+  assert(declaredRevision === null && declaredTree === null
+      && environment.CALLACK_ALLOW_EXTERNAL_BUILD_IDENTITY === undefined,
+  "CALLACK_BUILD_REVISION, CALLACK_BUILD_TREE, and CALLACK_ALLOW_EXTERNAL_BUILD_IDENTITY are forbidden; build identity comes from the checked-out Git candidate");
+  return { revision: local.revision, tree: local.tree, target: profile.target };
 }
 
 async function filesBelow(root, relativeDirectory = "") {
@@ -167,6 +163,14 @@ export async function generateBuildManifest(
     "web build manifest requires index.html");
   const sources = await buildInputRecords(sourceRoot, profile);
   const recipe = await assetRecord(sourceRoot, profile.recipePath);
+  let toolchain;
+  try {
+    toolchain = JSON.parse(
+      (await readFile(path.join(webRoot, toolchainEvidenceName))).toString("utf8"),
+    );
+  } catch (error) {
+    throw new Error(`authenticated toolchain evidence is missing or invalid: ${error.message}`);
+  }
   const manifest = {
     schema: buildManifestSchema,
     revision: identity.revision,
@@ -178,11 +182,13 @@ export async function generateBuildManifest(
     recipe,
     sources,
     sourceSetSha256: assetSetSha256(sources),
+    toolchain,
     entrypoint: "index.html",
     assets,
     assetSetSha256: assetSetSha256(assets),
   };
   const bytes = Buffer.from(`${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+  validateBuildManifest(manifest, sourceRoot, identity);
   await writeFile(path.join(webRoot, buildManifestName), bytes);
   return { manifest, bytes };
 }
@@ -207,6 +213,11 @@ function validateRepoPath(value) {
 }
 
 function gitRecord(repoRoot, revision, relativePath) {
+  const bytes = gitBytes(repoRoot, revision, relativePath);
+  return { path: relativePath, bytes: bytes.length, sha256: sha256(bytes) };
+}
+
+function gitBytes(repoRoot, revision, relativePath) {
   let bytes;
   try {
     bytes = execFileSync("git", ["show", `${revision}:${relativePath}`], {
@@ -219,7 +230,106 @@ function gitRecord(repoRoot, revision, relativePath) {
       `build manifest source is absent from candidate revision ${revision}: ${relativePath}`,
     );
   }
-  return { path: relativePath, bytes: bytes.length, sha256: sha256(bytes) };
+  return bytes;
+}
+
+function sameJson(left, right) {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function validateFileRecord(record, label, pathValidator = validateRepoPath) {
+  assert(record && typeof record === "object" && !Array.isArray(record),
+    `${label} is missing or malformed`);
+  assert(pathValidator(record.path), `${label} has an unsafe path: ${record.path}`);
+  assert(Number.isSafeInteger(record.bytes) && record.bytes >= 0,
+    `${label} has an invalid byte length`);
+  assert(/^[0-9a-f]{64}$/.test(record.sha256 ?? ""),
+    `${label} has an invalid SHA-256`);
+}
+
+function validateToolchainLock(lock) {
+  assert(lock && typeof lock === "object" && !Array.isArray(lock),
+    "candidate toolchain lock is malformed");
+  assert(lock.schema === "callack-lovejs-toolchain-lock-v1",
+    `candidate toolchain lock schema is ${lock.schema ?? "missing"}`);
+  assert(lock.package?.name === "love.js" && lock.package?.version === "11.4.1",
+    "candidate toolchain package is not love.js@11.4.1");
+  const archive = lock.package.archive;
+  assert(archive?.name === "love.js-11.4.1.tgz"
+      && archive.url === "https://registry.npmjs.org/love.js/-/love.js-11.4.1.tgz",
+  "candidate toolchain archive name or source is not pinned");
+  assert(Number.isSafeInteger(archive.bytes) && archive.bytes > 0,
+    "candidate toolchain archive byte count is invalid");
+  assert(/^[0-9a-f]{64}$/.test(archive.sha256 ?? "")
+      && /^[0-9a-f]{128}$/.test(archive.sha512 ?? ""),
+  "candidate toolchain archive digest is invalid");
+  assert(archive.integrity === `sha512-${Buffer.from(archive.sha512, "hex").toString("base64")}`,
+    "candidate toolchain archive SRI disagrees with SHA-512");
+  assert(Array.isArray(lock.runtimeFiles) && lock.runtimeFiles.length === 5,
+    "candidate toolchain runtime file set is incomplete");
+  const runtimePaths = [];
+  for (const record of lock.runtimeFiles) {
+    validateFileRecord(record, "candidate toolchain runtime file");
+    runtimePaths.push(record.path);
+  }
+  assert(new Set(runtimePaths).size === runtimePaths.length
+      && runtimePaths.join("\n") === [...runtimePaths].sort().join("\n"),
+  "candidate toolchain runtime file set is duplicated or unsorted");
+  return lock;
+}
+
+function validateToolchainIdentity(manifest, profile, repoRoot) {
+  const toolchain = manifest.toolchain;
+  assert(toolchain && typeof toolchain === "object" && !Array.isArray(toolchain),
+    "build manifest toolchain identity is missing or malformed");
+  assert(toolchain.schema === toolchainEvidenceSchema,
+    `build manifest toolchain schema is ${toolchain.schema ?? "missing"}`);
+  validateFileRecord(toolchain.lock, "build manifest toolchain lock");
+  validateFileRecord(toolchain.packager, "build manifest toolchain packager");
+  validateFileRecord(toolchain.candidateArchive, "build manifest candidate archive", validateAssetPath);
+  assert(toolchain.lock.path === toolchainLockPath,
+    `build manifest toolchain lock path is ${toolchain.lock.path}, expected ${toolchainLockPath}`);
+  assert(toolchain.packager.path === toolchainPackagerPath,
+    `build manifest toolchain packager path is ${toolchain.packager.path}, expected ${toolchainPackagerPath}`);
+  assert(toolchain.candidateArchive.path === profile.archiveName,
+    `build manifest candidate archive path is ${toolchain.candidateArchive.path}, expected ${profile.archiveName}`);
+
+  const committedLock = gitRecord(repoRoot, manifest.revision, toolchainLockPath);
+  const committedPackager = gitRecord(repoRoot, manifest.revision, toolchainPackagerPath);
+  assert(sameJson(toolchain.lock, committedLock),
+    `build manifest toolchain lock mismatch: manifest=${JSON.stringify(toolchain.lock)} candidate=${JSON.stringify(committedLock)}`);
+  assert(sameJson(toolchain.packager, committedPackager),
+    `build manifest toolchain packager mismatch: manifest=${JSON.stringify(toolchain.packager)} candidate=${JSON.stringify(committedPackager)}`);
+
+  let committedLockJson;
+  try {
+    committedLockJson = JSON.parse(
+      gitBytes(repoRoot, manifest.revision, toolchainLockPath).toString("utf8"),
+    );
+  } catch (error) {
+    throw new Error(`candidate toolchain lock is invalid JSON: ${error.message}`);
+  }
+  const lock = validateToolchainLock(committedLockJson);
+  assert(sameJson(toolchain.package, lock.package),
+    "build manifest toolchain package identity disagrees with the candidate lock");
+  assert(sameJson(toolchain.runtimeFiles, lock.runtimeFiles),
+    "build manifest toolchain runtime files disagree with the candidate lock");
+
+  const gameDataAssets = manifest.assets.filter((asset) => /^game\.[0-9a-f]{16}\.data$/.test(asset.path));
+  assert(gameDataAssets.length === 1,
+    `build manifest must contain exactly one packaged game archive, found ${gameDataAssets.length}`);
+  const [gameData] = gameDataAssets;
+  assert(gameData.bytes === toolchain.candidateArchive.bytes
+      && gameData.sha256 === toolchain.candidateArchive.sha256
+      && gameData.path === `game.${toolchain.candidateArchive.sha256.slice(0, 16)}.data`,
+  `build manifest game data does not match the authenticated candidate archive: ${gameData.sha256}/${gameData.bytes} vs ${toolchain.candidateArchive.sha256}/${toolchain.candidateArchive.bytes}`);
+
+  const evidenceBytes = Buffer.from(`${JSON.stringify(toolchain, null, 2)}\n`, "utf8");
+  const evidenceAsset = manifest.assets.find((asset) => asset.path === toolchainEvidenceName);
+  assert(evidenceAsset
+      && evidenceAsset.bytes === evidenceBytes.length
+      && evidenceAsset.sha256 === sha256(evidenceBytes),
+  "build manifest toolchain evidence asset is missing or not canonical candidate-owned identity");
 }
 
 export function validateBuildManifest(manifest, repoRoot, callerClaims = {}) {
@@ -328,6 +438,7 @@ export function validateBuildManifest(manifest, repoRoot, callerClaims = {}) {
   assert(manifest.recipe.bytes === committedRecipe.bytes
       && manifest.recipe.sha256 === committedRecipe.sha256,
   `build manifest recipe mismatch for ${profile.recipePath}: ${manifest.recipe.sha256}/${manifest.recipe.bytes}, candidate ${committedRecipe.sha256}/${committedRecipe.bytes}`);
+  validateToolchainIdentity(manifest, profile, repoRoot);
 
   if (callerClaims.revision !== null && callerClaims.revision !== undefined) {
     assert(callerClaims.revision === manifest.revision,
