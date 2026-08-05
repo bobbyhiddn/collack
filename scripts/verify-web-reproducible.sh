@@ -61,7 +61,7 @@ find "$SOURCE_B/src" "$SOURCE_B/battle" -exec touch -t 203012312359.58 {} +
 find "$SOURCE_A/src" "$SOURCE_A/battle" -type f -exec chmod 0644 {} +
 find "$SOURCE_B/src" "$SOURCE_B/battle" -type f -exec chmod 0600 {} +
 
-TOOLCHAIN_CACHE="$ROOT/.love_cache"
+TOOLCHAIN_CACHE="$ROOT/.love_cache/lovejs-11.4.1"
 
 echo "[web-repro] build A: short path, old mtimes, mode 0644, restrictive umask"
 (

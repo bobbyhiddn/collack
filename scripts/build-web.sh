@@ -24,7 +24,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SRC="$ROOT/src"
 FINAL_OUT="$ROOT/dist/web"
 FINAL_LOVE_ARCHIVE="$ROOT/dist/collack-spike.love"
-TOOLCHAIN_CACHE="${CALLACK_NODE_CACHE_DIR:-$ROOT/.love_cache}"
+TOOLCHAIN_CACHE="${CALLACK_NODE_CACHE_DIR:-$ROOT/.love_cache/lovejs-11.4.1}"
 ARCHIVE_TIMESTAMP="200001010000.00"
 
 # Keep archive ordering, timestamps, permissions, and locale-dependent tool
