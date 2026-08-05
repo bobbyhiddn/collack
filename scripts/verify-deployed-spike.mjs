@@ -205,7 +205,7 @@ async function dragTouch(page, from, to, steps = 8) {
   }
 }
 
-async function tapTouch(page, at, holdMs = 25) {
+async function tapTouch(page, at, controlledFrameMilliseconds = null) {
   const session = await page.context().newCDPSession(page);
   const point = {
     x: at.x,
@@ -215,12 +215,18 @@ async function tapTouch(page, at, holdMs = 25) {
     radiusY: 1,
     force: 1,
   };
+  let heldState = null;
   try {
     await session.send("Input.dispatchTouchEvent", {
       type: "touchStart",
       touchPoints: [point],
     });
-    await page.waitForTimeout(holdMs);
+    if (controlledFrameMilliseconds === null) {
+      await page.waitForTimeout(25);
+    } else {
+      await page.clock.runFor(controlledFrameMilliseconds);
+      heldState = await readCanvasState(page);
+    }
     await session.send("Input.dispatchTouchEvent", {
       type: "touchEnd",
       touchPoints: [],
@@ -228,6 +234,7 @@ async function tapTouch(page, at, holdMs = 25) {
   } finally {
     await session.detach();
   }
+  return heldState;
 }
 
 async function readInputEvidence(page) {
@@ -529,7 +536,12 @@ async function controlledTouchRetryAndCollision(page, loss) {
   let freshRound;
   let collisionAndScore;
 
-  await tapTouch(page, retryPoint);
+  // Hold the genuine touch across one explicitly advanced browser frame so
+  // love.js must consume touchpressed while the observer is already ready.
+  // A real-time sleep while the controlled clock is stopped can let both CDP
+  // edges queue between game frames and makes delivery schedule-dependent.
+  const retryFrame = await tapTouch(page, retryPoint, 16);
+  samples.push({ frame: 1, virtualMilliseconds: 16, ...retryFrame });
   const inputAfter = await readInputEvidence(page);
   assert(inputAfter.keydown === 0 && inputAfter.keyup === 0,
     `phone: retry sent a keyboard event: ${JSON.stringify(inputAfter)}`);
@@ -537,7 +549,7 @@ async function controlledTouchRetryAndCollision(page, loss) {
       && inputAfter.trustedTouchend > inputBefore.trustedTouchend,
   `phone: retry was not a trusted held touch tap: ${JSON.stringify({ inputBefore, inputAfter })}`);
 
-  for (let frame = 1; frame <= 240; frame += 1) {
+  for (let frame = 2; frame <= 240; frame += 1) {
     await page.clock.runFor(16);
     const sampled = await readCanvasState(page);
     samples.push({ frame, virtualMilliseconds: frame * 16, ...sampled });
@@ -825,26 +837,33 @@ try {
     },
     deviceScaleFactor: evidence.viewport.desktop.deviceScaleFactor,
   });
-  const desktopRetry = await boot(desktopRetryContext, "desktop-retry");
+  const desktopRetry = await boot(desktopRetryContext, "desktop-retry", {
+    controlledClock: true,
+  });
   await verifySessionIdentity("desktop-retry", desktopRetry);
   await desktopRetry.page.keyboard.down("ArrowLeft");
-  await desktopRetry.page.waitForTimeout(850);
+  await desktopRetry.page.clock.runFor(850);
   await desktopRetry.page.keyboard.up("ArrowLeft");
   const desktopParked = await readCanvasState(desktopRetry.page);
   assert(desktopParked.paddleCenter < 80,
     `desktop: could not park paddle for SPACE retry: ${desktopParked.paddleCenter}`);
-  const desktopLost = await waitForLoss(desktopRetry.page, "desktop-retry");
+  const desktopLost = await waitForControlledLoss(desktopRetry.page, "desktop-retry");
   await capture(desktopRetry.page, "desktop-loss.png");
-  await desktopRetry.page.keyboard.press("Space");
-  const desktopRestarted = await waitForState(
-    desktopRetry.page,
-    "desktop: SPACE after loss did not begin a fresh round",
-    (state) => state.centerBrightPixels < 50
-      && state.brickPixels >= desktopRetry.initial.brickPixels - 100
-      && state.hudHash === desktopRetry.initial.hudHash
-      && state.frameHash !== desktopLost.frameHash,
-    3_000,
-  );
+  await desktopRetry.page.keyboard.down("Space");
+  let desktopRestarted;
+  try {
+    desktopRestarted = await waitForControlledState(
+      desktopRetry.page,
+      "desktop: SPACE after loss did not begin a fresh round",
+      (state) => state.centerBrightPixels < 50
+        && state.brickPixels >= desktopRetry.initial.brickPixels - 100
+        && state.hudHash === desktopRetry.initial.hudHash
+        && state.frameHash !== desktopLost.frameHash,
+      180,
+    );
+  } finally {
+    await desktopRetry.page.keyboard.up("Space");
+  }
   evidence.desktop1280x800.spaceRetry = {
     paddleParked: desktopParked,
     loss: desktopLost,
