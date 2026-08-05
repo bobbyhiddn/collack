@@ -57,6 +57,7 @@ local function refresh_setup_status(state)
     state.setup.errors = errors
     state.setup.build_tags = setup_rules.build_tags(loadout)
     state.setup.adjacencies = setup_rules.adjacency_preview(loadout)
+    state.setup.ability_links = setup_rules.resolve_ability_links(loadout)
 end
 
 local function journal_offer(state)

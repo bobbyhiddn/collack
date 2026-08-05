@@ -239,16 +239,16 @@ function M.run(t)
         { { canonical_brick.uid } },
         { canonical_brick }
     )
-    t:eq(canonical_brick.hp, 3,
+    t:eq(canonical_brick.hp, 4,
         "drafted brick HP ignores the mutable compiled cache")
-    t:eq(canonical_formation.grid[1][1].hp, 3,
+    t:eq(canonical_formation.grid[1][1].hp, 4,
         "live formation HP derives from the entity RuleSet")
     t:raises(function()
         bricks.runtime("basalt_absorber", canonical_brick.rule_set, brick_cache)
     end, "diverges from canonical RuleSet",
     "claimed divergent brick cache fails closed")
     brick_cache.hp, brick_cache.rule_set = old_hp, old_brick_rules
-    for _, field in ipairs({ "behaviour", "hp", "max_hp" }) do
+    for _, field in ipairs({ "behaviour", "hp", "max_hp", "restitution", "rarity" }) do
         local shadow = util.deep_copy(bricks.by_id.basalt_absorber)
         shadow[field] = 999
         t:raises(function()
@@ -258,8 +258,137 @@ function M.run(t)
                 shadow
             )
         end, "diverges from canonical RuleSet",
-        "brick projection rejects shadow field " .. field)
+            "brick projection rejects shadow field " .. field)
     end
+
+    local splice_by_id = bricks.by_id.splice_node
+    local splice_by_id_again = bricks.by_id.splice_node
+    local splice_from_list
+    for _, item in ipairs(bricks.list()) do
+        if item.id == "splice_node" then splice_from_list = item break end
+    end
+    t:neq(splice_by_id, splice_by_id_again,
+        "by-id brick lookup returns fresh isolated projections")
+    t:neq(splice_by_id, splice_from_list,
+        "list and by-id brick lookups cannot share a mutable alias")
+    local function mutate_splice_projection(item)
+        item.balance.spent = 1
+        item.telegraph.passive_ceiling = 99
+        item.compact_copy = "FORGED SPLICE COPY"
+        for _, rule in ipairs(item.rule_set.rules) do
+            if rule.id == "brick.splice.guard" then
+                rule.magnitude.value = 9
+                rule.cadence.interval = 2
+                rule.duration.value = 17
+            end
+        end
+    end
+    mutate_splice_projection(splice_by_id)
+    mutate_splice_projection(splice_from_list)
+    local clean_splice = bricks.by_id.splice_node
+    local clean_guard = ast.rule(clean_splice.rule_set, "brick.splice.guard")
+    t:eq(clean_guard.magnitude.value, 1,
+        "by-id nested magnitude mutation cannot poison later reads")
+    t:eq(clean_guard.cadence.interval, 1,
+        "by-id nested cadence mutation cannot poison later reads")
+    t:eq(clean_guard.duration.value, 120,
+        "list nested duration mutation cannot poison later reads")
+    t:eq(clean_splice.telegraph.passive_ceiling, 1,
+        "telegraph cache mutation cannot poison later reads")
+    t:eq(clean_splice.balance.spent, 21.12,
+        "balance cache mutation cannot poison later reads")
+    t:neq(clean_splice.compact_copy, "FORGED SPLICE COPY",
+        "compact-copy cache mutation cannot poison later reads")
+    t:raises(function()
+        bricks.by_id.splice_node = splice_by_id
+    end, "read-only", "the by-id projection lookup rejects replacement")
+    t:raises(function()
+        bricks.by_id = { splice_node = splice_by_id }
+    end, "read-only", "the brick projection module rejects lookup replacement")
+    t:raises(function()
+        bricks.get = function() return splice_by_id end
+    end, "read-only", "the brick projection module rejects accessor replacement")
+    t:raises(function()
+        rawset(bricks.by_id, "splice_node", splice_by_id)
+    end, "table expected",
+    "raw writes cannot bypass the protected by-id projection lookup")
+    t:raises(function()
+        rawset(bricks, "by_id", { splice_node = splice_by_id })
+    end, "table expected",
+    "raw writes cannot replace the protected brick projection module")
+
+    local authored_splice = rulebook.bricks.splice_node
+    ast.assert_valid(authored_splice)
+    for _, rule in ipairs(authored_splice.rules) do
+        if rule.id == "brick.splice.guard" then
+            rule.magnitude.value = 9
+            rule.cadence.interval = 2
+        end
+    end
+    authored_splice.abilities[1].id = "forged_guard"
+    local fresh_authored_splice = rulebook.bricks.splice_node
+    local fresh_authored_guard = ast.rule(
+        fresh_authored_splice,
+        "brick.splice.guard"
+    )
+    t:eq(fresh_authored_guard.magnitude.value, 1,
+        "post-validation authored-table magnitude edits stay isolated")
+    t:eq(fresh_authored_guard.cadence.interval, 1,
+        "post-validation authored-table cadence edits stay isolated")
+    t:eq(fresh_authored_splice.abilities[1].id, "splice_guard",
+        "post-validation nested ability aliases stay isolated")
+    t:raises(function()
+        rulebook.bricks.splice_node = authored_splice
+    end, "read-only", "the canonical RuleSet lookup rejects replacement")
+    t:raises(function()
+        rulebook.bricks = { splice_node = authored_splice }
+    end, "read-only", "the canonical RuleSet module rejects group replacement")
+    t:raises(function()
+        rulebook.get = function() return authored_splice end
+    end, "read-only", "the canonical RuleSet module rejects accessor replacement")
+    t:raises(function()
+        rawset(rulebook.bricks, "splice_node", authored_splice)
+    end, "table expected",
+    "raw writes cannot bypass the protected canonical RuleSet lookup")
+    t:raises(function()
+        rawset(rulebook, "bricks", { splice_node = authored_splice })
+    end, "table expected",
+    "raw writes cannot replace the protected canonical RuleSet module")
+
+    local common_shadow = bricks.by_id.basalt_absorber
+    common_shadow.telegraph.passive_count = 1
+    common_shadow.telegraph.passive_ceiling = 99
+    common_shadow.inspection_copy[2] = "FORGED PASSIVE"
+    common_shadow.abilities[1] = {
+        id = "forged_guard", kind = "passive",
+        rule_ids = { "brick.splice.guard" },
+    }
+    local canonical_common = bricks.by_id.basalt_absorber
+    t:eq(canonical_common.telegraph.passive_count, 0,
+        "projection edits cannot create a common passive")
+    t:eq(canonical_common.telegraph.passive_ceiling, 0,
+        "projection edits cannot raise the common passive ceiling")
+    t:eq(#canonical_common.abilities, 0,
+        "common projection retains zero canonical ability groups")
+    t:neq(canonical_common.inspection_copy[2], "FORGED PASSIVE",
+        "common inspection-copy mutation cannot poison later reads")
+
+    local common_rules = rulebook.bricks.basalt_absorber
+    ast.assert_valid(common_rules)
+    local splice_rule = ast.rule(
+        rulebook.bricks.splice_node,
+        "brick.splice.guard"
+    )
+    common_rules.rules[#common_rules.rules + 1] = splice_rule
+    common_rules.abilities[1] = {
+        id = "forged_guard", kind = "passive",
+        rule_ids = { splice_rule.id },
+    }
+    local common_valid = ast.validate(common_rules)
+    t:eq(common_valid, false,
+        "a common passive remains invalid even on an isolated post-validation copy")
+    t:eq(ast.ability_summary(rulebook.bricks.basalt_absorber).count, 0,
+        "a rejected common mutation cannot poison canonical RuleSet reads")
 
     local release_shadow = effects.release_profile("baseline")
     release_shadow.field_release_strength = 999
@@ -279,7 +408,8 @@ function M.run(t)
     t:eq(effects.brick_profile(
         canonical_brick.behaviour,
         canonical_brick.rule_set
-    ).damage_reduction, 1, "brick effect profiles are fresh RuleSet projections")
+    ).damage_reduction, nil,
+    "common Basalt profiles remain passive-free fresh RuleSet projections")
 
     local setup_state = fixtures.place_unplaced(short.new({
         run_seed = 9125,
@@ -331,8 +461,11 @@ function M.run(t)
                 kit.id .. "/" .. brick_id .. " has exact rule membership")
             t:eq(#authority.rule_ids, #authority.rules,
                 kit.id .. "/" .. brick_id .. " has no helper inflation")
-            t:eq(#authority.rule_ids, #authority.balance.lines,
-                kit.id .. "/" .. brick_id .. " accounts exact membership")
+            t:eq(
+                #authority.balance.lines,
+                #authority.rule_ids + #entity.rule_set.abilities,
+                kit.id .. "/" .. brick_id .. " accounts exact membership and MCU"
+            )
             for _, rule_id in ipairs(authority.rule_ids) do
                 t:eq(authority_ids[rule_id], 1,
                     kit.id .. "/" .. brick_id .. " maps each rule once")
@@ -364,49 +497,52 @@ function M.run(t)
     end
     t:eq(variants, 16, "exact membership covers all sixteen kit/brick variants")
 
-    -- The original seed-7 counterexample now applies and attributes the same
-    -- Temporal Anchor entity, with no Vault Arch rules.
+    -- Fight-one rarity law excludes legendary rewards while the selected
+    -- individual brick still has exact entity-only attribution.
     local reward_state = fixtures.complete(short.new({
         run_seed = 7,
         short_run = true,
     }))
-    local temporal
+    local reward_brick
     for _, choice in ipairs(reward_state.draft.offer.choices) do
-        if choice.operation.kind == "add_brick"
-            and choice.operation.content_id == "temporal_anchor" then
-            temporal = choice
-            break
-        end
+        t:neq(choice.operation.content_id, "temporal_anchor",
+            "win-one reward cannot contain a legendary brick")
+        if choice.operation.kind == "add_brick" then reward_brick = choice end
     end
-    t:ok(temporal ~= nil, "seed 7 offers the Temporal Anchor add-brick operation")
-    if temporal then
+    t:ok(reward_brick ~= nil, "seed 7 offers one legal individual add-brick operation")
+    if reward_brick then
+        local reward_id = reward_brick.operation.content_id
         local expected = ast.player_rule_ids(
-            bricks.canonical_rule_set("temporal_anchor")
+            bricks.canonical_rule_set(reward_id)
         )
         t:ok(util.deep_equal(
-            temporal.causal_attribution.source_rule_ids,
+            reward_brick.causal_attribution.source_rule_ids,
             expected
-        ), "Temporal Anchor reward attribution is exact")
-        t:eq(#temporal.causal_attribution.applied_content_ids, 1,
-            "Temporal Anchor reward records one applied entity")
-        t:eq(temporal.causal_attribution.applied_content_ids[1],
-            "temporal_anchor",
-            "Temporal Anchor attribution names only the applied brick")
-        t:eq(ids_as_set(temporal.causal_attribution.source_rule_ids)
-            ["brick.vault_arch.hp"], nil,
-            "Temporal Anchor excludes the absent Vault Arch")
+        ), "individual reward attribution is exact")
+        t:eq(#reward_brick.causal_attribution.applied_content_ids, 1,
+            "individual reward records one applied entity")
+        t:eq(reward_brick.causal_attribution.applied_content_ids[1],
+            reward_id,
+            "individual attribution names only the applied brick")
+        local kit = catalog.brick_kit_by_id[reward_brick.operation.kit_id]
+        local companion = kit.brick_ids[1] == reward_id
+            and kit.brick_ids[2] or kit.brick_ids[1]
+        local companion_rule = "brick." .. companion .. ".hp"
+        t:eq(ids_as_set(reward_brick.causal_attribution.source_rule_ids)
+            [companion_rule], nil,
+            "individual reward excludes absent companion rules")
 
         local inflated = util.deep_copy(reward_state)
         local inflated_choice = draft.find_choice(
             inflated.draft.offer,
-            temporal.choice_id
+            reward_brick.choice_id
         )
         inflated_choice.causal_attribution.source_rule_ids[#inflated_choice
-            .causal_attribution.source_rule_ids + 1] = "brick.vault_arch.hp"
+            .causal_attribution.source_rule_ids + 1] = companion_rule
         local inflated_result, inflated_error = run.dispatch(inflated, {
             kind = "choose_offer",
             offer_id = inflated.draft.offer.offer_id,
-            choice_id = temporal.choice_id,
+            choice_id = reward_brick.choice_id,
         })
         t:eq(inflated_result, nil,
             "hidden companion attribution cannot cross the apply boundary")
@@ -416,7 +552,7 @@ function M.run(t)
         local duplicated = util.deep_copy(reward_state)
         local duplicated_choice = draft.find_choice(
             duplicated.draft.offer,
-            temporal.choice_id
+            reward_brick.choice_id
         )
         duplicated_choice.causal_attribution.source_rule_ids[#duplicated_choice
             .causal_attribution.source_rule_ids + 1] = duplicated_choice
@@ -424,7 +560,7 @@ function M.run(t)
         local duplicate_result, duplicate_error = run.dispatch(duplicated, {
             kind = "choose_offer",
             offer_id = duplicated.draft.offer.offer_id,
-            choice_id = temporal.choice_id,
+            choice_id = reward_brick.choice_id,
         })
         t:eq(duplicate_result, nil,
             "duplicate reward attribution cannot cross the apply boundary")
@@ -434,13 +570,13 @@ function M.run(t)
         local retargeted = util.deep_copy(reward_state)
         local retargeted_choice = draft.find_choice(
             retargeted.draft.offer,
-            temporal.choice_id
+            reward_brick.choice_id
         )
-        retargeted_choice.operation.content_id = "vault_arch"
+        retargeted_choice.operation.content_id = companion
         local retargeted_result, retargeted_error = run.dispatch(retargeted, {
             kind = "choose_offer",
             offer_id = retargeted.draft.offer.offer_id,
-            choice_id = temporal.choice_id,
+            choice_id = reward_brick.choice_id,
         })
         t:eq(retargeted_result, nil,
             "operation retargeting cannot preserve stale attribution")
@@ -451,19 +587,19 @@ function M.run(t)
         local chosen, choose_error = run.dispatch(reward_state, {
             kind = "choose_offer",
             offer_id = reward_state.draft.offer.offer_id,
-            choice_id = temporal.choice_id,
+            choice_id = reward_brick.choice_id,
         })
         t:ok(chosen ~= nil, choose_error and choose_error.message
-            or "Temporal Anchor reward applies")
+            or "individual brick reward applies")
         if chosen then
             t:eq(#chosen.state.player.bricks, before_count + 1,
                 "add-brick operation applies exactly one brick")
             local applied = chosen.state.player.bricks[#chosen.state.player.bricks]
-            t:eq(applied.content_id, "temporal_anchor",
-                "the attributed Temporal Anchor is the applied entity")
+            t:eq(applied.content_id, reward_id,
+                "the attributed brick is the applied entity")
             t:ok(util.deep_equal(
                 ast.player_rule_ids(applied.rule_set),
-                temporal.causal_attribution.source_rule_ids
+                reward_brick.causal_attribution.source_rule_ids
             ), "applied entity rules equal reward attribution")
         end
     end

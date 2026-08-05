@@ -15,7 +15,9 @@ brick. The collection may contain at most four marbles and six bricks.
 
 The fixed route is:
 
-1. Switchback Scout: Ricochet, two marbles, and a sparse mirror/fuse pair.
+1. Switchback Scout: Ricochet, two marbles, and one edge Powder Keg. The
+   previous rear Mirror was removed because old Chain destroyed its allied
+   neighbour; the tutorial now demonstrates legal enemy-marble retaliation.
 2. Fuse Garden: Effect Amplifier, three marbles, and four status/release
    bricks.
 3. Brass Bastion: Momentum, four marbles, and five

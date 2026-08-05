@@ -301,6 +301,9 @@ local function rule_inspection(rule_set, requested_index)
         rule = rule_identity(rules[index]),
         drawback = drawback_projection(rule_set.drawback),
         compatibility = util.deep_copy(rule_set.compatibility),
+        rarity = rule_set.rarity,
+        abilities = util.deep_copy(rule_set.abilities),
+        telegraph = util.deep_copy(rule_ast.player_authority(rule_set).telegraph),
     }
 end
 
@@ -399,6 +402,8 @@ local function choice_card(choice, ui, index, state)
         rule_set = util.deep_copy(choice.rule_set),
         compatibility = util.deep_copy(choice.compatibility),
         balance = util.deep_copy(choice.balance),
+        telegraph = util.deep_copy(choice.telegraph),
+        availability = util.deep_copy(choice.availability),
         tags = tag_projection(choice.tags),
         synergy = synergy_projection(choice.synergy),
         details = util.deep_copy(choice.details),
@@ -605,6 +610,7 @@ local function project_setup(presentation, state, ui)
         errors = util.deep_copy(state.setup.errors),
         build_tags = counted_tag_projection(state.setup.build_tags),
         adjacencies = util.deep_copy(state.setup.adjacencies),
+        ability_links = util.deep_copy(state.setup.ability_links),
         sling = state.player.sling and {
             id = state.player.sling.id,
             name = state.player.sling.name,
@@ -633,30 +639,29 @@ local function project_setup(presentation, state, ui)
     }
 
     for index, brick in ipairs(state.player.bricks) do
-        local behaviour = art.behaviour[brick.behaviour] or art.behaviour.inert
-        local definition = brick_content.by_id[brick.content_id]
+        local definition = brick_content.get(brick.content_id)
+        local canonical_behaviour = definition and definition.behaviour or brick.behaviour
+        local behaviour = art.behaviour[canonical_behaviour] or art.behaviour.inert
         local projected_brick = {
             uid = brick.uid,
             content_id = brick.content_id,
-            name = brick.name,
-            behaviour = brick.behaviour,
+            name = definition and definition.name or brick.name,
+            behaviour = canonical_behaviour,
+            rarity = definition and definition.rarity or brick.rarity,
             mechanic_label = behaviour.label,
-            mechanic_description = brick.compact_copy
-                or (definition and definition.compact_copy)
-                or "",
-            inspection_copy = util.deep_copy(
-                brick.inspection_copy or (definition and definition.inspection_copy)
-            ),
-            rule_set = util.deep_copy(brick.rule_set or (definition and definition.rule_set)),
-            compatibility = util.deep_copy(
-                brick.compatibility
-                    or (definition and definition.rule_set.compatibility)
-            ),
-            balance = util.deep_copy(brick.balance or (definition and definition.balance)),
-            family = brick.family,
+            mechanic_description = definition and definition.compact_copy or "",
+            inspection_copy = definition
+                and util.deep_copy(definition.inspection_copy) or nil,
+            rule_set = definition and util.deep_copy(definition.rule_set) or nil,
+            compatibility = definition
+                and util.deep_copy(definition.rule_set.compatibility) or nil,
+            balance = definition and util.deep_copy(definition.balance) or nil,
+            telegraph = definition and util.deep_copy(definition.telegraph) or nil,
+            family = definition and definition.family or brick.family,
             hp = brick.hp,
             max_hp = brick.max_hp,
-            tags = tag_projection(brick.tags),
+            tags = tag_projection(definition
+                and definition.rule_set.synergy_tags or brick.tags),
             art_id = brick.art_id,
             selected = ui.selected_brick_uid == brick.uid,
             cell = util.deep_copy(placement[brick.uid]),
@@ -726,6 +731,7 @@ local function project_setup(presentation, state, ui)
             rule_set = util.deep_copy(marble.rule_set),
             compatibility = util.deep_copy(marble.compatibility),
             balance = util.deep_copy(marble.balance),
+            telegraph = util.deep_copy(marble.telegraph),
             tags = tag_projection(marble.tags),
             art_id = marble.art_id,
             selected = ui.selected_marble_uid == uid,
@@ -851,15 +857,26 @@ local function entity_inspection(frame, inspected_id, requested_rule_index)
                     or (entity.owner and tostring(entity.owner) or "Arena"),
             }
             if entity.type == "brick" then
-                local definition = brick_content.by_id[entity.content_id]
-                inspected.family = readable_title(entity.family)
-                inspected.mechanic = readable_title(entity.behaviour)
+                local definition = brick_content.get(entity.content_id)
+                inspected.name = definition and definition.name or inspected.name
+                inspected.family = readable_title(
+                    definition and definition.family or entity.family
+                )
+                inspected.mechanic = readable_title(
+                    definition and definition.behaviour or entity.behaviour
+                )
+                inspected.rarity = readable_title(
+                    definition and definition.rarity or entity.rarity
+                )
                 inspected.mechanic_description = definition and definition.compact_copy or ""
                 inspected.inspection_copy = definition
                     and util.deep_copy(definition.inspection_copy)
                     or nil
                 inspected.rule_set = definition and util.deep_copy(definition.rule_set) or nil
                 inspected.balance = definition and util.deep_copy(definition.balance) or nil
+                inspected.telegraph = definition
+                    and util.deep_copy(definition.telegraph) or nil
+                inspected.guard = util.deep_copy(entity.guard)
                 inspected.rule_inspection = definition
                     and rule_inspection(definition.rule_set, requested_rule_index)
                     or nil
@@ -884,6 +901,10 @@ local function entity_inspection(frame, inspected_id, requested_rule_index)
                     or nil
                 inspected.rule_set = definition and util.deep_copy(definition.rule_set) or nil
                 inspected.balance = definition and util.deep_copy(definition.balance) or nil
+                inspected.compatibility = definition
+                    and util.deep_copy(definition.compatibility) or nil
+                inspected.telegraph = definition
+                    and util.deep_copy(definition.telegraph) or nil
                 inspected.rule_inspection = definition
                     and rule_inspection(definition.rule_set, requested_rule_index)
                     or nil

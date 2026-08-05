@@ -137,7 +137,7 @@ local function all_runtime_rule_sets()
         "bricks",
     }
     for _, group in ipairs(groups) do
-        for _, rule_set in pairs(rulebook[group]) do
+        for _, rule_set in ipairs(rulebook.list(group)) do
             if not seen[rule_set] then
                 seen[rule_set] = true
                 out[#out + 1] = rule_set
@@ -172,8 +172,11 @@ function M.run(t)
 
         t:eq(#authority.rule_ids, #authority.rules,
             key .. " exposes every canonical structured rule")
-        t:eq(#authority.balance.lines, #authority.rule_ids,
-            key .. " accounts every canonical structured rule")
+        t:eq(
+            #authority.balance.lines,
+            #authority.rule_ids + #item.rule_set.abilities,
+            key .. " accounts every canonical structured rule and ability MCU"
+        )
         for index, rule_id in ipairs(authority.rule_ids) do
             t:eq(authority_ids[rule_id], nil,
                 key .. " rejects duplicate/helper-inflated ID " .. rule_id)
@@ -235,8 +238,28 @@ function M.run(t)
                 rule.id .. " cannot hide executable routing or mechanics")
             local changed = mutate_rule(rule_set, rule.id, changed_value(rule))
             local valid, errors = ast.validate(changed)
-            t:ok(valid, rule.id .. " remains valid for the small adversarial mutation: "
-                .. table.concat(errors or {}, "; "))
+            local error_text = table.concat(errors or {}, "; ")
+            local rejected_negative = error_text:find(
+                "negative net ability cost",
+                1,
+                true
+            ) ~= nil
+            local rejected_identity = error_text:find(
+                "ungrouped brick rule",
+                1,
+                true
+            ) ~= nil
+            t:ok(valid or rejected_negative or rejected_identity,
+                rule.id .. " either remains valid or fails the canonical negative-net guard: "
+                    .. error_text)
+            if rejected_negative then
+                t:ok(not valid,
+                    rule.id .. " cannot use a mutation to create negative net cost")
+            end
+            if rejected_identity then
+                t:ok(not valid,
+                    rule.id .. " cannot detach a body/identity projection from its canonical body")
+            end
             if valid then
                 local before_profile = ast.project(rule_set)
                 local after_profile = ast.project(changed)

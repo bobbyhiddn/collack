@@ -7,7 +7,7 @@ export const manifestName =
   "dist/verification/packaged-runtime-evidence.json";
 export const checksumName =
   "dist/verification/packaged-runtime-evidence.sha256";
-export const evidenceSchemaVersion = 3;
+export const evidenceSchemaVersion = 6;
 
 export function sha256(bytes) {
   return createHash("sha256").update(bytes).digest("hex");
@@ -21,43 +21,156 @@ function gitText(root, args) {
   }).trim();
 }
 
-function gitParent(root, commit) {
+function commitRecord(root, revision) {
+  let ancestry;
   try {
-    return gitText(root, ["rev-parse", `${commit}^`]);
+    ancestry = gitText(root, ["rev-list", "--parents", "-n", "1", `${revision}^{commit}`])
+      .split(" ");
   } catch {
-    return null;
+    throw new Error(`evidence provenance cannot resolve commit ${revision}`);
   }
+  const [commit, ...parents] = ancestry;
+  return {
+    commit,
+    parents,
+    tree: gitText(root, ["rev-parse", `${commit}^{tree}`]),
+  };
 }
 
-function changedPaths(root, commit) {
+function changedPaths(root, parent, commit) {
   const output = gitText(root, [
     "diff-tree",
     "--no-commit-id",
     "--name-only",
+    "--no-renames",
     "-r",
+    parent,
     commit,
   ]);
   return output === "" ? [] : output.split("\n");
 }
 
-// Evidence is committed immediately after the exact source/build commit.
-// Peel any evidence-only commits so provenance never attempts to hash itself.
-export function expectedEvidenceProvenance(root) {
-  let sourceCommit = gitText(root, ["rev-parse", "HEAD"]);
+function isAncestor(root, ancestor, descendant) {
+  try {
+    execFileSync("git", ["merge-base", "--is-ancestor", ancestor, descendant], {
+      cwd: root,
+      stdio: "ignore",
+    });
+    return true;
+  } catch (error) {
+    if (error?.status === 1) return false;
+    throw new Error(
+      `evidence provenance could not compare ${ancestor} with ${descendant}`
+    );
+  }
+}
+
+function sourceBelowEvidence(root, reviewedCommit) {
+  let source = commitRecord(root, reviewedCommit);
+  const evidenceCommits = [];
   while (true) {
-    const parent = gitParent(root, sourceCommit);
-    const changed = changedPaths(root, sourceCommit);
-    if (!parent
-      || changed.length === 0
+    if (source.parents.length !== 1) break;
+    const [parent] = source.parents;
+    const changed = changedPaths(root, parent, source.commit);
+    if (changed.length === 0
       || !changed.every((name) => name.startsWith("dist/verification/"))) {
       break;
     }
-    sourceCommit = parent;
+    evidenceCommits.push(source.commit);
+    source = commitRecord(root, parent);
   }
+  return { source, evidenceCommits };
+}
+
+// The manifest names the exact source/build commit immediately below any
+// evidence-only commits. The final reviewed tree cannot name its own commit or
+// tree without becoming self-referential, so derive that identity from Git.
+// A release merge is valid only when its bytes are exactly its reviewed second
+// parent's bytes; its first and second parents remain part of the returned,
+// cryptographically resolved provenance.
+export function expectedEvidenceProvenance(root, revision = "HEAD") {
+  const candidate = commitRecord(root, revision);
+  if (candidate.parents.length > 2) {
+    throw new Error(
+      `release evidence rejects octopus merge ${candidate.commit}: `
+        + `expected at most two parents, got ${candidate.parents.length}`
+    );
+  }
+
+  let reviewed = candidate;
+  let mergeCommit = null;
+  let mergeTree = null;
+  let mergeParents = [];
+  if (candidate.parents.length === 2) {
+    const [baseParent, reviewedParent] = candidate.parents;
+    if (baseParent === reviewedParent) {
+      throw new Error(
+        `release merge ${candidate.commit} repeats parent ${baseParent}; `
+          + "reviewed provenance is ambiguous"
+      );
+    }
+    reviewed = commitRecord(root, reviewedParent);
+    if (candidate.tree !== reviewed.tree) {
+      throw new Error(
+        `release merge tree mismatch: merge ${candidate.commit} tree ${candidate.tree} `
+          + `does not match reviewed parent ${reviewed.commit} tree ${reviewed.tree}; `
+          + "the merge introduced unreviewed bytes"
+      );
+    }
+    if (isAncestor(root, reviewedParent, baseParent)) {
+      throw new Error(
+        `release merge ${candidate.commit} has invalid reviewed parent ${reviewedParent}: `
+          + `it is already contained in base parent ${baseParent}`
+      );
+    }
+    mergeCommit = candidate.commit;
+    mergeTree = candidate.tree;
+    mergeParents = [...candidate.parents];
+  }
+
+  const { source, evidenceCommits } = sourceBelowEvidence(root, reviewed.commit);
   return {
-    sourceCommit,
-    sourceTree: gitText(root, ["rev-parse", `${sourceCommit}^{tree}`]),
+    sourceCommit: source.commit,
+    sourceTree: source.tree,
+    reviewedCommit: reviewed.commit,
+    reviewedTree: reviewed.tree,
+    evidenceCommits,
+    mergeCommit,
+    mergeTree,
+    mergeParents,
   };
+}
+
+export function validateEvidenceFreshness(evidence, expectedSourceDigest, provenance) {
+  if (evidence.schemaVersion !== evidenceSchemaVersion) {
+    throw new Error(
+      `generated evidence schema must be ${evidenceSchemaVersion}, got ${evidence.schemaVersion}`
+    );
+  }
+  if (!/^[0-9a-f]{64}$/.test(evidence.sourceDigest ?? "")) {
+    throw new Error("generated evidence is missing its exact source digest");
+  }
+  if (evidence.sourceDigest !== expectedSourceDigest) {
+    throw new Error(
+      `stale generated evidence source digest: ${evidence.sourceDigest}, `
+        + `expected ${expectedSourceDigest}`
+    );
+  }
+  const lineage = provenance.mergeCommit
+    ? `reviewed parent ${provenance.reviewedCommit} of merge ${provenance.mergeCommit}`
+    : `reviewed commit ${provenance.reviewedCommit}`;
+  if (evidence.sourceCommit !== provenance.sourceCommit) {
+    throw new Error(
+      `stale generated evidence commit: ${evidence.sourceCommit}, `
+        + `expected ${provenance.sourceCommit} from ${lineage} evidence-only lineage`
+    );
+  }
+  if (evidence.sourceTree !== provenance.sourceTree) {
+    throw new Error(
+      `stale generated evidence tree: ${evidence.sourceTree}, `
+        + `expected ${provenance.sourceTree} from source commit ${provenance.sourceCommit}`
+    );
+  }
 }
 
 export function assertSourceWorkingTreeClean(root) {

@@ -28,8 +28,11 @@ function M.run(t)
         "depth splash is compiled from its rule")
     t:eq(effects.release_profile("concussion").radius, 2,
         "release radius is compiled from its rule")
-    t:eq(effects.release_profile("scorch").field_duration, 24,
-        "release-field duration is compiled from its rule")
+    t:eq(effects.release_profile(
+        "scorch",
+        cores.by_id.cinder_nucleus.rule_set
+    ).field_duration, 24,
+        "baseline release-field duration is composed into the core RuleSet")
     t:eq(effects.status_profile("poison").duration_ticks, 240,
         "status duration is compiled from its rule")
     t:eq(effects.status_profile("poison")._cadence.shell_wear.interval, 120,
@@ -42,8 +45,15 @@ function M.run(t)
         "field force is compiled from its rule")
     t:eq(effects.brick_profile("reflect").reflect, 1.08,
         "brick rebound strength is compiled from its rule")
-    t:eq(effects.brick_profile("chain")._cadence.death_splash.limit, 3,
-        "chain limit is compiled from cadence")
+    t:eq(ast.rule(
+        rulebook.brick_behaviours.chain,
+        "brick.chain.shell_wear"
+    ).target.count, 3,
+        "enemy-marble chain limit is compiled from its target contract")
+    t:eq(effects.brick_profile("chain").death_splash, nil,
+        "Chain has no legacy neighbouring-brick damage projection")
+    t:eq(effects.brick_profile("splice").collision_splash, nil,
+        "Splice has no legacy neighbouring-brick damage projection")
     t:eq(effects.brick_profile("aegis")._cadence.negate_once.charges, 1,
         "one-shot protection is compiled from charges")
 

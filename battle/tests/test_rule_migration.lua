@@ -93,10 +93,20 @@ function M.run(t)
             key .. " compact lines use canonical player rules")
         t:ok(util.deep_equal(item.inspection_copy, authority.inspection_copy),
             key .. " expanded inspection uses canonical player rules")
-        t:ok(util.deep_equal(item.balance, authority.balance),
-            key .. " accounting uses canonical player rules")
-        t:eq(#authority.balance.lines, #authority.rule_ids,
-            key .. " accounting cannot count hidden helper rules")
+        if entry.category == "brick_kit" then
+            t:eq(item.balance.packaging_only, true,
+                key .. " has no independent power budget")
+            t:eq(#item.balance.members, 2,
+                key .. " reports both member ledgers")
+        else
+            t:ok(util.deep_equal(item.balance, authority.balance),
+                key .. " accounting uses canonical player rules")
+        end
+        t:eq(
+            #authority.balance.lines,
+            #authority.rule_ids + #item.rule_set.abilities,
+            key .. " accounting includes only canonical rules and MCU surcharges"
+        )
 
         local first_inspection = run_presentation.inspect_rule_set(item.rule_set, 1)
         t:eq(first_inspection.count, #authority.rule_ids,

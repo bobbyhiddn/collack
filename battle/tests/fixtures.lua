@@ -91,6 +91,43 @@ function F.default_matchup()
     }
 end
 
+-- ADR 0006 balance counterexample: coherent low-rarity bodies and adjacency
+-- must beat a sparse collection of individually complex upper-tier pieces
+-- when sling and bag are held constant.
+function F.rarity_balance_matchup()
+    local bag = {
+        "chalk_common",
+        "quartz_common",
+        "geode_uncommon",
+        "warden_rare",
+    }
+    return {
+        A = {
+            name = "Coherent wall",
+            sling = "momentum",
+            formation = {
+                {
+                    "basalt_absorber", "training_dummy", "basalt_absorber",
+                    "training_dummy", ".", ".", ".",
+                },
+                { ".", "granite_fortifier", "granite_fortifier", ".", ".", ".", "." },
+                { ".", ".", ".", ".", ".", ".", "." },
+            },
+            marbles = hand(unpack(bag)),
+        },
+        B = {
+            name = "Sparse relics",
+            sling = "momentum",
+            formation = {
+                { "void_prism", ".", ".", "aegis_keystone", ".", ".", "." },
+                { ".", ".", "prismatic_mirror", ".", ".", ".", "." },
+                { ".", ".", ".", "temporal_anchor", ".", ".", "." },
+            },
+            marbles = hand(unpack(bag)),
+        },
+    }
+end
+
 --- One shell, one durability: breaks on its first collision, which exposes the
 --- core and fires blowback. The workhorse of the blowback tests.
 function F.fragile(lane)
