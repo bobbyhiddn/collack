@@ -17,20 +17,19 @@ import {
   validateLocalBuild,
   validateResponseRecords,
 } from "./web-build-identity.mjs";
+import {
+  rebuildPaddleExpectation,
+  trustedPaddleBuild,
+} from "./paddle-verification-policy.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const trustedPaddle = trustedPaddleBuild(root);
 const evidenceRoot = path.join(root, "dist", "deployed-verification");
 const deployedUrl = process.env.CALLACK_DEPLOYED_URL ?? "https://collack-spike.fly.dev/";
-const expectedManifestPath = path.resolve(
-  process.env.CALLACK_EXPECTED_BUILD_MANIFEST
-    ?? path.join(root, "dist", "web", buildManifestName),
-);
+const paddleBuildScript = trustedPaddle.buildScript;
+const expectedManifestPath = trustedPaddle.manifestPath;
 const identityReportOnly = process.env.CALLACK_IDENTITY_REPORT_ONLY === "1";
-const callerClaims = {
-  revision: process.env.CALLACK_TARGET_SOURCE_COMMIT ?? null,
-  tree: process.env.CALLACK_TARGET_SOURCE_TREE ?? null,
-  target: process.env.CALLACK_TARGET_NAME ?? null,
-};
+const callerClaims = trustedPaddle.callerClaims;
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -374,7 +373,7 @@ async function verifyTargetIdentity(page, booted, expectedBuild) {
   } catch (error) {
     throw new Error(`served build manifest is invalid JSON: ${error.message}`);
   }
-  validateBuildManifest(parsedManifest, root, callerClaims);
+  validateBuildManifest(parsedManifest, root, trustedClaims);
 
   const verifiedAssets = [];
   for (const asset of expectedBuild.manifest.assets) {
@@ -441,6 +440,7 @@ async function sha256(file) {
 }
 
 const git = (...args) => execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
+const trustedClaims = trustedPaddle.claims;
 const screenshotNames = [];
 const evidence = {
   schema: "callack-deployed-spike-v3",
@@ -455,6 +455,11 @@ const evidence = {
     requestedUrl: new URL(deployedUrl).href,
     expectedManifestPath,
     callerClaims,
+    trustedClaims,
+    runtimePath: trustedPaddle.runtimePath,
+    outputPath: trustedPaddle.outputPath,
+    buildRecipe: trustedPaddle.recipePath,
+    manifestPolicy: "rebuilt-from-checked-out-candidate-paddle-target",
     identityPolicy: identityReportOnly ? "report-only" : "strict",
   },
   viewport: {
@@ -483,7 +488,8 @@ let expectedBuild;
 let identityFailure;
 try {
   await mkdir(evidenceRoot, { recursive: true });
-  expectedBuild = await readBuildManifest(expectedManifestPath, root, callerClaims);
+  rebuildPaddleExpectation(trustedPaddle);
+  expectedBuild = await readBuildManifest(expectedManifestPath, root, trustedClaims);
   await validateLocalBuild(path.dirname(expectedManifestPath), expectedBuild.manifest);
   evidence.target.expectedBuild = {
     revision: expectedBuild.manifest.revision,
@@ -492,6 +498,12 @@ try {
     manifestSha256: expectedBuild.sha256,
     assetSetSha256: expectedBuild.manifest.assetSetSha256,
     assetCount: expectedBuild.manifest.assets.length,
+    runtimePath: expectedBuild.manifest.runtimePath,
+    shellPath: expectedBuild.manifest.shellPath,
+    outputPath: expectedBuild.manifest.outputPath,
+    recipe: expectedBuild.manifest.recipe,
+    sourceSetSha256: expectedBuild.manifest.sourceSetSha256,
+    sourceCount: expectedBuild.manifest.sources.length,
   };
   browser = await chromium.launch({ headless: true });
   evidence.browser = await browser.version();

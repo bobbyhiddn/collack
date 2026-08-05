@@ -6,7 +6,9 @@
 > native evidence. The durable unsigned proof route is now
 > `.github/workflows/ios-simulator-smoke.yml`, backed by
 > `scripts/verify-ios-simulator.sh`; the separately gated signed TestFlight path
-> remains unchanged.
+> remains unchanged. The wrapper now consumes the explicit candidate-owned
+> `targets/paddle` package from `dist/paddle-web`; the active auto-battler
+> remains a separate `dist/web` target.
 
 **Date**: 2026-05-07
 **Worker**: Gamma (Hermetic ForgePrime swarm)

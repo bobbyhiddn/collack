@@ -4,8 +4,29 @@ import { readFile, readdir, realpath, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 export const buildManifestName = "callack-build-manifest.json";
-export const buildManifestSchema = "callack-web-build-v1";
+export const buildManifestSchema = "callack-web-build-v2";
 export const buildTarget = "web";
+export const buildProfiles = Object.freeze({
+  web: Object.freeze({
+    target: "web",
+    outputPath: "dist/web",
+    runtimePath: "src",
+    shellPath: "web-shell/index.html",
+    recipePath: "scripts/build-web.sh",
+    sourcePaths: Object.freeze(["battle", "src", "web-shell"]),
+  }),
+  "paddle-web": Object.freeze({
+    target: "paddle-web",
+    outputPath: "dist/paddle-web",
+    runtimePath: "targets/paddle/src",
+    shellPath: "targets/paddle/web-shell/index.html",
+    recipePath: "scripts/build-paddle-web.sh",
+    sourcePaths: Object.freeze([
+      "targets/paddle/src",
+      "targets/paddle/web-shell",
+    ]),
+  }),
+});
 
 export function sha256(bytes) {
   return createHash("sha256").update(bytes).digest("hex");
@@ -47,7 +68,18 @@ async function localGitIdentity(sourceRoot) {
   }
 }
 
-export async function sourceIdentity(sourceRoot, environment = process.env) {
+function profileFor(name) {
+  const profile = buildProfiles[name];
+  assert(profile, `unknown web build target: ${name ?? "missing"}`);
+  return profile;
+}
+
+export async function sourceIdentity(
+  sourceRoot,
+  environment = process.env,
+  profileName = buildTarget,
+) {
+  const profile = profileFor(profileName);
   const local = await localGitIdentity(sourceRoot);
   const declaredRevision = environment.CALLACK_BUILD_REVISION ?? null;
   const declaredTree = environment.CALLACK_BUILD_TREE ?? null;
@@ -59,7 +91,7 @@ export async function sourceIdentity(sourceRoot, environment = process.env) {
       `CALLACK_BUILD_REVISION ${declaredRevision} disagrees with source HEAD ${local.revision}`);
     assert(!declaredTree || declaredTree === local.tree,
       `CALLACK_BUILD_TREE ${declaredTree} disagrees with source tree ${local.tree}`);
-    return { revision: local.revision, tree: local.tree, target: buildTarget };
+    return { revision: local.revision, tree: local.tree, target: profile.target };
   }
 
   assert(environment.CALLACK_ALLOW_EXTERNAL_BUILD_IDENTITY === "1",
@@ -68,7 +100,7 @@ export async function sourceIdentity(sourceRoot, environment = process.env) {
     "external build manifest requires a full CALLACK_BUILD_REVISION");
   assert(/^[0-9a-f]{40}$/.test(declaredTree ?? ""),
     "external build manifest requires a full CALLACK_BUILD_TREE");
-  return { revision: declaredRevision, tree: declaredTree, target: buildTarget };
+  return { revision: declaredRevision, tree: declaredTree, target: profile.target };
 }
 
 async function filesBelow(root, relativeDirectory = "") {
@@ -96,23 +128,56 @@ async function assetRecord(webRoot, relativePath) {
   return { path: relativePath, bytes: bytes.length, sha256: sha256(bytes) };
 }
 
+async function buildInputRecords(sourceRoot, profile) {
+  const inputPaths = [];
+  for (const sourcePath of profile.sourcePaths) {
+    const info = await stat(path.join(sourceRoot, sourcePath));
+    if (info.isDirectory()) {
+      inputPaths.push(...await filesBelow(sourceRoot, sourcePath));
+    } else if (info.isFile()) {
+      inputPaths.push(sourcePath);
+    } else {
+      throw new Error(`build input is not a regular file or directory: ${sourcePath}`);
+    }
+  }
+  const records = [];
+  for (const inputPath of [...new Set(inputPaths)].sort()) {
+    records.push(await assetRecord(sourceRoot, inputPath));
+  }
+  return records;
+}
+
 export function assetSetSha256(assets) {
   return sha256(Buffer.from(JSON.stringify(assets), "utf8"));
 }
 
-export async function generateBuildManifest(webRoot, sourceRoot, environment = process.env) {
-  const identity = await sourceIdentity(sourceRoot, environment);
+export async function generateBuildManifest(
+  webRoot,
+  sourceRoot,
+  profileName = buildTarget,
+  environment = process.env,
+) {
+  const profile = profileFor(profileName);
+  const identity = await sourceIdentity(sourceRoot, environment, profileName);
   const assets = [];
   for (const relativePath of await filesBelow(webRoot)) {
     assets.push(await assetRecord(webRoot, relativePath));
   }
   assert(assets.some((asset) => asset.path === "index.html"),
     "web build manifest requires index.html");
+  const sources = await buildInputRecords(sourceRoot, profile);
+  const recipe = await assetRecord(sourceRoot, profile.recipePath);
   const manifest = {
     schema: buildManifestSchema,
     revision: identity.revision,
     tree: identity.tree,
     target: identity.target,
+    outputPath: profile.outputPath,
+    runtimePath: profile.runtimePath,
+    shellPath: profile.shellPath,
+    recipe,
+    sources,
+    sourceSetSha256: assetSetSha256(sources),
     entrypoint: "index.html",
     assets,
     assetSetSha256: assetSetSha256(assets),
@@ -132,6 +197,31 @@ function validateAssetPath(value) {
     && value !== buildManifestName;
 }
 
+function validateRepoPath(value) {
+  return typeof value === "string"
+    && value !== ""
+    && value === path.posix.normalize(value)
+    && !value.startsWith("/")
+    && !value.startsWith("../")
+    && !value.includes("\\");
+}
+
+function gitRecord(repoRoot, revision, relativePath) {
+  let bytes;
+  try {
+    bytes = execFileSync("git", ["show", `${revision}:${relativePath}`], {
+      cwd: repoRoot,
+      encoding: null,
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+  } catch {
+    throw new Error(
+      `build manifest source is absent from candidate revision ${revision}: ${relativePath}`,
+    );
+  }
+  return { path: relativePath, bytes: bytes.length, sha256: sha256(bytes) };
+}
+
 export function validateBuildManifest(manifest, repoRoot, callerClaims = {}) {
   assert(manifest && typeof manifest === "object" && !Array.isArray(manifest),
     "build manifest must be a JSON object");
@@ -141,8 +231,15 @@ export function validateBuildManifest(manifest, repoRoot, callerClaims = {}) {
     "build manifest revision is missing or not a full commit SHA");
   assert(/^[0-9a-f]{40}$/.test(manifest.tree ?? ""),
     "build manifest tree is missing or not a full tree SHA");
-  assert(manifest.target === buildTarget,
-    `build manifest target is ${manifest.target ?? "missing"}, expected ${buildTarget}`);
+  const profile = profileFor(manifest.target);
+  assert(manifest.outputPath === profile.outputPath,
+    `build manifest output path is ${manifest.outputPath ?? "missing"}, expected ${profile.outputPath}`);
+  assert(manifest.runtimePath === profile.runtimePath,
+    `build manifest runtime path is ${manifest.runtimePath ?? "missing"}, expected ${profile.runtimePath}`);
+  assert(manifest.shellPath === profile.shellPath,
+    `build manifest shell path is ${manifest.shellPath ?? "missing"}, expected ${profile.shellPath}`);
+  assert(manifest.recipe?.path === profile.recipePath,
+    `build manifest recipe path is ${manifest.recipe?.path ?? "missing"}, expected ${profile.recipePath}`);
   assert(manifest.entrypoint === "index.html",
     `build manifest entrypoint is ${manifest.entrypoint ?? "missing"}, expected index.html`);
   assert(Array.isArray(manifest.assets) && manifest.assets.length > 0,
@@ -168,6 +265,35 @@ export function validateBuildManifest(manifest, repoRoot, callerClaims = {}) {
     "build manifest entrypoint is absent from its asset set");
   assert(manifest.assetSetSha256 === assetSetSha256(manifest.assets),
     "build manifest asset-set digest mismatch");
+  assert(Array.isArray(manifest.sources) && manifest.sources.length > 0,
+    "build manifest source set is missing or empty");
+  const sourcePaths = [];
+  for (const source of manifest.sources) {
+    assert(source && typeof source === "object" && !Array.isArray(source),
+      "build manifest contains a malformed source record");
+    assert(validateRepoPath(source.path),
+      `build manifest contains an unsafe source path: ${source.path}`);
+    assert(Number.isSafeInteger(source.bytes) && source.bytes >= 0,
+      `build manifest source has invalid byte length: ${source.path}`);
+    assert(/^[0-9a-f]{64}$/.test(source.sha256 ?? ""),
+      `build manifest source has invalid SHA-256: ${source.path}`);
+    assert(profile.sourcePaths.some(
+      (prefix) => source.path === prefix || source.path.startsWith(`${prefix}/`),
+    ), `build manifest source is outside target inputs: ${source.path}`);
+    sourcePaths.push(source.path);
+  }
+  assert(new Set(sourcePaths).size === sourcePaths.length,
+    "build manifest contains duplicate source paths");
+  assert(sourcePaths.join("\n") === [...sourcePaths].sort().join("\n"),
+    "build manifest source paths are not sorted");
+  assert(manifest.sourceSetSha256 === assetSetSha256(manifest.sources),
+    "build manifest source-set digest mismatch");
+  assert(validateRepoPath(manifest.recipe.path),
+    `build manifest contains an unsafe recipe path: ${manifest.recipe.path}`);
+  assert(Number.isSafeInteger(manifest.recipe.bytes) && manifest.recipe.bytes >= 0,
+    "build manifest recipe has invalid byte length");
+  assert(/^[0-9a-f]{64}$/.test(manifest.recipe.sha256 ?? ""),
+    "build manifest recipe has invalid SHA-256");
 
   let actualTree;
   try {
@@ -177,6 +303,31 @@ export function validateBuildManifest(manifest, repoRoot, callerClaims = {}) {
   }
   assert(actualTree === manifest.tree,
     `build manifest revision/tree disagreement: ${manifest.revision} has tree ${actualTree}, not ${manifest.tree}`);
+
+  let committedSourcePaths;
+  try {
+    committedSourcePaths = gitText(repoRoot, [
+      "ls-tree",
+      "-r",
+      "--name-only",
+      manifest.revision,
+      "--",
+      ...profile.sourcePaths,
+    ]).split("\n").filter(Boolean).sort();
+  } catch {
+    throw new Error(`cannot enumerate ${manifest.target} source inputs at ${manifest.revision}`);
+  }
+  assert(sourcePaths.join("\n") === committedSourcePaths.join("\n"),
+    `build manifest source set disagrees with candidate revision: manifest=${sourcePaths} candidate=${committedSourcePaths}`);
+  for (const source of manifest.sources) {
+    const committed = gitRecord(repoRoot, manifest.revision, source.path);
+    assert(source.bytes === committed.bytes && source.sha256 === committed.sha256,
+      `build manifest source mismatch for ${source.path}: ${source.sha256}/${source.bytes}, candidate ${committed.sha256}/${committed.bytes}`);
+  }
+  const committedRecipe = gitRecord(repoRoot, manifest.revision, profile.recipePath);
+  assert(manifest.recipe.bytes === committedRecipe.bytes
+      && manifest.recipe.sha256 === committedRecipe.sha256,
+  `build manifest recipe mismatch for ${profile.recipePath}: ${manifest.recipe.sha256}/${manifest.recipe.bytes}, candidate ${committedRecipe.sha256}/${committedRecipe.bytes}`);
 
   if (callerClaims.revision !== null && callerClaims.revision !== undefined) {
     assert(callerClaims.revision === manifest.revision,

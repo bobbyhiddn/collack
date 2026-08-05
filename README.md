@@ -27,6 +27,8 @@ lua5.1 battle/cli.lua --seed 9125
 
 # Build targets:
 ./scripts/build-web.sh
+./scripts/build-paddle-web.sh
+lua5.1 targets/paddle/tests/test_logic.lua
 ./scripts/verify-release-container.sh
 npm ci && npm run browser:install
 npm run verify:web
@@ -39,14 +41,20 @@ npm run verify:deployed
 ./scripts/verify-ios-simulator.sh
 ```
 
-The web result is written to `dist/web/` with content-addressed JavaScript,
-data, and WebAssembly filenames. `callack-build-manifest.json` binds the exact
-Git revision/tree and SHA-256 of every served file. Serve that directory with
-any static HTTP server. The browser verifier starts and stops its own local server, completes
+The active auto-battler web result remains in `dist/web/`. The independent
+Touch Input deliverable is candidate-owned under `targets/paddle/` and builds
+to `dist/paddle-web/` through `scripts/build-paddle-web.sh`; neither target
+overwrites or relabels the other. Both use content-addressed JavaScript, data,
+and WebAssembly filenames.
+
+Each `callack-build-manifest.json` binds the exact Git revision/tree, explicit
+runtime target/path, source-file set, build recipe, and SHA-256 of every served
+asset. The paddle browser verifier completes
 the full flow at both 390×844 and 1280×800, validates moving canonical physics,
 and writes review captures to `dist/verification/`.
 
-The iOS Simulator verifier rebuilds that same web output, re-seeds and syncs
+The iOS Simulator verifier always rebuilds the candidate-owned paddle output,
+re-seeds and syncs
 the lockfile-pinned Capacitor project, builds with signing disabled, installs it
 on a clean available iPhone Simulator, and requires a launch marker emitted by
 the app process. Inspectable build logs, launch logs, identities, hashes, and a
@@ -54,12 +62,15 @@ screenshot are written to `dist/ios-simulator-smoke/`. The
 `iOS Simulator smoke` workflow runs this secret-free path independently of the
 manually gated TestFlight job.
 
-`npm run verify:deployed` independently exercises a target at 390×844 and
-desktop size. Before accepting the journey, it requires the target's loaded
-HTML and assets to match the exact manifest at `dist/web/` (or
-`CALLACK_EXPECTED_BUILD_MANIFEST`). Optional `CALLACK_TARGET_SOURCE_COMMIT`,
-`CALLACK_TARGET_SOURCE_TREE`, and `CALLACK_TARGET_NAME` labels are assertions
-only and cannot override the manifest-derived identity. It records requested
+`npm run verify:deployed` independently exercises the paddle target at 390×844
+and desktop size. Before accepting the journey, it rebuilds
+`dist/paddle-web/callack-build-manifest.json` from the checked-out
+`targets/paddle` sources and fixed recipe, then requires the loaded HTML and
+every runtime asset to agree exactly. `CALLACK_EXPECTED_BUILD_MANIFEST` is
+rejected rather than treated as a trust root. Optional
+`CALLACK_TARGET_SOURCE_COMMIT`, `CALLACK_TARGET_SOURCE_TREE`, and
+`CALLACK_TARGET_NAME` labels are assertions only and cannot override the
+candidate-derived identity. It records requested
 and final URLs, redirects, loaded and complete asset digests, render,
 collision, score-change, loss, touch, and keyboard evidence under
 `dist/deployed-verification/`; it never deploys or changes the target. For a
@@ -83,6 +94,7 @@ preferences persist across runs.
 ```
 battle/                 Pure-Lua draft, setup, continuous physics, rules, recording
 src/                    LÖVE and pure presentation controllers; no combat rules
+targets/paddle/         Independent 800x600 touch-paddle runtime, tests, and shell
 tests/                  Plain-Lua run, snapshot, and recorded-frame replay tests
 scripts/                love.js, desktop, and Capacitor packaging
 web-shell/              Responsive 390x844 browser shell

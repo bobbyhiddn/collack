@@ -1,7 +1,7 @@
 {
   "name": "collack-spike-capacitor",
   "version": "0.1.0",
-  "description": "Capacitor wrapper for the love.js web bundle.",
+  "description": "Capacitor wrapper for the candidate-owned Collack paddle love.js target.",
   "type": "module",
   "private": true,
   "scripts": {

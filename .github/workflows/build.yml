@@ -30,7 +30,9 @@ jobs:
       - name: Install Lua 5.1
         run: sudo apt-get update && sudo apt-get install -y lua5.1
       - name: Run logic tests
-        run: lua5.1 tests/test_logic.lua
+        run: |
+          lua5.1 tests/test_logic.lua
+          lua5.1 targets/paddle/tests/test_logic.lua
 
   # -----------------------------------------------------------------
   # battle-test: the headless battle simulation in battle/. Pure Lua,
@@ -89,6 +91,10 @@ jobs:
         if: matrix.target == 'web'
         run: ./scripts/build-web.sh
 
+      - name: Build candidate-owned paddle web target
+        if: matrix.target == 'web'
+        run: ./scripts/build-paddle-web.sh
+
       - name: Verify release container
         if: matrix.target == 'web'
         env:
@@ -97,11 +103,15 @@ jobs:
 
       - name: Verify reproducible web artifacts
         if: matrix.target == 'web'
-        run: bash scripts/verify-web-reproducible.sh
+        run: |
+          bash scripts/verify-web-reproducible.sh
+          bash scripts/verify-paddle-web-reproducible.sh
 
       - name: Verify exact web build identity controls
         if: matrix.target == 'web'
-        run: npm run verify:web:identity
+        run: |
+          npm run verify:web:identity
+          npm run verify:paddle:identity
 
       - name: Verify tracked browser evidence freshness
         if: matrix.target == 'web'
@@ -128,6 +138,7 @@ jobs:
           npm run test:shore-browser
           npm run verify:shore-local
           npm run verify:web
+          npm run verify:paddle:browser
           npm run verify:evidence -- --working-tree --compare-tracked
 
       - name: Build desktop (Linux + Windows)
@@ -140,9 +151,11 @@ jobs:
           name: collack-spike-${{ matrix.target }}
           path: |
             dist/web
+            dist/paddle-web
             dist/desktop
             dist/verification
             dist/collack-spike.love
+            dist/collack-paddle.love
           if-no-files-found: ignore
           retention-days: 14
 
@@ -179,8 +192,8 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Build web bundle
-        run: ./scripts/build-web.sh
+      - name: Build candidate-owned paddle web bundle
+        run: ./scripts/build-paddle-web.sh
 
       - name: Wrap in Capacitor
         run: ./scripts/build-ios.sh

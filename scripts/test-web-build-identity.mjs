@@ -15,6 +15,7 @@ import {
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const webRoot = path.resolve(process.argv[2] ?? path.join(root, "dist", "web"));
+const expectedTarget = process.argv[3] ?? "web";
 const manifestPath = path.join(webRoot, buildManifestName);
 const git = (...args) => execFileSync("git", args, {
   cwd: root,
@@ -47,8 +48,8 @@ assert(expected.manifest.revision === git("rev-parse", "HEAD"),
   "positive exact-head build manifest revision is stale");
 assert(expected.manifest.tree === git("rev-parse", "HEAD^{tree}"),
   "positive exact-head build manifest tree is stale");
-assert(expected.manifest.target === "web",
-  "positive exact-head build manifest target is wrong");
+assert(expected.manifest.target === expectedTarget,
+  `positive exact-head build manifest target is ${expected.manifest.target}, expected ${expectedTarget}`);
 console.log(
   `[web-identity-control] OK positive exact-head local build: `
     + `${expected.manifest.revision}/${expected.manifest.tree}`,
@@ -99,7 +100,7 @@ await expectFailure("mixed asset set", () => {
 for (const [field, value, pattern] of [
   ["revision", "0".repeat(40), /revision is not present|revision\/tree disagreement/],
   ["tree", "0".repeat(40), /revision\/tree disagreement/],
-  ["target", "desktop", /target is desktop, expected web/],
+  ["target", "desktop", /unknown web build target/],
 ]) {
   await expectFailure(`altered served ${field}`, () => {
     const altered = structuredClone(expected.manifest);

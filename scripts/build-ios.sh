@@ -2,8 +2,8 @@
 # build-ios.sh — wrap the love.js web bundle in a Capacitor iOS project.
 #
 # Steps performed locally (Linux-safe):
-#   1. Run build-web.sh to produce dist/web/.
-#   2. Copy dist/web/ → capacitor/dist/ (Capacitor's webDir).
+#   1. Rebuild the candidate-owned paddle target into dist/paddle-web/.
+#   2. Copy dist/paddle-web/ → capacitor/dist/ (Capacitor's webDir).
 #   3. Install the lockfile-pinned npm deps under capacitor/.
 #   4. Re-seed capacitor/ios/ from the tracked template so stale generated files
 #      cannot influence a build.
@@ -18,20 +18,20 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-WEB_OUT="$ROOT/dist/web"
+WEB_OUT="$ROOT/dist/paddle-web"
 CAP="$ROOT/capacitor"
 
-# 1. Ensure web bundle exists.
-if [ ! -f "$WEB_OUT/index.html" ]; then
-    echo "[ios] running build-web.sh first..."
-    "$ROOT/scripts/build-web.sh"
-fi
+# 1. Always regenerate the trusted paddle package. A stale or caller-selected
+# bundle must never enter the native wrapper.
+echo "[ios] rebuilding candidate-owned paddle web target"
+"$ROOT/scripts/build-paddle-web.sh"
 
 # 2. Mirror web bundle into capacitor/dist (Capacitor webDir).
 mkdir -p "$CAP/dist"
 rm -rf "$CAP/dist"/*
 cp -r "$WEB_OUT/." "$CAP/dist/"
-echo "[ios] copied web bundle to $CAP/dist"
+node "$ROOT/scripts/verify-paddle-package.mjs" "$CAP/dist"
+echo "[ios] copied candidate paddle bundle to $CAP/dist"
 
 # 3. Install the exact Capacitor dependency graph.
 pushd "$CAP" >/dev/null
@@ -53,4 +53,5 @@ npx cap sync ios
 popd >/dev/null
 
 test -f "$CAP/ios/App/App/public/index.html"
+node "$ROOT/scripts/verify-paddle-package.mjs" "$CAP/ios/App/App/public" --allow-extra-files
 echo "[ios] OK. Synced Capacitor project at $CAP/ios/App."

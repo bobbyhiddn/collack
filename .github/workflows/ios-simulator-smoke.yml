@@ -9,9 +9,14 @@ on:
       - 'battle/**'
       - 'capacitor/**'
       - 'scripts/build-ios.sh'
+      - 'scripts/build-paddle-web.sh'
       - 'scripts/build-web.sh'
+      - 'scripts/generate-web-build-manifest.mjs'
+      - 'scripts/paddle-verification-policy.mjs'
+      - 'scripts/verify-paddle-package.mjs'
       - 'scripts/verify-ios-simulator.sh'
       - 'src/**'
+      - 'targets/paddle/**'
       - 'web-shell/**'
   workflow_dispatch:
 

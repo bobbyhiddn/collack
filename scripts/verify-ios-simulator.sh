@@ -41,8 +41,8 @@ done
 rm -rf "$EVIDENCE_ROOT"
 mkdir -p "$EVIDENCE_ROOT"
 
-echo "[ios-smoke] building the current love.js output"
-"$ROOT/scripts/build-web.sh" 2>&1 | tee "$EVIDENCE_ROOT/build-web.log"
+echo "[ios-smoke] building the candidate-owned paddle love.js output"
+"$ROOT/scripts/build-paddle-web.sh" 2>&1 | tee "$EVIDENCE_ROOT/build-paddle-web.log"
 
 echo "[ios-smoke] syncing the web output into Capacitor"
 "$ROOT/scripts/build-ios.sh" 2>&1 | tee "$EVIDENCE_ROOT/capacitor-sync.log"
@@ -172,16 +172,31 @@ grep -Fq "$LAUNCH_MARKER" "$LAUNCH_LOG" || {
     exit 1
 }
 
-(cd "$ROOT/dist/web" && find . -type f -print | LC_ALL=C sort | while IFS= read -r file; do
+(cd "$ROOT/dist/paddle-web" && find . -type f -print | LC_ALL=C sort | while IFS= read -r file; do
     shasum -a 256 "$file"
 done) > "$EVIDENCE_ROOT/web-assets.sha256"
+(cd "$APP_ROOT/App/public" && find . -type f -print | LC_ALL=C sort | while IFS= read -r file; do
+    shasum -a 256 "$file"
+done) > "$EVIDENCE_ROOT/capacitor-public-assets.sha256"
 
 APP_BINARY_SHA256="$(shasum -a 256 "$APP_BINARY" | awk '{print $1}')"
 SCREENSHOT_SHA256="$(shasum -a 256 "$APP_SCREENSHOT" | awk '{print $1}')"
+PADDLE_MANIFEST_SHA256="$(shasum -a 256 "$ROOT/dist/paddle-web/callack-build-manifest.json" | awk '{print $1}')"
+PADDLE_ASSET_SET_SHA256="$(node -p "require('$ROOT/dist/paddle-web/callack-build-manifest.json').assetSetSha256")"
+PADDLE_SOURCE_SET_SHA256="$(node -p "require('$ROOT/dist/paddle-web/callack-build-manifest.json').sourceSetSha256")"
+PUBLIC_ASSET_LIST_SHA256="$(shasum -a 256 "$EVIDENCE_ROOT/capacitor-public-assets.sha256" | awk '{print $1}')"
 cat > "$EVIDENCE_ROOT/evidence.txt" <<EOF
 schema=callack-ios-simulator-smoke-v1
 source_commit=$SOURCE_COMMIT
 source_tree=$SOURCE_TREE
+runtime_target=paddle-web
+runtime_path=targets/paddle/src
+runtime_output=dist/paddle-web
+build_recipe=scripts/build-paddle-web.sh
+paddle_manifest_sha256=$PADDLE_MANIFEST_SHA256
+paddle_asset_set_sha256=$PADDLE_ASSET_SET_SHA256
+paddle_source_set_sha256=$PADDLE_SOURCE_SET_SHA256
+capacitor_public_asset_list_sha256=$PUBLIC_ASSET_LIST_SHA256
 xcode=$XCODE_VERSION
 simulator_sdk_version=$SIMULATOR_SDK_VERSION
 simulator_sdk_build=$SIMULATOR_SDK_BUILD
