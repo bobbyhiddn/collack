@@ -154,6 +154,7 @@ jobs:
             dist/paddle-web
             dist/desktop
             dist/verification
+            dist/deployed-verification
             dist/collack-spike.love
             dist/collack-paddle.love
           if-no-files-found: ignore
