@@ -114,6 +114,10 @@ jobs:
           npm run verify:paddle:identity
           npm run verify:lovejs-cache
 
+      - name: Verify dedicated paddle Fly release contract
+        if: matrix.target == 'web'
+        run: npm run verify:paddle:release
+
       - name: Verify tracked browser evidence freshness
         if: matrix.target == 'web'
         run: npm run verify:evidence
@@ -140,6 +144,7 @@ jobs:
           npm run verify:shore-local
           npm run verify:web
           npm run verify:paddle:browser
+          CALLACK_CONTAINER_ENGINE=docker npm run verify:paddle:release:container
           npm run verify:evidence -- --working-tree --compare-tracked
 
       - name: Build desktop (Linux + Windows)

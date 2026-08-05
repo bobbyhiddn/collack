@@ -30,8 +30,10 @@ lua5.1 battle/cli.lua --seed 9125
 ./scripts/build-paddle-web.sh
 lua5.1 targets/paddle/tests/test_logic.lua
 npm run verify:lovejs-cache
+npm run verify:paddle:release
 ./scripts/verify-release-container.sh
 npm ci && npm run browser:install
+npm run verify:paddle:release:container
 npm run verify:web
 npm run verify:deployed
 ./scripts/build-desktop.sh
@@ -95,6 +97,44 @@ inspector. Space pauses and Right Arrow advances one exact fixed step. `M`
 toggles generated audio and `V` toggles reduced motion. On the result screen,
 `R` opens replay and `N` starts the next seeded run. Mute and reduced-motion
 preferences persist across runs.
+
+## Paddle Fly release path
+
+The existing `deploy/fly/Dockerfile` and `deploy/fly/fly.toml` remain the
+auto-battler release path and consume only `dist/web`. The paddle release is a
+separate, explicit contract:
+
+```bash
+./scripts/build-paddle-web.sh
+npm run verify:paddle:release
+CALLACK_CONTAINER_ENGINE=docker ./scripts/build-paddle-release-image.sh
+```
+
+`deploy/fly/Dockerfile.paddle` can copy only `dist/paddle-web`; its
+Dockerfile-specific ignore file excludes `dist/web`, and a pinned Node stage
+checks the target, manifest structure, complete file set, and every asset byte
+before nginx receives the bundle. Before invoking the container engine, the
+host gate requires a clean tracked checkout, derives revision and tree from
+Git, authenticates the candidate-owned manifest/source/recipe/toolchain, and
+compares the supplied package and `.love` archive with an independent rebuild
+of that exact commit. Image tags, service labels, and optional caller labels
+never define artifact identity.
+
+The dedicated `deploy/fly/paddle.fly.toml` still names the existing
+`collack-spike` service, but marks the release target as `paddle-web`. A future
+authorized deployment uses only the guarded command below; it requires the
+explicit `--deploy` acknowledgement and repeats the exact-source gate before
+Fly receives the dedicated Dockerfile and config:
+
+```bash
+./scripts/release-paddle-fly.sh --deploy
+```
+
+The paddle nginx config serves the contract at `/` only, keeps the shell and
+provenance files revalidated, and gives immutable caching only to 16-hex
+content-addressed runtime assets. The container verifier compares the complete
+image and HTTP file sets with `dist/paddle-web`, rejects auto-battler or nested
+base paths, and runs the real 390×844 touch and desktop keyboard journeys.
 
 ## Repository map
 

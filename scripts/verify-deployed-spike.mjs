@@ -562,9 +562,24 @@ try {
   };
   await capture(phone.page, "phone-render.png");
 
+  // Prove the untouched candidate reaches a real brick collision and score
+  // change before parking the paddle. Under a fast container response the
+  // opening shot can otherwise be moved past a narrow brick gap by one large
+  // browser frame, producing a valid loss before the collision observation.
+  const collided = await waitForState(
+    phone.page,
+    "phone: no deployed brick collision/score change",
+    (state) => state.brickPixels < phone.initial.brickPixels - 900
+      && state.hudHash !== phone.initial.hudHash,
+    15_000,
+  );
+  evidence.phone390x844.collisionAndScore = collided;
+  await capture(phone.page, "phone-scored.png");
+
   // Use only the browser's touch stream on the phone path. Starting at the
-  // visible paddle and dragging left parks it away from the opening shot.
-  const dragFrom = await canvasPoint(phone.page, phone.initial.paddleCenter, 565);
+  // visible paddle and dragging left parks it away from the next return.
+  const dragState = await readCanvasState(phone.page);
+  const dragFrom = await canvasPoint(phone.page, dragState.paddleCenter, 565);
   const dragTo = await canvasPoint(phone.page, 30, 565);
   await dragTouch(phone.page, dragFrom, dragTo, 1);
   const inputAfterDrag = await readInputEvidence(phone.page);
@@ -586,16 +601,6 @@ try {
     3_000,
   );
   evidence.phone390x844.touchDrag.paddleParked = parked;
-
-  const collided = await waitForState(
-    phone.page,
-    "phone: no deployed brick collision/score change",
-    (state) => state.brickPixels < phone.initial.brickPixels - 900
-      && state.hudHash !== phone.initial.hudHash,
-    10_000,
-  );
-  evidence.phone390x844.collisionAndScore = collided;
-  await capture(phone.page, "phone-scored.png");
 
   const lost = await waitForLoss(phone.page, "phone");
   evidence.phone390x844.loss = lost;
