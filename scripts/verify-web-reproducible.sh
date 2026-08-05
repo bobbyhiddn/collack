@@ -7,6 +7,9 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 export LC_ALL=C
 
+SOURCE_REVISION="$(git -C "$ROOT" rev-parse HEAD)"
+SOURCE_TREE="$(git -C "$ROOT" rev-parse 'HEAD^{tree}')"
+
 fail() {
     echo "[web-repro] FAIL: $*" >&2
     exit 1
@@ -52,6 +55,9 @@ echo "[web-repro] build A: short path, old mtimes, mode 0644, restrictive umask"
 (
     umask 077
     TZ=Pacific/Honolulu CALLACK_NODE_CACHE_DIR="$NODE_CACHE" \
+        CALLACK_ALLOW_EXTERNAL_BUILD_IDENTITY=1 \
+        CALLACK_BUILD_REVISION="$SOURCE_REVISION" \
+        CALLACK_BUILD_TREE="$SOURCE_TREE" \
         bash "$SOURCE_A/scripts/build-web.sh"
 )
 
@@ -59,6 +65,9 @@ echo "[web-repro] build B: different path, new mtimes, mode 0600, permissive uma
 (
     umask 002
     TZ=Etc/GMT-14 CALLACK_NODE_CACHE_DIR="$NODE_CACHE" \
+        CALLACK_ALLOW_EXTERNAL_BUILD_IDENTITY=1 \
+        CALLACK_BUILD_REVISION="$SOURCE_REVISION" \
+        CALLACK_BUILD_TREE="$SOURCE_TREE" \
         bash "$SOURCE_B/scripts/build-web.sh"
 )
 

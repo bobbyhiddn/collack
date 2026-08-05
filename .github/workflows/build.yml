@@ -99,6 +99,10 @@ jobs:
         if: matrix.target == 'web'
         run: bash scripts/verify-web-reproducible.sh
 
+      - name: Verify exact web build identity controls
+        if: matrix.target == 'web'
+        run: npm run verify:web:identity
+
       - name: Verify tracked browser evidence freshness
         if: matrix.target == 'web'
         run: npm run verify:evidence

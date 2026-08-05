@@ -7,10 +7,30 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
 import { PNG } from "pngjs";
+import {
+  assertExactManifestBytes,
+  assertNavigationIdentity,
+  buildManifestName,
+  readBuildManifest,
+  sha256 as bytesSha256,
+  validateBuildManifest,
+  validateLocalBuild,
+  validateResponseRecords,
+} from "./web-build-identity.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const evidenceRoot = path.join(root, "dist", "deployed-verification");
 const deployedUrl = process.env.CALLACK_DEPLOYED_URL ?? "https://collack-spike.fly.dev/";
+const expectedManifestPath = path.resolve(
+  process.env.CALLACK_EXPECTED_BUILD_MANIFEST
+    ?? path.join(root, "dist", "web", buildManifestName),
+);
+const identityReportOnly = process.env.CALLACK_IDENTITY_REPORT_ONLY === "1";
+const callerClaims = {
+  revision: process.env.CALLACK_TARGET_SOURCE_COMMIT ?? null,
+  tree: process.env.CALLACK_TARGET_SOURCE_TREE ?? null,
+  target: process.env.CALLACK_TARGET_NAME ?? null,
+};
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -206,32 +226,52 @@ async function installInputEvidence(context) {
   });
 }
 
-async function resourceManifest(page) {
-  const origin = new URL(deployedUrl).origin;
-  const urls = await page.evaluate((targetOrigin) => Array.from(new Set(
-    performance.getEntriesByType("resource")
-      .map((entry) => entry.name)
-      .filter((url) => new URL(url).origin === targetOrigin),
-  )).sort(), origin);
-  const records = [];
-  for (const url of urls) {
-    const response = await page.context().request.get(url);
-    assert(response.ok(), `target resource returned ${response.status()}: ${url}`);
-    const body = await response.body();
-    records.push({
-      url,
-      status: response.status(),
-      etag: response.headers().etag ?? null,
-      lastModified: response.headers()["last-modified"] ?? null,
-      bytes: body.length,
-      sha256: createHash("sha256").update(body).digest("hex"),
-    });
+function requestRedirects(request) {
+  const redirects = [];
+  let prior = request.redirectedFrom();
+  while (prior) {
+    redirects.unshift(prior.url());
+    prior = prior.redirectedFrom();
   }
-  return records;
+  return redirects;
+}
+
+async function responseRecord(response) {
+  const request = response.request();
+  let body;
+  try {
+    body = await response.body();
+  } catch {
+    body = Buffer.alloc(0);
+  }
+  return {
+    requestUrl: request.url(),
+    url: response.url(),
+    redirects: requestRedirects(request),
+    resourceType: request.resourceType(),
+    method: request.method(),
+    status: response.status(),
+    etag: response.headers().etag ?? null,
+    lastModified: response.headers()["last-modified"] ?? null,
+    bytes: body.length,
+    sha256: bytesSha256(body),
+  };
+}
+
+function collectTargetResponses(page) {
+  const targetOrigin = new URL(deployedUrl).origin;
+  const pending = [];
+  page.on("response", (response) => {
+    if (new URL(response.url()).origin === targetOrigin) {
+      pending.push(responseRecord(response));
+    }
+  });
+  return async () => Promise.all(pending);
 }
 
 async function boot(context, label) {
   const page = await context.newPage();
+  const collectedResponses = collectTargetResponses(page);
   const errors = [];
   page.on("pageerror", (error) => errors.push(`${label} page: ${error.message}`));
   page.on("requestfailed", (request) =>
@@ -247,6 +287,7 @@ async function boot(context, label) {
       && loader?.classList.contains("hidden");
   }, undefined, { timeout: 30_000 });
   await page.waitForTimeout(250);
+  const loadedResponses = await collectedResponses();
   const state = await readCanvasState(page);
   const viewport = await page.evaluate(() => ({
     innerWidth: window.innerWidth,
@@ -265,15 +306,113 @@ async function boot(context, label) {
     page,
     errors,
     response: {
+      requestedUrl: new URL(deployedUrl).href,
       url: response.url(),
+      redirects: requestRedirects(response.request()),
       status: response.status(),
       etag: response.headers()["etag"] ?? null,
       lastModified: response.headers()["last-modified"] ?? null,
       bytes: indexBody.length,
       sha256: createHash("sha256").update(indexBody).digest("hex"),
     },
+    loadedResponses,
     viewport,
     initial: state,
+  };
+}
+
+async function fetchExact(page, url, resourceType) {
+  const response = await page.context().request.get(url, {
+    maxRedirects: 0,
+    timeout: 30_000,
+  });
+  const body = await response.body();
+  return {
+    record: {
+      requestUrl: url,
+      url: response.url(),
+      redirects: [],
+      resourceType,
+      method: "GET",
+      status: response.status(),
+      etag: response.headers().etag ?? null,
+      lastModified: response.headers()["last-modified"] ?? null,
+      bytes: body.length,
+      sha256: bytesSha256(body),
+    },
+    body,
+  };
+}
+
+async function verifyLoadedSession(booted, expectedManifest) {
+  assertNavigationIdentity({
+    requestedUrl: booted.response.requestedUrl,
+    finalUrl: booted.response.url,
+    redirects: booted.response.redirects,
+  });
+  return validateResponseRecords(
+    expectedManifest,
+    booted.loadedResponses,
+    booted.response.url,
+  );
+}
+
+async function verifyTargetIdentity(page, booted, expectedBuild) {
+  const loaded = await verifyLoadedSession(booted, expectedBuild.manifest);
+  const baseUrl = new URL("./", booted.response.url).href;
+  const manifestUrl = new URL(buildManifestName, baseUrl).href;
+  const servedManifest = await fetchExact(page, manifestUrl, "manifest");
+  assert(servedManifest.record.status >= 200 && servedManifest.record.status < 300,
+    `served build manifest is missing or failed with HTTP ${servedManifest.record.status}: ${manifestUrl}`);
+  assert(servedManifest.record.requestUrl === servedManifest.record.url,
+    `served build manifest redirected to unintended URL ${servedManifest.record.url}; requested ${manifestUrl}`);
+  assertExactManifestBytes(expectedBuild.bytes, servedManifest.body);
+
+  let parsedManifest;
+  try {
+    parsedManifest = JSON.parse(servedManifest.body.toString("utf8"));
+  } catch (error) {
+    throw new Error(`served build manifest is invalid JSON: ${error.message}`);
+  }
+  validateBuildManifest(parsedManifest, root, callerClaims);
+
+  const verifiedAssets = [];
+  for (const asset of expectedBuild.manifest.assets) {
+    const assetUrl = new URL(asset.path, baseUrl).href;
+    const fetched = await fetchExact(page, assetUrl, "verified-asset");
+    verifiedAssets.push(fetched.record);
+  }
+  const complete = validateResponseRecords(
+    expectedBuild.manifest,
+    verifiedAssets,
+    booted.response.url,
+    { requireAll: true },
+  );
+
+  return {
+    outcome: "PASS",
+    derivedIdentity: {
+      revision: expectedBuild.manifest.revision,
+      tree: expectedBuild.manifest.tree,
+      target: expectedBuild.manifest.target,
+    },
+    requestedUrl: booted.response.requestedUrl,
+    finalUrl: booted.response.url,
+    redirects: booted.response.redirects,
+    expectedManifest: {
+      path: expectedBuild.path,
+      sha256: expectedBuild.sha256,
+      bytes: expectedBuild.bytes.length,
+      assetSetSha256: expectedBuild.manifest.assetSetSha256,
+    },
+    servedManifest: {
+      url: manifestUrl,
+      sha256: servedManifest.record.sha256,
+      bytes: servedManifest.record.bytes,
+      status: servedManifest.record.status,
+    },
+    loaded,
+    completeAssetSet: complete,
   };
 }
 
@@ -303,9 +442,8 @@ async function sha256(file) {
 
 const git = (...args) => execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
 const screenshotNames = [];
-const declaredTargetCommit = process.env.CALLACK_TARGET_SOURCE_COMMIT ?? null;
 const evidence = {
-  schema: "callack-deployed-spike-v2",
+  schema: "callack-deployed-spike-v3",
   outcome: "RUNNING",
   verifier: {
     commit: git("rev-parse", "HEAD"),
@@ -314,11 +452,10 @@ const evidence = {
     scriptSha256: await sha256(fileURLToPath(import.meta.url)),
   },
   target: {
-    url: deployedUrl,
-    declaredSourceCommit: declaredTargetCommit,
-    declaredSourceTree: declaredTargetCommit
-      ? git("rev-parse", `${declaredTargetCommit}^{tree}`)
-      : null,
+    requestedUrl: new URL(deployedUrl).href,
+    expectedManifestPath,
+    callerClaims,
+    identityPolicy: identityReportOnly ? "report-only" : "strict",
   },
   viewport: {
     phone: { width: 390, height: 844, deviceScaleFactor: 1, hasTouch: true, isMobile: true },
@@ -342,8 +479,20 @@ async function persistEvidence() {
 }
 
 let browser;
+let expectedBuild;
+let identityFailure;
 try {
   await mkdir(evidenceRoot, { recursive: true });
+  expectedBuild = await readBuildManifest(expectedManifestPath, root, callerClaims);
+  await validateLocalBuild(path.dirname(expectedManifestPath), expectedBuild.manifest);
+  evidence.target.expectedBuild = {
+    revision: expectedBuild.manifest.revision,
+    tree: expectedBuild.manifest.tree,
+    target: expectedBuild.manifest.target,
+    manifestSha256: expectedBuild.sha256,
+    assetSetSha256: expectedBuild.manifest.assetSetSha256,
+    assetCount: expectedBuild.manifest.assets.length,
+  };
   browser = await chromium.launch({ headless: true });
   evidence.browser = await browser.version();
 
@@ -359,6 +508,7 @@ try {
   await installInputEvidence(phoneContext);
   const phone = await boot(phoneContext, "phone");
   evidence.target.response = phone.response;
+  evidence.target.loadedResponses = phone.loadedResponses;
   evidence.phone390x844 = {
     browserViewport: phone.viewport,
     initial: phone.initial,
@@ -366,6 +516,37 @@ try {
   };
   assert(phone.viewport.innerWidth === 390 && phone.viewport.innerHeight === 844,
     `phone: expected observed 390x844 viewport, got ${JSON.stringify(phone.viewport)}`);
+  try {
+    evidence.target.identity = await verifyTargetIdentity(phone.page, phone, expectedBuild);
+  } catch (error) {
+    identityFailure = error;
+    evidence.target.identity = {
+      outcome: "FAIL",
+      message: error instanceof Error ? error.message : String(error),
+      requestedUrl: phone.response.requestedUrl,
+      finalUrl: phone.response.url,
+      redirects: phone.response.redirects,
+      loaded: phone.loadedResponses,
+    };
+    if (!identityReportOnly) throw error;
+  }
+  evidence.target.identitySessions = [];
+  const verifySessionIdentity = async (label, booted) => {
+    try {
+      const loaded = await verifyLoadedSession(booted, expectedBuild.manifest);
+      evidence.target.identitySessions.push({ label, outcome: "PASS", loaded });
+    } catch (error) {
+      identityFailure ??= error;
+      evidence.target.identitySessions.push({
+        label,
+        outcome: "FAIL",
+        message: error instanceof Error ? error.message : String(error),
+        response: booted.response,
+        loaded: booted.loadedResponses,
+      });
+      if (!identityReportOnly) throw error;
+    }
+  };
   await capture(phone.page, "phone-render.png");
 
   // Use only the browser's touch stream on the phone path. Starting at the
@@ -406,7 +587,6 @@ try {
   const lost = await waitForLoss(phone.page, "phone");
   evidence.phone390x844.loss = lost;
   await capture(phone.page, "phone-loss.png");
-  evidence.target.resources = await resourceManifest(phone.page);
 
   const inputAtLoss = await readInputEvidence(phone.page);
   assert(inputAtLoss.keydown === 0 && inputAtLoss.keyup === 0,
@@ -454,6 +634,7 @@ try {
     deviceScaleFactor: evidence.viewport.desktop.deviceScaleFactor,
   });
   const desktop = await boot(desktopContext, "desktop");
+  await verifySessionIdentity("desktop", desktop);
   assert(desktop.viewport.innerWidth === 1280 && desktop.viewport.innerHeight === 800,
     `desktop: expected observed 1280x800 viewport, got ${JSON.stringify(desktop.viewport)}`);
   assert(desktop.response.sha256 === phone.response.sha256,
@@ -488,6 +669,7 @@ try {
     deviceScaleFactor: evidence.viewport.desktop.deviceScaleFactor,
   });
   const desktopRetry = await boot(desktopRetryContext, "desktop-retry");
+  await verifySessionIdentity("desktop-retry", desktopRetry);
   await desktopRetry.page.keyboard.down("ArrowLeft");
   await desktopRetry.page.waitForTimeout(850);
   await desktopRetry.page.keyboard.up("ArrowLeft");
@@ -515,11 +697,17 @@ try {
   assert(desktopRetry.errors.length === 0, desktopRetry.errors.join("\n"));
   await desktopRetryContext.close();
 
+  if (identityFailure) {
+    throw new Error(
+      `target identity rejected after behavior-only observation: ${identityFailure.message}`,
+    );
+  }
   evidence.outcome = "PASS";
   await persistEvidence();
   console.log(
     `[deployed-spike] OK: trusted 390x844 touch drag + loss + touch retry; `
-      + `desktop Left/Right + SPACE retry at ${deployedUrl}`,
+      + `desktop Left/Right + SPACE retry; exact target `
+      + `${expectedBuild.manifest.revision}/${expectedBuild.manifest.tree} at ${deployedUrl}`,
   );
 } catch (error) {
   evidence.outcome = "FAIL";

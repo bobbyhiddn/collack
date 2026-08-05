@@ -40,8 +40,9 @@ npm run verify:deployed
 ```
 
 The web result is written to `dist/web/` with content-addressed JavaScript,
-data, and WebAssembly filenames. Serve that directory with any static HTTP
-server. The browser verifier starts and stops its own local server, completes
+data, and WebAssembly filenames. `callack-build-manifest.json` binds the exact
+Git revision/tree and SHA-256 of every served file. Serve that directory with
+any static HTTP server. The browser verifier starts and stops its own local server, completes
 the full flow at both 390×844 and 1280×800, validates moving canonical physics,
 and writes review captures to `dist/verification/`.
 
@@ -53,10 +54,18 @@ screenshot are written to `dist/ios-simulator-smoke/`. The
 `iOS Simulator smoke` workflow runs this secret-free path independently of the
 manually gated TestFlight job.
 
-`npm run verify:deployed` independently exercises the public legacy spike at
-390×844 and desktop size. It records render, collision, score-change, loss, and
-keyboard evidence under `dist/deployed-verification/`; it never deploys or
-changes the live service.
+`npm run verify:deployed` independently exercises a target at 390×844 and
+desktop size. Before accepting the journey, it requires the target's loaded
+HTML and assets to match the exact manifest at `dist/web/` (or
+`CALLACK_EXPECTED_BUILD_MANIFEST`). Optional `CALLACK_TARGET_SOURCE_COMMIT`,
+`CALLACK_TARGET_SOURCE_TREE`, and `CALLACK_TARGET_NAME` labels are assertions
+only and cannot override the manifest-derived identity. It records requested
+and final URLs, redirects, loaded and complete asset digests, render,
+collision, score-change, loss, touch, and keyboard evidence under
+`dist/deployed-verification/`; it never deploys or changes the target. For a
+known stale route, `CALLACK_IDENTITY_REPORT_ONLY=1` continues the behavioral
+observation after recording the identity failure, but the command still cannot
+produce a passing exact-build verdict.
 
 Touch or click the visible controls; drag a selected brick or marble onto a
 legal destination, or use the equivalent tap sequence. Tab and Enter navigate

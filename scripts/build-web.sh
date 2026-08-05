@@ -227,6 +227,7 @@ find "$OUT" -type d -exec chmod 0755 {} +
 find "$OUT" -type f -exec chmod 0644 {} +
 
 bash "$ROOT/scripts/verify-web-assets.sh" "$OUT"
+node "$ROOT/scripts/generate-web-build-manifest.mjs" "$OUT" "$ROOT"
 
 ls -lh "$OUT"
 echo "[web] OK. Serve with: (cd $OUT && python3 -m http.server 8000)"
