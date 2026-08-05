@@ -21,6 +21,10 @@ import {
   rebuildPaddleExpectation,
   trustedPaddleBuild,
 } from "./paddle-verification-policy.mjs";
+import {
+  requireCollisionAndScore,
+  requireFreshRound,
+} from "./paddle-browser-transition-contract.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const trustedPaddle = trustedPaddleBuild(root);
@@ -30,6 +34,7 @@ const paddleBuildScript = trustedPaddle.buildScript;
 const expectedManifestPath = trustedPaddle.manifestPath;
 const identityReportOnly = process.env.CALLACK_IDENTITY_REPORT_ONLY === "1";
 const callerClaims = trustedPaddle.callerClaims;
+const observerDelayMs = Number(process.env.CALLACK_BROWSER_OBSERVER_DELAY_MS ?? "0");
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -42,6 +47,26 @@ async function waitForState(page, description, predicate, timeout = 15_000) {
     state = await readCanvasState(page);
     if (predicate(state)) return state;
     await page.waitForTimeout(100);
+  }
+  const error = new Error(`${description}; last state: ${JSON.stringify(state)}`);
+  error.lastState = state;
+  throw error;
+}
+
+async function waitForControlledState(
+  page,
+  description,
+  predicate,
+  maxFrames = 900,
+  frameMilliseconds = 16,
+) {
+  let state;
+  for (let frame = 1; frame <= maxFrames; frame += 1) {
+    await page.clock.runFor(frameMilliseconds);
+    state = await readCanvasState(page);
+    if (predicate(state)) {
+      return { frame, virtualMilliseconds: frame * frameMilliseconds, ...state };
+    }
   }
   const error = new Error(`${description}; last state: ${JSON.stringify(state)}`);
   error.lastState = state;
@@ -180,6 +205,31 @@ async function dragTouch(page, from, to, steps = 8) {
   }
 }
 
+async function tapTouch(page, at, holdMs = 25) {
+  const session = await page.context().newCDPSession(page);
+  const point = {
+    x: at.x,
+    y: at.y,
+    id: 1,
+    radiusX: 1,
+    radiusY: 1,
+    force: 1,
+  };
+  try {
+    await session.send("Input.dispatchTouchEvent", {
+      type: "touchStart",
+      touchPoints: [point],
+    });
+    await page.waitForTimeout(holdMs);
+    await session.send("Input.dispatchTouchEvent", {
+      type: "touchEnd",
+      touchPoints: [],
+    });
+  } finally {
+    await session.detach();
+  }
+}
+
 async function readInputEvidence(page) {
   return page.evaluate(() => window.__callackInputEvidence);
 }
@@ -268,8 +318,11 @@ function collectTargetResponses(page) {
   return async () => Promise.all(pending);
 }
 
-async function boot(context, label) {
+async function boot(context, label, { controlledClock = false } = {}) {
   const page = await context.newPage();
+  if (controlledClock) {
+    await page.clock.install({ time: new Date("2026-08-05T00:00:00.000Z") });
+  }
   const collectedResponses = collectTargetResponses(page);
   const errors = [];
   page.on("pageerror", (error) => errors.push(`${label} page: ${error.message}`));
@@ -285,9 +338,21 @@ async function boot(context, label) {
       && canvas.style.visibility === "visible"
       && loader?.classList.contains("hidden");
   }, undefined, { timeout: 30_000 });
-  await page.waitForTimeout(250);
+  let state;
+  if (controlledClock) {
+    state = await waitForControlledState(
+      page,
+      `${label}: controlled browser clock did not render the game`,
+      (sample) => sample.brickPixels > 35_000
+        && sample.paddlePixels > 900
+        && sample.paddleCenter !== null,
+      120,
+    );
+  } else {
+    await page.waitForTimeout(250);
+    state = await readCanvasState(page);
+  }
   const loadedResponses = await collectedResponses();
-  const state = await readCanvasState(page);
   const viewport = await page.evaluate(() => ({
     innerWidth: window.innerWidth,
     innerHeight: window.innerHeight,
@@ -435,6 +500,87 @@ async function waitForLoss(page, label, timeout = 10_000) {
   );
 }
 
+async function waitForControlledLoss(page, label, maxFrames = 900) {
+  let priorFrame;
+  let stableFrames = 0;
+  return waitForControlledState(
+    page,
+    `${label}: controlled journey did not reach a stable loss`,
+    (state) => {
+      if (state.centerBrightPixels < 50) {
+        priorFrame = state.frameHash;
+        stableFrames = 0;
+        return false;
+      }
+      stableFrames = state.frameHash === priorFrame ? stableFrames + 1 : 0;
+      priorFrame = state.frameHash;
+      return stableFrames >= 3;
+    },
+    maxFrames,
+  );
+}
+
+async function controlledTouchRetryAndCollision(page, loss) {
+  const pausedAt = await page.evaluate(() => Date.now());
+  const observationStarted = await readCanvasState(page);
+  const inputBefore = await readInputEvidence(page);
+  const retryPoint = await canvasPoint(page, 400, 300);
+  const samples = [];
+  let freshRound;
+  let collisionAndScore;
+
+  await tapTouch(page, retryPoint);
+  const inputAfter = await readInputEvidence(page);
+  assert(inputAfter.keydown === 0 && inputAfter.keyup === 0,
+    `phone: retry sent a keyboard event: ${JSON.stringify(inputAfter)}`);
+  assert(inputAfter.trustedTouchstart > inputBefore.trustedTouchstart
+      && inputAfter.trustedTouchend > inputBefore.trustedTouchend,
+  `phone: retry was not a trusted held touch tap: ${JSON.stringify({ inputBefore, inputAfter })}`);
+
+  for (let frame = 1; frame <= 240; frame += 1) {
+    await page.clock.runFor(16);
+    const sampled = await readCanvasState(page);
+    samples.push({ frame, virtualMilliseconds: frame * 16, ...sampled });
+    if (!freshRound) {
+      try {
+        freshRound = requireFreshRound(loss, samples);
+        await capture(page, "phone-restarted.png");
+      } catch (error) {
+        if (!/no observed fresh-round transition/.test(error.message)) throw error;
+      }
+    }
+    if (freshRound) {
+      const afterFresh = samples.slice(freshRound.index + 1);
+      try {
+        collisionAndScore = requireCollisionAndScore(freshRound.state, afterFresh);
+        break;
+      } catch (error) {
+        if (!/no observed (brick-collision|score) transition/.test(error.message)) throw error;
+      }
+    }
+  }
+
+  freshRound ??= requireFreshRound(loss, samples);
+  const afterFresh = samples.slice(freshRound.index + 1);
+  collisionAndScore ??= requireCollisionAndScore(freshRound.state, afterFresh);
+  const progressed = afterFresh.find((state) => state.frameHash !== freshRound.state.frameHash);
+  assert(progressed, "phone: controlled fresh round did not resume moving state");
+  return {
+    clock: { pausedAt, frameStepMilliseconds: 16 },
+    observationStarted,
+    retryPoint,
+    inputBefore,
+    inputAfter: await readInputEvidence(page),
+    sampleCount: samples.length,
+    freshRound: freshRound.state,
+    freshRoundProgressed: progressed,
+    collision: collisionAndScore.collision,
+    score: collisionAndScore.score,
+    collisionAndScore: collisionAndScore.proof,
+    samples,
+  };
+}
+
 async function sha256(file) {
   return createHash("sha256").update(await readFile(file)).digest("hex");
 }
@@ -466,7 +612,14 @@ const evidence = {
     phone: { width: 390, height: 844, deviceScaleFactor: 1, hasTouch: true, isMobile: true },
     desktop: { width: 1280, height: 800, deviceScaleFactor: 1 },
   },
+  browserSchedule: {
+    observerDelayMs,
+    policy: "stable-loss-then-observe-before-controlled-touch-retry",
+  },
 };
+
+assert(Number.isSafeInteger(observerDelayMs) && observerDelayMs >= 0 && observerDelayMs <= 30_000,
+  "CALLACK_BROWSER_OBSERVER_DELAY_MS must be an integer from 0 through 30000");
 
 async function capture(page, name) {
   await page.screenshot({ path: path.join(evidenceRoot, name) });
@@ -519,7 +672,7 @@ try {
     isMobile: evidence.viewport.phone.isMobile,
   });
   await installInputEvidence(phoneContext);
-  const phone = await boot(phoneContext, "phone");
+  const phone = await boot(phoneContext, "phone", { controlledClock: true });
   evidence.target.response = phone.response;
   evidence.target.loadedResponses = phone.loadedResponses;
   evidence.phone390x844 = {
@@ -562,80 +715,71 @@ try {
   };
   await capture(phone.page, "phone-render.png");
 
-  // Use only the browser's touch stream on the phone path. Starting at the
-  // visible paddle and dragging left parks it away from the opening shot.
-  const dragFrom = await canvasPoint(phone.page, phone.initial.paddleCenter, 565);
+  if (observerDelayMs > 0) await phone.page.clock.runFor(observerDelayMs);
+  let preparation = await readCanvasState(phone.page);
+  if (preparation.centerBrightPixels < 50) {
+    const from = await canvasPoint(phone.page, preparation.paddleCenter, 565);
+    const to = await canvasPoint(phone.page, 30, 565);
+    await dragTouch(phone.page, from, to, 1);
+    preparation = await waitForControlledState(
+      phone.page,
+      "phone: preparation touch did not park the paddle",
+      (state) => state.paddleCenter !== null && state.paddleCenter < 80,
+      180,
+    );
+  }
+  evidence.phone390x844.preparation = preparation;
+  const lost = await waitForControlledLoss(phone.page, "phone-before-controlled-round");
+  evidence.phone390x844.loss = lost;
+  await capture(phone.page, "phone-loss.png");
+
+  const controlledRound = await controlledTouchRetryAndCollision(phone.page, lost);
+  evidence.phone390x844.retryTap = {
+    browserCss: controlledRound.retryPoint,
+    inputBefore: controlledRound.inputBefore,
+    inputAfter: controlledRound.inputAfter,
+  };
+  evidence.phone390x844.controlledRound = controlledRound;
+  evidence.phone390x844.freshRound = controlledRound.freshRound;
+  evidence.phone390x844.freshRoundProgressed = controlledRound.freshRoundProgressed;
+  evidence.phone390x844.collision = controlledRound.collision;
+  evidence.phone390x844.score = controlledRound.score;
+  evidence.phone390x844.collisionAndScore = controlledRound.collisionAndScore;
+  await capture(phone.page, "phone-scored.png");
+
+  // The collision proof above came from a round that began only after capture
+  // was ready. Now use a second trusted touch gesture to park the paddle and
+  // prove that same controlled round reaches a stable loss.
+  const dragState = await readCanvasState(phone.page);
+  const dragFrom = await canvasPoint(phone.page, dragState.paddleCenter, 565);
   const dragTo = await canvasPoint(phone.page, 30, 565);
+  const inputBeforeDrag = await readInputEvidence(phone.page);
   await dragTouch(phone.page, dragFrom, dragTo, 1);
   const inputAfterDrag = await readInputEvidence(phone.page);
   evidence.phone390x844.touchDrag = {
     fromBrowserCss: dragFrom,
     toBrowserCss: dragTo,
+    inputBefore: inputBeforeDrag,
     inputAfter: inputAfterDrag,
   };
   assert(inputAfterDrag.keydown === 0 && inputAfterDrag.keyup === 0,
     `phone: keyboard input leaked into touch drag: ${JSON.stringify(inputAfterDrag)}`);
-  assert(inputAfterDrag.trustedTouchstart >= 1
-      && inputAfterDrag.trustedTouchmove >= 1
-      && inputAfterDrag.trustedTouchend >= 1,
-  `phone: drag did not deliver a trusted touch sequence: ${JSON.stringify(inputAfterDrag)}`);
-  const parked = await waitForState(
+  assert(inputAfterDrag.trustedTouchstart > inputBeforeDrag.trustedTouchstart
+      && inputAfterDrag.trustedTouchmove > inputBeforeDrag.trustedTouchmove
+      && inputAfterDrag.trustedTouchend > inputBeforeDrag.trustedTouchend,
+  `phone: drag did not deliver a new trusted touch sequence: ${JSON.stringify(evidence.phone390x844.touchDrag)}`);
+  const parked = await waitForControlledState(
     phone.page,
     "phone: genuine touch drag did not park the paddle",
     (state) => state.paddleCenter !== null && state.paddleCenter < 80,
-    3_000,
+    180,
   );
   evidence.phone390x844.touchDrag.paddleParked = parked;
-
-  const collided = await waitForState(
+  evidence.phone390x844.lossAfterCollision = await waitForControlledLoss(
     phone.page,
-    "phone: no deployed brick collision/score change",
-    (state) => state.brickPixels < phone.initial.brickPixels - 900
-      && state.hudHash !== phone.initial.hudHash,
-    10_000,
+    "phone-after-collision",
   );
-  evidence.phone390x844.collisionAndScore = collided;
-  await capture(phone.page, "phone-scored.png");
-
-  const lost = await waitForLoss(phone.page, "phone");
-  evidence.phone390x844.loss = lost;
-  await capture(phone.page, "phone-loss.png");
-
-  const inputAtLoss = await readInputEvidence(phone.page);
-  assert(inputAtLoss.keydown === 0 && inputAtLoss.keyup === 0,
-    `phone: keyboard input occurred before retry: ${JSON.stringify(inputAtLoss)}`);
-  const retryPoint = await canvasPoint(phone.page, 400, 300);
-  evidence.phone390x844.retryTap = {
-    browserCss: retryPoint,
-    inputBefore: inputAtLoss,
-  };
-  await phone.page.touchscreen.tap(retryPoint.x, retryPoint.y);
-  evidence.phone390x844.retryTap.inputAfter = await readInputEvidence(phone.page);
-  assert(evidence.phone390x844.retryTap.inputAfter.keydown === 0
-      && evidence.phone390x844.retryTap.inputAfter.keyup === 0,
-  `phone: retry sent a keyboard event: ${JSON.stringify(evidence.phone390x844.retryTap.inputAfter)}`);
-  assert(evidence.phone390x844.retryTap.inputAfter.trustedTouchstart
-      > inputAtLoss.trustedTouchstart
-      && evidence.phone390x844.retryTap.inputAfter.trustedTouchend
-      > inputAtLoss.trustedTouchend,
-  `phone: retry was not a trusted touch tap: ${JSON.stringify(evidence.phone390x844.retryTap)}`);
-
-  const restarted = await waitForState(
-    phone.page,
-    "phone: genuine touch tap after proven loss did not begin a fresh round",
-    (state) => state.centerBrightPixels < 50
-      && state.brickPixels >= phone.initial.brickPixels - 100
-      && state.hudHash === phone.initial.hudHash
-      && state.frameHash !== lost.frameHash,
-    3_000,
-  );
-  await phone.page.waitForTimeout(250);
-  const restartedProgress = await readCanvasState(phone.page);
-  assert(restartedProgress.frameHash !== restarted.frameHash,
-    "phone: the fresh round did not resume moving state");
-  evidence.phone390x844.freshRound = restarted;
-  evidence.phone390x844.freshRoundProgressed = restartedProgress;
-  await capture(phone.page, "phone-restarted.png");
+  await capture(phone.page, "phone-post-score-loss.png");
   assert(phone.errors.length === 0, phone.errors.join("\n"));
   await phoneContext.close();
 

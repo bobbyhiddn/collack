@@ -1,0 +1,16 @@
+# Target-specific BuildKit context. The default auto-battler context remains
+# governed by the root .dockerignore; this one admits only the paddle artifact,
+# its in-image verifier, and the dedicated runtime config.
+**
+!deploy/
+deploy/**
+!deploy/fly/
+deploy/fly/**
+!deploy/fly/nginx.paddle.conf
+!scripts/
+scripts/**
+!scripts/paddle-release-contract.mjs
+!dist/
+dist/**
+!dist/paddle-web/
+!dist/paddle-web/**

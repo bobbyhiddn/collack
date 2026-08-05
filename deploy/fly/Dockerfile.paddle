@@ -1,0 +1,18 @@
+# Dedicated static-site image for the candidate-owned paddle web target.
+# Build only through scripts/build-paddle-release-image.sh or
+# scripts/release-paddle-fly.sh from the repository root.
+
+FROM docker.io/library/node:20.19.5-alpine3.22@sha256:6178e78b972f79c335df281f4b7674a2d85071aae2af020ffa39f0a770265435 AS provenance
+WORKDIR /candidate
+COPY scripts/paddle-release-contract.mjs scripts/paddle-release-contract.mjs
+COPY dist/paddle-web/ dist/paddle-web/
+RUN node scripts/paddle-release-contract.mjs
+
+FROM docker.io/library/nginx:1.31.3-alpine@sha256:4a73073bd557c65b759505da037898b61f1be6cbcc3c2c3aeac22d2a470c1752
+LABEL io.callack.release.target="paddle-web" \
+      io.callack.release.artifact-path="dist/paddle-web" \
+      io.callack.release.manifest-path="/srv/callack/paddle-web/callack-build-manifest.json"
+COPY deploy/fly/nginx.paddle.conf /etc/nginx/conf.d/default.conf
+COPY --from=provenance /candidate/dist/paddle-web/ /srv/callack/paddle-web/
+EXPOSE 8080
+CMD ["nginx", "-g", "daemon off;"]
