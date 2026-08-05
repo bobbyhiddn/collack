@@ -210,10 +210,12 @@ node "$ROOT/scripts/generate-web-build-manifest.mjs" "$OUT" "$ROOT" "paddle-web"
 
 # Publish only the completely validated staged archive/output. All generation,
 # hashing, and manifest work above is isolated from stale final paths.
-[ ! -e "$FINAL_LOVE_ARCHIVE" ] && [ ! -L "$FINAL_LOVE_ARCHIVE" ] \
-    || fail "paddle archive path changed during the authenticated build"
-[ ! -e "$FINAL_OUT" ] && [ ! -L "$FINAL_OUT" ] \
-    || fail "paddle output path changed during the authenticated build"
+if [ -e "$FINAL_LOVE_ARCHIVE" ] || [ -L "$FINAL_LOVE_ARCHIVE" ]; then
+    fail "paddle archive path changed during the authenticated build"
+fi
+if [ -e "$FINAL_OUT" ] || [ -L "$FINAL_OUT" ]; then
+    fail "paddle output path changed during the authenticated build"
+fi
 mv "$LOVE_ARCHIVE" "$FINAL_LOVE_ARCHIVE"
 mv "$OUT" "$FINAL_OUT"
 

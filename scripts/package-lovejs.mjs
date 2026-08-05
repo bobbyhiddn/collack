@@ -321,10 +321,13 @@ async function run() {
   const extracted = path.join(scratch, "extracted");
   await mkdir(extracted, { recursive: true, mode: 0o755 });
   const tar = "/usr/bin/tar";
-  const tarInfo = await lstat(tar);
+  const tarResolved = await realpath(tar);
+  assert(tarResolved === "/usr/bin/tar" || tarResolved === "/usr/bin/bsdtar",
+    `trusted system extractor resolved outside the fixed platform allowlist: ${tarResolved}`);
+  const tarInfo = await lstat(tarResolved);
   assert(tarInfo.isFile() && !tarInfo.isSymbolicLink(),
-    `trusted system extractor is unavailable: ${tar}`);
-  execFileSync(tar, ["-xzf", localArchive, "-C", extracted], {
+    `trusted system extractor is unavailable: ${tarResolved}`);
+  execFileSync(tarResolved, ["-xzf", localArchive, "-C", extracted], {
     cwd: root,
     env: { LC_ALL: "C", PATH: "/usr/bin:/bin" },
     stdio: ["ignore", "ignore", "pipe"],

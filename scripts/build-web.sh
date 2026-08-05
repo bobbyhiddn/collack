@@ -231,10 +231,12 @@ find "$OUT" -type f -exec chmod 0644 {} +
 bash "$ROOT/scripts/verify-web-assets.sh" "$OUT"
 node "$ROOT/scripts/generate-web-build-manifest.mjs" "$OUT" "$ROOT"
 
-[ ! -e "$FINAL_LOVE_ARCHIVE" ] && [ ! -L "$FINAL_LOVE_ARCHIVE" ] \
-    || fail "web archive path changed during the authenticated build"
-[ ! -e "$FINAL_OUT" ] && [ ! -L "$FINAL_OUT" ] \
-    || fail "web output path changed during the authenticated build"
+if [ -e "$FINAL_LOVE_ARCHIVE" ] || [ -L "$FINAL_LOVE_ARCHIVE" ]; then
+    fail "web archive path changed during the authenticated build"
+fi
+if [ -e "$FINAL_OUT" ] || [ -L "$FINAL_OUT" ]; then
+    fail "web output path changed during the authenticated build"
+fi
 mv "$LOVE_ARCHIVE" "$FINAL_LOVE_ARCHIVE"
 mv "$OUT" "$FINAL_OUT"
 
