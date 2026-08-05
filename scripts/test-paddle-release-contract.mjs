@@ -99,6 +99,14 @@ const imageBuilder = await readFile(
   path.join(root, "scripts/build-paddle-release-image.sh"),
   "utf8",
 );
+const imageVerifier = await readFile(
+  path.join(root, "scripts/verify-paddle-release-image.sh"),
+  "utf8",
+);
+const releaseWrapper = await readFile(
+  path.join(root, "scripts/release-paddle-fly.sh"),
+  "utf8",
+);
 assert(dockerfile.includes("COPY dist/paddle-web/ dist/paddle-web/"),
   "dedicated Dockerfile does not consume canonical dist/paddle-web");
 assert(!dockerfile.includes("dist/web"),
@@ -117,6 +125,15 @@ assert(flyConfig.includes('app = "collack-spike"')
 assert(imageBuilder.indexOf("verify-paddle-release.mjs")
     < imageBuilder.indexOf("container build"),
 "image build can run before the exact-source release gate");
+assert(imageBuilder.includes('verify-paddle-release-image.sh\" \"$IMAGE_ID\"'),
+  "built image is not validated by immutable ID");
+assert(imageVerifier.includes("verifyPaddleRelease")
+    && imageVerifier.includes("artifactRoot:process.argv[1]"),
+"actual image filesystem is not bound to an independent exact-source rebuild");
+assert(releaseWrapper.includes("--image \"$REMOTE_REF\"")
+    && !releaseWrapper.includes("flyctl deploy \"$TEMP_ROOT\"")
+    && !releaseWrapper.includes("--dockerfile"),
+"release wrapper can rebuild instead of consuming the validated digest");
 
 const exact = await verifyPaddleRelease(root, { quiet: true });
 assert(exact.manifest.target === "paddle-web", "positive release target is not paddle-web");

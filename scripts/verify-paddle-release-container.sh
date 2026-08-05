@@ -127,6 +127,8 @@ done
 CALLACK_CONTAINER_ENGINE="$ENGINE" \
     bash "$ROOT/scripts/build-paddle-release-image.sh" "$IMAGE_TAG"
 IMAGE_ID="$(container image inspect --format '{{.Id}}' "$IMAGE_TAG")"
+[[ "$IMAGE_ID" =~ ^sha256:[0-9a-f]{64}$ ]] \
+    || fail "image builder did not return an immutable image ID"
 
 TEMP_ROOT="$(mktemp -d "$ROOT/dist/.paddle-release-container.XXXXXX")"
 LIVE_ROOT="$TEMP_ROOT/live"
@@ -136,7 +138,7 @@ mkdir -p "$LIVE_ROOT" "$IMAGE_ROOT"
 container run --detach \
     --name "$CONTAINER_NAME" \
     --publish 127.0.0.1::8080 \
-    "$IMAGE_TAG" >/dev/null
+    "$IMAGE_ID" >/dev/null
 
 CONTAINER_ID="$(container inspect --format '{{.Id}}' "$CONTAINER_NAME")"
 PORT_BINDING="$(container port "$CONTAINER_NAME" 8080/tcp | sed -n '1p')"

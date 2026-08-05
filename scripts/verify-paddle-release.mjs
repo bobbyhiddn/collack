@@ -37,6 +37,7 @@ const requiredReleasePaths = Object.freeze([
   "scripts/build-paddle-release-image.sh",
   "scripts/paddle-release-contract.mjs",
   "scripts/release-paddle-fly.sh",
+  "scripts/verify-paddle-release-image.sh",
   "scripts/verify-paddle-release.mjs",
 ]);
 

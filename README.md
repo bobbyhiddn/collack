@@ -120,15 +120,23 @@ compares the supplied package and `.love` archive with an independent rebuild
 of that exact commit. Image tags, service labels, and optional caller labels
 never define artifact identity.
 
+The image builder rebuilds canonical output, builds exactly once, resolves the
+immutable local image ID, and validates that image's extracted filesystem and
+labels against a fresh exact-source rebuild. The final
+`CALLACK_VALIDATED_IMAGE=sha256:...` line is the only release candidate.
+
 The dedicated `deploy/fly/paddle.fly.toml` still names the existing
 `collack-spike` service, but marks the release target as `paddle-web`. A future
-authorized deployment uses only the guarded command below; it requires the
-explicit `--deploy` acknowledgement and repeats the exact-source gate before
-Fly receives the dedicated Dockerfile and config:
+authorized deployment supplies that immutable ID to the guarded command:
 
 ```bash
-./scripts/release-paddle-fly.sh --deploy
+./scripts/release-paddle-fly.sh --deploy --image sha256:<validated-image-id>
 ```
+
+The wrapper revalidates the image by ID, publishes that same image, compares
+the registry manifest's config digest with the validated local ID, and passes
+only the returned digest-qualified reference to `flyctl deploy --image`. It
+never sends a build context, rereads `dist/paddle-web`, or deploys a mutable tag.
 
 The paddle nginx config serves the contract at `/` only, keeps the shell and
 provenance files revalidated, and gives immutable caching only to 16-hex
