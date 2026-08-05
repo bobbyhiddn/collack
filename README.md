@@ -66,6 +66,8 @@ collision, score-change, loss, touch, and keyboard evidence under
 known stale route, `CALLACK_IDENTITY_REPORT_ONLY=1` continues the behavioral
 observation after recording the identity failure, but the command still cannot
 produce a passing exact-build verdict.
+CI rebuilds the checked-out head and rejects wrong bytes, mixed assets, stale or
+altered manifests, missing identity fields, and unexpected redirects.
 
 Touch or click the visible controls; drag a selected brick or marble onto a
 legal destination, or use the equivalent tap sequence. Tab and Enter navigate
