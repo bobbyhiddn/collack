@@ -80,7 +80,8 @@ try {
 
   const racedBuild = spawnSync("bash", [path.join(root, "scripts", "build-paddle-release-image.sh"), "fake:race"], { cwd: root, env, encoding: "utf8" });
   assert(racedBuild.status !== 0, "post-preflight artifact replacement silently became the image candidate");
-  assert(JSON.parse(await readFile(statePath, "utf8")).builds === 1, "race control did not cross the preflight/build boundary exactly once");
+  assert(JSON.parse(await readFile(statePath, "utf8")).builds === 1,
+    `race control did not cross the preflight/build boundary exactly once: ${racedBuild.stderr}`);
 
   await writeFile(path.join(canonical, "index.html"), originalIndex); await writeFile(path.join(canonical, "callack-build-manifest.json"), originalManifest);
   await rm(imageRoot, { recursive: true, force: true }); await cp(canonical, imageRoot, { recursive: true });
