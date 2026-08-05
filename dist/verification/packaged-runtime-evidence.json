@@ -1,8 +1,8 @@
 {
   "schemaVersion": 3,
-  "sourceDigest": "dddb7d2dcf0cad88853ffc223e0266223c6094d1bba1f06415c377ceda350d5c",
-  "sourceCommit": "013f9bcee59578c3a5860ca8d45b42ce85161c1d",
-  "sourceTree": "d5b8fdd0849148acd0724d57a277364ca7ce7be7",
+  "sourceDigest": "d88b9d47e832ce585c86331ac7256a9f15a19138dab2a3dc3dfffdb0a285b28c",
+  "sourceCommit": "9625dc5583770151c662619fc7e0ed31e048b6a6",
+  "sourceTree": "477e9600c315fa0d9df27c243b3411e1f325b58b",
   "viewports": {
     "phone": {
       "width": 390,
@@ -22,11 +22,6 @@
       "sha256": "ed38d902c8eb6130f36a5583d36c6309190b58d46f116467066f46eb06b6ac9b"
     },
     "webFiles": [
-      {
-        "path": "dist/web/callack-build-manifest.json",
-        "size": 1394,
-        "sha256": "d15b2618883d9320a367514114ac2608eb263a73a6997c6142ab52f8cbdc1fcd"
-      },
       {
         "path": "dist/web/game.6a04e82a3bfa1407.js",
         "size": 11516,
@@ -63,7 +58,7 @@
         "sha256": "b991b00f74b61804d52f8e5590337f4ef1311fa8bb4315337a1bbc7c8bd262cd"
       }
     ],
-    "aggregateDigest": "3a0e7b2db8784ef93f87f4159e9981513271619c621d9469d051d9da3f243a27"
+    "aggregateDigest": "b71c1444509b036974f9ca146490a7851ba31aba27d3790ee7302e95c94ba94d"
   },
   "canonicalSweeps": [
     {
@@ -529,5 +524,5 @@
     "phone-setup.png": "8d38328122a34184a874e887160fcc03cb3f7efaa87aa2d64ec425357aa2f9e9",
     "phone-terminal-result.png": "c87662621cd42cf0072b40143127514144b85529455faa9f27d8d6d49d8db8b6"
   },
-  "evidenceDigest": "1eeeba722ec5d5ee8ac3c93faa4d1409a7c3d924f3f9177f891483bd5cce1743"
+  "evidenceDigest": "66a28d83ca92063209639d2d4eaef48e2ef9a257b1e9d352844cc385dfdbda7c"
 }
