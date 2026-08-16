@@ -43,6 +43,7 @@ harness.run({
     require("battle.tests.test_data_model"),
     require("battle.tests.test_event_protocol"),
     require("battle.tests.test_physics"),
+    require("battle.tests.test_continuous_motion"),
     require("battle.tests.test_continuous_battle"),
     require("battle.tests.test_runtime_verification"),
     require("battle.tests.test_determinism"),

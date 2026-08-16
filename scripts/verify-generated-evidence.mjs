@@ -444,17 +444,17 @@ assert(evidence.viewports?.desktop?.width === 1280
     && evidence.viewports.desktop.height === 800
     && evidence.viewports.desktop.touch === false,
   "generated evidence is missing the canonical desktop mouse viewport");
-assert(evidence.ruleCallouts?.length === 62,
-  `generated evidence must match the 62-callout telemetry, got ${evidence.ruleCallouts?.length}`);
+assert(evidence.ruleCallouts?.length === 66,
+  `generated evidence must match the 66-callout telemetry, got ${evidence.ruleCallouts?.length}`);
 for (const label of ["phone", "desktop"]) {
   const callouts = evidence.ruleCallouts.filter((sample) => sample.label === label);
-  assert(callouts.length === 31,
-    `${label} evidence must contain 31 callouts, got ${callouts.length}`);
+  assert(callouts.length === 33,
+    `${label} evidence must contain 33 callouts, got ${callouts.length}`);
 }
 
 const screenshotEntries = Object.entries(evidence.screenshotHashes ?? {});
-assert(screenshotEntries.length === 40,
-  `generated evidence must bind all 40 screenshots, got ${screenshotEntries.length}`);
+assert(screenshotEntries.length === 42,
+  `generated evidence must bind all 42 screenshots, got ${screenshotEntries.length}`);
 for (const [name, expected] of screenshotEntries) {
   assert(/^(phone|desktop)-[a-z0-9-]+\.png$/.test(name),
     `generated evidence contains an unexpected screenshot path: ${name}`);
@@ -463,7 +463,7 @@ for (const [name, expected] of screenshotEntries) {
   assert(actual === expected,
     `stale generated screenshot ${name}: ${actual}, expected ${expected}`);
 }
-assert(evidence.screenshotRecords?.length === 40,
+assert(evidence.screenshotRecords?.length === 42,
   "generated evidence must carry one semantic record per screenshot");
 for (const record of evidence.screenshotRecords) {
   const expectedViewport = evidence.viewports[record.label];

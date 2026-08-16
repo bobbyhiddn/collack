@@ -23,9 +23,12 @@ motion from an event log.
 
 Both sides commit the head of their ordered bag on the same simulation tick.
 Those marbles then fly concurrently in a shared arena. The next pair is not
-committed until both are destroyed or settled and all effects from the exchange
-have resolved. Win conditions are checked only at that boundary, so resolution
-order cannot award a mutual finish to one side.
+committed until both reach an explicit canonical outcome: physical home-edge
+return, shell destruction/core release, removal, or bounded safety return after
+visible deterministic recovery. Active marbles retain an authored nonzero speed
+class; passive settling never advances play. Win conditions are checked only at
+the lifecycle boundary, so resolution order cannot award a mutual finish to one
+side.
 
 ## What remains from ADR 0004
 

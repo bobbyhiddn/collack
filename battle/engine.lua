@@ -36,6 +36,10 @@ M.MAX_RELEASE_DEPTH = 3
 M.MAX_CASCADE_GENERATION = 3
 M.MAX_CASCADE_ACTIVATIONS = 16
 M.MAX_BRICK_HARM_ATTEMPTS = 32
+M.ACTIVE_SPEED_FLOOR_RATIO = 0.40
+M.NO_PROGRESS_TICKS = 180
+M.RETURN_GUIDANCE_TICKS = 360
+M.RETURN_GUIDANCE_INTERVAL = 60
 
 M.ARENA = {
     width = 70,
@@ -53,6 +57,13 @@ M.ARENA = {
 
 local abs, floor, max, min, sqrt =
     math.abs, math.floor, math.max, math.min, math.sqrt
+
+local function finite(value)
+    return type(value) == "number"
+        and value == value
+        and value ~= math.huge
+        and value ~= -math.huge
+end
 
 local function clamp(value, lo, hi)
     if value < lo then return lo end
@@ -515,6 +526,8 @@ local function create_world(battle)
                 x = x, y = y, radius = M.ARENA.marble_radius,
                 mass = mass, restitution = marble.ricochet and 0.98 or 0.84,
                 dynamic = false, asleep = true,
+                motion_fallback_x = 0,
+                motion_fallback_y = side_id == "A" and -1 or 1,
                 data = { marble = marble.uid, state = marble.state, shells = #marble.shells },
             })
         end
@@ -567,19 +580,32 @@ function M.new(opts)
     local a_cols = #sides.A.formation[1]
     local b_cols = #sides.B.formation[1]
     if a_cols ~= b_cols then error("both formations must have the same width") end
+    local seed = tonumber(opts.battle_seed or opts.seed) or 1
+    local max_exchanges = opts.max_exchanges or opts.max_volleys or M.DEFAULT_MAX_EXCHANGES
+    local max_exchange_ticks = opts.max_exchange_ticks or M.DEFAULT_EXCHANGE_TICKS
+    if not finite(seed) then error("battle seed must be a finite number") end
+    if not finite(max_exchanges) or max_exchanges < 1 then
+        error("max_exchanges must be a positive finite number")
+    end
+    if not finite(max_exchange_ticks) or max_exchange_ticks < 1 then
+        error("max_exchange_ticks must be a positive finite number")
+    end
+    seed = floor(seed)
+    max_exchanges = floor(max_exchanges)
+    max_exchange_ticks = floor(max_exchange_ticks)
 
     local battle = {
         schema_version = M.SCHEMA_VERSION,
         rules_version = opts.rules_version or M.RULES_VERSION,
-        seed = floor(tonumber(opts.battle_seed or opts.seed) or 1),
-        rng = RNG.new(opts.battle_seed or opts.seed),
+        seed = seed,
+        rng = RNG.new(seed),
         log = Log.new(),
         tick = 0,
         exchange = 0,
         volley = 0,
-        max_exchanges = opts.max_exchanges or opts.max_volleys or M.DEFAULT_MAX_EXCHANGES,
-        max_volleys = opts.max_exchanges or opts.max_volleys or M.DEFAULT_MAX_EXCHANGES,
-        max_exchange_ticks = opts.max_exchange_ticks or M.DEFAULT_EXCHANGE_TICKS,
+        max_exchanges = max_exchanges,
+        max_volleys = max_exchanges,
+        max_exchange_ticks = max_exchange_ticks,
         exchange_started_tick = 0,
         lanes = a_cols,
         order = { "A", "B" },
@@ -608,7 +634,7 @@ function M.new(opts)
         recording = {
             schema_version = 1,
             rules_version = opts.rules_version or M.RULES_VERSION,
-            battle_seed = floor(tonumber(opts.battle_seed or opts.seed) or 1),
+            battle_seed = seed,
             fixed_dt = M.FIXED_DT,
             frame_interval = M.FRAME_INTERVAL,
             keyframe_interval = M.KEYFRAME_INTERVAL,
@@ -703,6 +729,56 @@ M.new_battle = M.new
 
 local function opponent_of(battle, player)
     return player.id == "A" and battle.sides.B or battle.sides.A
+end
+
+local function launch_speed(marble)
+    return 62 + (marble.momentum or 0) * 7
+end
+
+local function freeze_multiplier(battle, marble)
+    local freeze = marble.statuses.freeze
+    if freeze and freeze.expires > battle.tick then
+        return effects.status_profile("freeze", freeze.rule_set).launch_speed_multiplier or 1
+    end
+    return 1
+end
+
+local function motion_floor(battle, marble)
+    return launch_speed(marble) * freeze_multiplier(battle, marble)
+        * M.ACTIVE_SPEED_FLOOR_RATIO
+end
+
+local function activate_motion(battle, owner, marble, reset_health)
+    local body = battle.world:get_body(marble.body_id)
+    if not body then return nil end
+    local fallback_x, fallback_y = body.vx, body.vy
+    if fallback_x == 0 and fallback_y == 0 then
+        fallback_x, fallback_y = 0, owner.id == "A" and -1 or 1
+    end
+    battle.world:set_motion_active(marble.body_id, true, {
+        minimum_speed = motion_floor(battle, marble),
+        fallback_x = fallback_x,
+        fallback_y = fallback_y,
+        return_wall = owner.id == "A" and "bottom" or "top",
+    })
+    if reset_health or not marble.motion_health then
+        marble.motion_health = {
+            last_progress_tick = battle.tick,
+            last_recovery_tick = battle.tick,
+            wall_contacts = 0,
+            recoveries = 0,
+            return_guided = false,
+            last_guidance_tick = battle.tick,
+        }
+    end
+    return body
+end
+
+local function refresh_motion_floor(battle, marble)
+    local body = battle.world:get_body(marble.body_id)
+    if body and body.motion_active then
+        battle.world:set_motion_floor(marble.body_id, motion_floor(battle, marble))
+    end
 end
 
 local function adjacent_protection(owner, brick)
@@ -1184,6 +1260,7 @@ end
 M.apply_brick_harm = apply_brick_harm
 
 local release_core
+local park_marble
 
 local function destroy_marble(battle, owner, marble, cause, x, y)
     if marble.state == "destroyed" then return false end
@@ -1193,6 +1270,7 @@ local function destroy_marble(battle, owner, marble, cause, x, y)
     remove_from(owner.queue, marble)
     remove_from(battle.active, marble)
     battle.active_by_body[marble.body_id] = nil
+    marble.motion_health = nil
     battle.world:remove_body(marble.body_id, cause)
     owner.bag[#owner.bag + 1] = marble.core.id
     append_event(battle, owner.id, "marble_destroyed", {
@@ -1394,6 +1472,14 @@ release_core = function(battle, owner, other, marble, x, y, depth, context)
                 battle.active[#battle.active + 1] = affected_marble
                 battle.active_by_body[affected_id] = affected_marble
             end
+            if affected_marble.state == "returned" then
+                affected_marble.state = "blown"
+                battle.active[#battle.active + 1] = affected_marble
+                battle.active_by_body[affected_id] = affected_marble
+            end
+            if affected_marble.state == "blown" then
+                activate_motion(battle, entry.owner, affected_marble, true)
+            end
             append_event(battle, entry.owner.id, "blowback_impulse", {
                 marble = affected_marble.uid,
                 source_marble = marble.uid,
@@ -1558,7 +1644,7 @@ local function start_marble(battle, player, marble, shot)
     local bias = ((marble.core.trajectory or 0) * 0.055 + scatter * 0.035) * facing
     dx, dy = rotate(dx, dy, bias)
     local freeze = marble.statuses.freeze and marble.statuses.freeze.expires > battle.tick
-    local speed = 62 + (marble.momentum or 0) * 7
+    local speed = launch_speed(marble)
     if freeze then
         speed = speed * (
             effects.status_profile("freeze", marble.statuses.freeze.rule_set)
@@ -1570,6 +1656,7 @@ local function start_marble(battle, player, marble, shot)
     battle.world:set_position(marble.body_id, start_x, start_y)
     battle.world:set_dynamic(marble.body_id, true)
     battle.world:set_velocity(marble.body_id, dx * speed, dy * speed)
+    activate_motion(battle, player, marble, true)
     body.data.state = "flying"
     marble.state = "flying"
     if player.rack[marble.lane] == marble then player.rack[marble.lane] = nil end
@@ -1682,7 +1769,13 @@ local function apply_status_from_field(battle, field_event)
     if behaviour == "freeze" then
         local body = battle.world:get_body(marble.body_id)
         local multiplier = status_profile.velocity_multiplier or 1
-        if body then body.vx, body.vy = body.vx * multiplier, body.vy * multiplier end
+        if body then
+            body.vx, body.vy = body.vx * multiplier, body.vy * multiplier
+            refresh_motion_floor(battle, marble)
+            if body.motion_active then
+                battle.world:enforce_motion(marble.body_id, "freeze")
+            end
+        end
     end
 end
 
@@ -1693,6 +1786,12 @@ local function handle_wall_contact(battle, event)
         marble = entry.marble.uid, wall = event.wall,
         nx = event.nx, ny = event.ny, impulse = event.impulse,
     })
+    local health = entry.marble.motion_health
+    if health then health.wall_contacts = health.wall_contacts + 1 end
+    if event.returned then
+        park_marble(battle, entry.marble, "home_edge", true)
+        return
+    end
     if entry.marble.ricochet then
         local sling = entry.owner.sling
         append_rule_event(battle, entry.owner.id, "ricochet", {
@@ -1711,6 +1810,12 @@ local function handle_body_contact(battle, event)
         a_owner = left.owner.id, b_owner = right.owner.id,
         nx = event.nx, ny = event.ny, impulse = event.impulse,
     })
+    for _, entry in ipairs({ left, right }) do
+        if entry.marble.motion_health then
+            entry.marble.motion_health.last_progress_tick = battle.tick
+            entry.marble.motion_health.wall_contacts = 0
+        end
+    end
 end
 
 brick_by_uid = function(owner, uid)
@@ -2480,6 +2585,10 @@ local function handle_box_contact(battle, event)
     local attacker = battle.marble_by_body[event.body]
     local defender = battle.brick_by_body[event.box]
     if not attacker or not defender then return end
+    if attacker.marble.motion_health then
+        attacker.marble.motion_health.last_progress_tick = battle.tick
+        attacker.marble.motion_health.wall_contacts = 0
+    end
     collision_damage(battle, attacker.owner, defender.owner, attacker.marble, defender.brick, event)
 end
 
@@ -2493,6 +2602,20 @@ local function process_physics_events(battle, events)
             local entry = battle.marble_by_body[event.body]
             append_event(battle, entry and entry.owner.id or "-", "speed_clamped", {
                 marble = entry and entry.marble.uid or nil, speed = event.speed,
+            })
+        elseif event.type == "motion_floor_applied" then
+            local entry = battle.marble_by_body[event.body]
+            append_event(battle, entry and entry.owner.id or "-", "motion_floor_applied", {
+                marble = entry and entry.marble.uid or nil,
+                minimum_speed = event.minimum_speed,
+                prior_speed = event.prior_speed,
+                reason = event.reason,
+            })
+        elseif event.type == "non_finite_recovered" then
+            local entry = battle.marble_by_body[event.body]
+            append_event(battle, entry and entry.owner.id or "-", "non_finite_recovered", {
+                marble = entry and entry.marble.uid or nil,
+                component = event.component,
             })
         elseif event.type == "body_sleep" then
             local entry = battle.marble_by_body[event.body]
@@ -2548,9 +2671,90 @@ local function tick_statuses(battle)
             local freeze = marble.statuses.freeze
             if freeze and freeze.expires <= battle.tick then
                 marble.statuses.freeze = nil
+                refresh_motion_floor(battle, marble)
                 append_event(battle, owner.id, "status_expired", {
                     marble = marble.uid, status = "freeze",
                 })
+            end
+        end
+    end
+end
+
+local function guide_marble(battle, owner, marble, reason)
+    local body = battle.world:get_body(marble.body_id)
+    if not body or not body.motion_active then return false end
+    local target_x, target_y
+    local target
+    if reason == "wall_loop" then
+        target = choose_target(opponent_of(battle, owner), marble.lane, marble.precision)
+    end
+    if target then
+        target_x, target_y = target.x, target.y
+    else
+        target_x, target_y = rack_position(owner.id, marble.home_lane or marble.lane, owner.lanes)
+    end
+    local dx, dy = target_x - body.x, target_y - body.y
+    local length = sqrt(dx * dx + dy * dy)
+    if length <= 1e-9 then
+        dx, dy = 0, owner.id == "A" and 1 or -1
+    else
+        dx, dy = dx / length, dy / length
+    end
+    local seeded_bias = 0
+    if reason == "wall_loop" then
+        seeded_bias = battle.rng:int(-6, 6) * 0.015
+        dx, dy = rotate(dx, dy, seeded_bias)
+    end
+    local speed = sqrt(body.vx * body.vx + body.vy * body.vy)
+    local guided_speed = max(speed, launch_speed(marble) * freeze_multiplier(battle, marble))
+    battle.world:set_velocity(marble.body_id, dx * guided_speed, dy * guided_speed)
+    battle.world:enforce_motion(marble.body_id, reason)
+    append_event(battle, owner.id,
+        reason == "wall_loop" and "no_progress_recovery" or "lifecycle_return_guidance", {
+            marble = marble.uid,
+            reason = reason,
+            speed = quantize(guided_speed),
+            vx = quantize(body.vx),
+            vy = quantize(body.vy),
+            seeded_bias = quantize(seeded_bias),
+            target = target and target.uid or "home_edge",
+        })
+    return true
+end
+
+local function update_motion_health(battle)
+    local duration = battle.tick - battle.exchange_started_tick
+    local return_start = max(1, battle.max_exchange_ticks - M.RETURN_GUIDANCE_TICKS)
+    local active = {}
+    for _, marble in ipairs(battle.active) do active[#active + 1] = marble end
+    for _, marble in ipairs(active) do
+        local entry = battle.marble_by_body[marble.body_id]
+        local body = battle.world:get_body(marble.body_id)
+        if entry and body and body.motion_active then
+            battle.world:enforce_motion(marble.body_id, "engine_effects")
+            local health = marble.motion_health
+            if not health then
+                activate_motion(battle, entry.owner, marble, true)
+                health = marble.motion_health
+            end
+            if duration >= return_start then
+                if not health.return_guided
+                    or battle.tick - health.last_guidance_tick >= M.RETURN_GUIDANCE_INTERVAL
+                then
+                    if guide_marble(battle, entry.owner, marble, "exchange_bound") then
+                        health.return_guided = true
+                        health.last_guidance_tick = battle.tick
+                    end
+                end
+            elseif health.wall_contacts > 0
+                and battle.tick - max(health.last_progress_tick, health.last_recovery_tick)
+                    >= M.NO_PROGRESS_TICKS
+            then
+                if guide_marble(battle, entry.owner, marble, "wall_loop") then
+                    health.recoveries = health.recoveries + 1
+                    health.last_recovery_tick = battle.tick
+                    health.wall_contacts = 0
+                end
             end
         end
     end
@@ -2622,11 +2826,16 @@ local function evaluate(battle)
     return nil
 end
 
-local function park_marble(battle, marble, timeout)
+park_marble = function(battle, marble, reason, physical)
     if marble.state == "destroyed" then return end
     local entry = battle.marble_by_body[marble.body_id]
     if not entry then return end
     local owner = entry.owner
+    local body = battle.world:get_body(marble.body_id)
+    local return_x, return_y = body and body.x or 0, body and body.y or 0
+    remove_from(battle.active, marble)
+    battle.active_by_body[marble.body_id] = nil
+    if body then battle.world:set_motion_active(marble.body_id, false) end
     local lane = marble.lane or marble.home_lane
     if owner.rack[lane] and owner.rack[lane] ~= marble then
         for offset = 1, owner.lanes do
@@ -2636,17 +2845,32 @@ local function park_marble(battle, marble, timeout)
         end
     end
     marble.lane = lane
-    marble.state = "ready"
+    marble.state = "returned"
+    marble.last_outcome = {
+        exchange = battle.exchange,
+        tick = battle.tick,
+        reason = reason or "home_edge",
+        physical = physical == true,
+    }
+    marble.motion_health = nil
     owner.rack[lane] = marble
     local x, y = rack_position(owner.id, lane, owner.lanes)
     battle.world:set_position(marble.body_id, x, y)
     battle.world:set_dynamic(marble.body_id, false)
-    local body = battle.world:get_body(marble.body_id)
-    body.data.state = "ready"
+    body = battle.world:get_body(marble.body_id)
+    body.data.state = "returned"
     if not contains(owner.queue, marble) then owner.queue[#owner.queue + 1] = marble end
+    append_event(battle, owner.id, "marble_returned", {
+        marble = marble.uid,
+        reason = reason or "home_edge",
+        physical = physical == true,
+        terminal = reason == "safety_return",
+        x = quantize(return_x),
+        y = quantize(return_y),
+    })
     append_event(battle, owner.id, "rack_return", {
         marble = marble.uid, lane = lane, shells_left = #marble.shells,
-        timeout = timeout == true,
+        reason = reason or "home_edge",
     })
 end
 
@@ -2667,20 +2891,21 @@ local function finish_battle(battle)
     add_recorded_frame(battle, true)
 end
 
-local function complete_exchange(battle, timeout)
-    local active = {}
-    for _, marble in ipairs(battle.active) do active[#active + 1] = marble end
+local function complete_exchange(battle, reason)
     battle.active, battle.active_by_body = {}, {}
-    for _, marble in ipairs(active) do park_marble(battle, marble, timeout) end
     expire_guards(battle, true)
     battle.state = "boundary"
     append_event(battle, "-", "exchange_end", {
-        reason = timeout and "timeout" or "settled",
+        reason = reason or "lifecycle_complete",
         duration_ticks = battle.tick - battle.exchange_started_tick,
         a_bricks = battle.sides.A.formation.alive,
         b_bricks = battle.sides.B.formation.alive,
         a_marbles = #battle.sides.A.roster,
         b_marbles = #battle.sides.B.roster,
+    })
+    append_event(battle, "-", "volley_end", {
+        reason = reason or "lifecycle_complete",
+        duration_ticks = battle.tick - battle.exchange_started_tick,
     })
     battle.result = evaluate(battle)
     if not battle.result and battle.exchange >= battle.max_exchanges then
@@ -2690,6 +2915,28 @@ local function complete_exchange(battle, timeout)
         }
     end
     if battle.result then finish_battle(battle) end
+end
+
+local function transient_fields_active(battle)
+    for _, field in ipairs(battle.world.fields) do
+        if field.alive and field.duration then return true end
+    end
+    return false
+end
+
+local function terminate_transient_fields(battle)
+    local ids = {}
+    for _, field in ipairs(battle.world.fields) do
+        if field.alive and field.duration then ids[#ids + 1] = field.id end
+    end
+    for _, id in ipairs(ids) do
+        battle.world:remove_field(id, "lifecycle_bound")
+        append_event(battle, "-", "field_terminal", {
+            field = id,
+            reason = "lifecycle_bound",
+        })
+    end
+    return #ids
 end
 
 function M.step(battle, dt)
@@ -2713,9 +2960,23 @@ function M.step(battle, dt)
         add_recorded_frame(battle, battle.tick % M.KEYFRAME_INTERVAL == 0)
     end
 
-    local timeout = battle.tick - battle.exchange_started_tick >= battle.max_exchange_ticks
-    local settled = #battle.active == 0 or battle.world:is_settled()
-    if timeout or settled then complete_exchange(battle, timeout) end
+    update_motion_health(battle)
+    local duration = battle.tick - battle.exchange_started_tick
+    local completion_reason
+    if duration >= battle.max_exchange_ticks
+        and (#battle.active > 0 or transient_fields_active(battle))
+    then
+        local active = {}
+        for _, marble in ipairs(battle.active) do active[#active + 1] = marble end
+        for _, marble in ipairs(active) do
+            park_marble(battle, marble, "safety_return", false)
+        end
+        terminate_transient_fields(battle)
+        completion_reason = "safety_return"
+    end
+    if #battle.active == 0 and not transient_fields_active(battle) then
+        complete_exchange(battle, completion_reason or "lifecycle_complete")
+    end
     return M.drain_events(battle)
 end
 
@@ -2780,12 +3041,16 @@ local function snapshot_side(battle, player)
             lane = marble.lane, state = marble.state,
             alive = marble.state ~= "destroyed", radius = M.ARENA.marble_radius,
             statuses = copy(marble.statuses), shells = {},
+            last_outcome = marble.last_outcome and copy(marble.last_outcome) or nil,
+            motion_health = marble.motion_health and copy(marble.motion_health) or nil,
         }
         if body then
             item.x, item.y = quantize(body.x), quantize(body.y)
             item.previous_x, item.previous_y = quantize(body.previous_x), quantize(body.previous_y)
             item.vx, item.vy = quantize(body.vx), quantize(body.vy)
             item.asleep = body.asleep
+            item.motion_active = body.motion_active
+            item.minimum_speed = body.minimum_speed
         end
         for _, shell in ipairs(marble.shells) do
             item.shells[#item.shells + 1] = {

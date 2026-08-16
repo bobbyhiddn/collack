@@ -12,7 +12,7 @@ local World = {}
 World.__index = World
 
 M.FIXED_DT = 1 / 120
-M.SCHEMA_VERSION = 1
+M.SCHEMA_VERSION = 2
 
 local abs, ceil, floor, max, min, sqrt =
     math.abs, math.ceil, math.floor, math.max, math.min, math.sqrt
@@ -21,6 +21,13 @@ local TIME_EPSILON = 1e-12
 local GEOMETRY_EPSILON = 1e-12
 local VELOCITY_EPSILON = 1e-14
 local POSITION_SLOP = 1e-9
+
+local function finite(value)
+    return type(value) == "number"
+        and value == value
+        and value ~= math.huge
+        and value ~= -math.huge
+end
 
 local function clamp(value, lo, hi)
     if value < lo then return lo end
@@ -52,18 +59,21 @@ local function ordered_insert(list, value)
 end
 
 local function require_number(value, name)
-    if type(value) ~= "number" or value ~= value then
+    if not finite(value) then
         error(name .. " must be a finite number")
     end
     return value
 end
 
 local function normalise(x, y, fallback_x, fallback_y)
-    local length = sqrt(x * x + y * y)
-    if length <= 1e-12 then
+    if not finite(x) or not finite(y) then
         return fallback_x or 1, fallback_y or 0, 0
     end
-    return x / length, y / length, length
+    local scale = max(abs(x), abs(y))
+    if scale <= VELOCITY_EPSILON then return fallback_x or 1, fallback_y or 0, 0 end
+    local sx, sy = x / scale, y / scale
+    local scaled_length = sqrt(sx * sx + sy * sy)
+    return sx / scaled_length, sy / scaled_length, scale * scaled_length
 end
 
 local function quantize(value)
@@ -91,23 +101,40 @@ function M.new(opts)
     opts = opts or {}
     local width = require_number(opts.width or 70, "width")
     local height = require_number(opts.height or 120, "height")
+    local fixed_dt = require_number(opts.fixed_dt or M.FIXED_DT, "fixed_dt")
+    local max_speed = require_number(opts.max_speed or 240, "max_speed")
+    local linear_damping = require_number(opts.linear_damping or 0.996, "linear_damping")
+    local sleep_speed = require_number(opts.sleep_speed or 1.25, "sleep_speed")
+    local sleep_ticks = require_number(opts.sleep_ticks or 36, "sleep_ticks")
+    local restitution = require_number(opts.restitution or 0.82, "restitution")
+    local max_collision_iterations = require_number(
+        opts.max_collision_iterations or 128,
+        "max_collision_iterations"
+    )
     if width <= 0 or height <= 0 then error("world bounds must be positive") end
+    if fixed_dt <= 0 then error("fixed_dt must be positive") end
+    if max_speed <= 0 then error("max_speed must be positive") end
+    if linear_damping < 0 then error("linear_damping must be non-negative") end
+    if sleep_speed < 0 or sleep_ticks < 1 then
+        error("sleep settings must be non-negative with at least one tick")
+    end
+    if restitution < 0 then error("restitution must be non-negative") end
 
     return setmetatable({
         schema_version = M.SCHEMA_VERSION,
-        fixed_dt = opts.fixed_dt or M.FIXED_DT,
+        fixed_dt = fixed_dt,
         width = width,
         height = height,
-        max_speed = opts.max_speed or 240,
+        max_speed = max_speed,
         -- Retained as value-compatible legacy configuration/snapshot state.
         -- Continuous collision detection always uses one authoritative tick.
         max_substeps = opts.max_substeps or 64,
         substep_fraction = opts.substep_fraction or 0.35,
-        max_collision_iterations = max(1, floor(opts.max_collision_iterations or 128)),
-        linear_damping = opts.linear_damping or 0.996,
-        sleep_speed = opts.sleep_speed or 1.25,
-        sleep_ticks = opts.sleep_ticks or 36,
-        restitution = opts.restitution or 0.82,
+        max_collision_iterations = max(1, floor(max_collision_iterations)),
+        linear_damping = linear_damping,
+        sleep_speed = sleep_speed,
+        sleep_ticks = floor(sleep_ticks),
+        restitution = restitution,
         tick = 0,
         time = 0,
         bodies = {},
@@ -133,6 +160,14 @@ function World:add_body(spec)
     local mass = require_number(spec.mass or 1, "body mass")
     if radius <= 0 or mass <= 0 then error("body radius and mass must be positive") end
 
+    local restitution = require_number(spec.restitution or self.restitution, "body restitution")
+    local fallback_x = require_number(spec.motion_fallback_x or 1, "motion fallback x")
+    local fallback_y = require_number(spec.motion_fallback_y or 0, "motion fallback y")
+    fallback_x, fallback_y = normalise(fallback_x, fallback_y, 1, 0)
+    local minimum_speed = require_number(spec.minimum_speed or 0, "minimum speed")
+    if minimum_speed < 0 or minimum_speed > self.max_speed then
+        error("minimum speed must be between zero and max_speed")
+    end
     local body = {
         id = id,
         kind = spec.kind or "circle",
@@ -146,14 +181,23 @@ function World:add_body(spec)
         radius = radius,
         mass = mass,
         inv_mass = 1 / mass,
-        restitution = spec.restitution or self.restitution,
+        restitution = restitution,
         dynamic = spec.dynamic ~= false,
         sensor = spec.sensor == true,
         asleep = spec.asleep == true,
         sleep_counter = spec.sleep_counter or 0,
         alive = spec.alive ~= false,
+        motion_active = spec.motion_active == true,
+        minimum_speed = minimum_speed,
+        motion_fallback_x = fallback_x,
+        motion_fallback_y = fallback_y,
+        return_wall = spec.return_wall,
+        floor_limited = false,
         data = copy_table(spec.data),
     }
+    if body.motion_active and not body.dynamic then
+        error("an active motion body must be dynamic")
+    end
     self.body_by_id[id] = body
     ordered_insert(self.bodies, body)
     emit(self, "body_added", { body = id })
@@ -166,7 +210,9 @@ function World:add_box(spec)
     if self.box_by_id[id] then error("duplicate box id: " .. tostring(id)) end
     local width = require_number(spec.width, "box width")
     local height = require_number(spec.height, "box height")
+    local restitution = require_number(spec.restitution or self.restitution, "box restitution")
     if width <= 0 or height <= 0 then error("box dimensions must be positive") end
+    if restitution < 0 then error("box restitution must be non-negative") end
     local box = {
         id = id,
         kind = spec.kind or "box",
@@ -175,7 +221,7 @@ function World:add_box(spec)
         y = require_number(spec.y, "box y"),
         width = width,
         height = height,
-        restitution = spec.restitution or self.restitution,
+        restitution = restitution,
         sensor = spec.sensor == true,
         alive = spec.alive ~= false,
         data = copy_table(spec.data),
@@ -198,15 +244,16 @@ function World:add_field(spec)
         y = require_number(spec.y or 0, "field y"),
         radius = require_number(spec.radius or 1, "field radius"),
         strength = require_number(spec.strength or 0, "field strength"),
-        dx = spec.dx or 0,
-        dy = spec.dy or 0,
+        dx = require_number(spec.dx or 0, "field dx"),
+        dy = require_number(spec.dy or 0, "field dy"),
         falloff = spec.falloff ~= false,
-        duration = spec.duration,
+        duration = spec.duration and require_number(spec.duration, "field duration") or nil,
         age = 0,
         alive = true,
         data = copy_table(spec.data),
     }
     if field.radius <= 0 then error("field radius must be positive") end
+    if field.duration and field.duration < 1 then error("field duration must be positive") end
     self.field_by_id[id] = field
     ordered_insert(self.fields, field)
     emit(self, "field_added", { field = id, kind = field.kind })
@@ -265,6 +312,8 @@ function World:set_dynamic(id, dynamic)
     else
         body.vx, body.vy = 0, 0
         body.asleep = true
+        body.motion_active = false
+        body.floor_limited = false
     end
     return body
 end
@@ -281,6 +330,66 @@ function World:set_velocity(id, vx, vy)
     body.vx, body.vy = require_number(vx, "body vx"), require_number(vy, "body vy")
     body.asleep = false
     body.sleep_counter = 0
+    if body.motion_active then self:enforce_motion(id, "set_velocity") end
+    return body
+end
+
+local VALID_RETURN_WALLS = { left = true, right = true, top = true, bottom = true }
+
+function World:set_motion_active(id, active, profile)
+    local body = assert(self.body_by_id[id], "unknown body: " .. tostring(id))
+    profile = profile or {}
+    if active then
+        local minimum_speed = require_number(
+            profile.minimum_speed or body.minimum_speed,
+            "minimum speed"
+        )
+        if minimum_speed <= 0 or minimum_speed > self.max_speed then
+            error("active minimum speed must be positive and no greater than max_speed")
+        end
+        local return_wall = profile.return_wall or body.return_wall
+        if return_wall ~= nil and not VALID_RETURN_WALLS[return_wall] then
+            error("return_wall must name a world wall")
+        end
+        if profile.fallback_x ~= nil or profile.fallback_y ~= nil then
+            local fallback_x = require_number(
+                profile.fallback_x or body.motion_fallback_x,
+                "motion fallback x"
+            )
+            local fallback_y = require_number(
+                profile.fallback_y or body.motion_fallback_y,
+                "motion fallback y"
+            )
+            body.motion_fallback_x, body.motion_fallback_y = normalise(
+                fallback_x,
+                fallback_y,
+                body.motion_fallback_x,
+                body.motion_fallback_y
+            )
+        end
+        body.minimum_speed = minimum_speed
+        body.return_wall = return_wall
+        body.dynamic = true
+        body.motion_active = true
+        body.asleep = false
+        body.sleep_counter = 0
+        self:enforce_motion(id, "activated")
+    else
+        body.motion_active = false
+        body.return_wall = nil
+        body.floor_limited = false
+    end
+    return body
+end
+
+function World:set_motion_floor(id, minimum_speed)
+    local body = assert(self.body_by_id[id], "unknown body: " .. tostring(id))
+    minimum_speed = require_number(minimum_speed, "minimum speed")
+    if minimum_speed <= 0 or minimum_speed > self.max_speed then
+        error("active minimum speed must be positive and no greater than max_speed")
+    end
+    body.minimum_speed = minimum_speed
+    if body.motion_active then self:enforce_motion(id, "floor_changed") end
     return body
 end
 
@@ -294,12 +403,18 @@ function World:apply_impulse(id, ix, iy, opts)
     body.vy = body.vy + require_number(iy, "impulse y") * body.inv_mass
     body.asleep = false
     body.sleep_counter = 0
+    if body.motion_active then self:enforce_motion(id, "impulse") end
     emit(self, "impulse", { body = id, ix = quantize(ix), iy = quantize(iy), source = opts.source })
     return true
 end
 
 function World:apply_radial_impulse(x, y, radius, strength, opts)
     opts = opts or {}
+    x = require_number(x, "radial impulse x")
+    y = require_number(y, "radial impulse y")
+    radius = require_number(radius, "radial impulse radius")
+    strength = require_number(strength, "radial impulse strength")
+    if radius <= 0 then error("radial impulse radius must be positive") end
     local affected = {}
     for _, body in ipairs(self.bodies) do
         if body.alive and (body.dynamic or opts.wake_static) then
@@ -310,16 +425,19 @@ function World:apply_radial_impulse(x, y, radius, strength, opts)
                 local scale = opts.falloff == false and 1 or max(0, 1 - distance / radius)
                 local force = strength * scale
                 if opts.invert then force = -force end
-                if not body.dynamic and opts.wake_static then body.dynamic = true end
-                body.vx = body.vx + nx * force * body.inv_mass
-                body.vy = body.vy + ny * force * body.inv_mass
-                body.asleep = false
-                body.sleep_counter = 0
-                affected[#affected + 1] = body.id
-                emit(self, "radial_impulse", {
-                    body = body.id, source = opts.source, strength = quantize(force),
-                    nx = quantize(nx), ny = quantize(ny),
-                })
+                if abs(force) > VELOCITY_EPSILON then
+                    if not body.dynamic and opts.wake_static then body.dynamic = true end
+                    body.vx = body.vx + nx * force * body.inv_mass
+                    body.vy = body.vy + ny * force * body.inv_mass
+                    body.asleep = false
+                    body.sleep_counter = 0
+                    if body.motion_active then self:enforce_motion(body.id, "radial_impulse") end
+                    affected[#affected + 1] = body.id
+                    emit(self, "radial_impulse", {
+                        body = body.id, source = opts.source, strength = quantize(force),
+                        nx = quantize(nx), ny = quantize(ny),
+                    })
+                end
             end
         end
     end
@@ -355,14 +473,85 @@ local function record_contact(world, contacts, kind, left, right, fields)
     end
 end
 
-local function clamp_speed(world, body)
-    local speed2 = body.vx * body.vx + body.vy * body.vy
-    local limit2 = world.max_speed * world.max_speed
-    if speed2 > limit2 then
-        local scale = world.max_speed / sqrt(speed2)
-        body.vx, body.vy = body.vx * scale, body.vy * scale
+local function recover_position(world, body)
+    local recovered = false
+    if not finite(body.x) then
+        body.x = finite(body.previous_x) and body.previous_x or world.width / 2
+        recovered = true
+    end
+    if not finite(body.y) then
+        body.y = finite(body.previous_y) and body.previous_y or world.height / 2
+        recovered = true
+    end
+    body.x = clamp(body.x, body.radius, world.width - body.radius)
+    body.y = clamp(body.y, body.radius, world.height - body.radius)
+    if not finite(body.previous_x) then
+        body.previous_x = body.x
+        recovered = true
+    end
+    if not finite(body.previous_y) then
+        body.previous_y = body.y
+        recovered = true
+    end
+    if recovered then emit(world, "non_finite_recovered", { body = body.id, component = "position" }) end
+end
+
+local function enforce_motion(world, body, reason)
+    if not finite(body.vx) or not finite(body.vy) then
+        if body.motion_active then
+            body.vx = body.motion_fallback_x * body.minimum_speed
+            body.vy = body.motion_fallback_y * body.minimum_speed
+            body.asleep = false
+        else
+            body.vx, body.vy = 0, 0
+            body.asleep = true
+        end
+        emit(world, "non_finite_recovered", { body = body.id, component = "velocity" })
+    end
+
+    local nx, ny, speed = normalise(
+        body.vx,
+        body.vy,
+        body.motion_fallback_x,
+        body.motion_fallback_y
+    )
+    if speed > world.max_speed then
+        body.vx, body.vy = nx * world.max_speed, ny * world.max_speed
+        speed = world.max_speed
         emit(world, "speed_clamped", { body = body.id, speed = world.max_speed })
     end
+    if body.motion_active then
+        body.asleep = false
+        body.sleep_counter = 0
+        if speed < body.minimum_speed then
+            body.vx, body.vy = nx * body.minimum_speed, ny * body.minimum_speed
+            local should_emit = not body.floor_limited or speed <= VELOCITY_EPSILON
+            body.floor_limited = true
+            if should_emit then
+                emit(world, "motion_floor_applied", {
+                    body = body.id,
+                    minimum_speed = quantize(body.minimum_speed),
+                    prior_speed = quantize(speed),
+                    reason = reason,
+                })
+            end
+        elseif speed > body.minimum_speed + VELOCITY_EPSILON then
+            body.floor_limited = false
+        end
+        body.motion_fallback_x, body.motion_fallback_y = normalise(
+            body.vx,
+            body.vy,
+            body.motion_fallback_x,
+            body.motion_fallback_y
+        )
+    end
+end
+
+function World:enforce_motion(id, reason)
+    local body = assert(self.body_by_id[id], "unknown body: " .. tostring(id))
+    recover_position(self, body)
+    enforce_motion(self, body, reason or "explicit")
+    return body
 end
 
 local function choose_earlier(best, candidate, remaining)
@@ -674,7 +863,15 @@ local function resolve_collision(world, hit, contacts, ignored_sensors, toi, ite
 
         local normal_velocity = body.vx * hit.nx + body.vy * hit.ny
         local impulse = 0
-        if normal_velocity < 0 then
+        local returned = body.motion_active and body.return_wall == hit.wall
+        if returned then
+            body.vx, body.vy = 0, 0
+            body.dynamic = false
+            body.asleep = true
+            body.sleep_counter = 0
+            body.motion_active = false
+            body.floor_limited = false
+        elseif normal_velocity < 0 then
             impulse = -(1 + body.restitution) * normal_velocity * body.mass
             body.vx = body.vx + hit.nx * impulse * body.inv_mass
             body.vy = body.vy + hit.ny * impulse * body.inv_mass
@@ -684,6 +881,7 @@ local function resolve_collision(world, hit, contacts, ignored_sensors, toi, ite
             nx = hit.nx, ny = hit.ny,
             impulse = quantize(impulse), speed = quantize(abs(normal_velocity)),
             toi = quantize(toi), sort_toi = toi, iteration = iteration,
+            returned = returned,
         })
         return
     end
@@ -805,7 +1003,10 @@ end
 local function update_sleep(world)
     local threshold2 = world.sleep_speed * world.sleep_speed
     for _, body in ipairs(world.bodies) do
-        if body.alive and body.dynamic then
+        if body.alive and body.dynamic and body.motion_active then
+            body.asleep = false
+            body.sleep_counter = 0
+        elseif body.alive and body.dynamic then
             local speed2 = body.vx * body.vx + body.vy * body.vy
             if speed2 <= threshold2 then
                 body.sleep_counter = body.sleep_counter + 1
@@ -831,9 +1032,12 @@ function World:step(dt)
     self.time = self.tick * self.fixed_dt
 
     for _, body in ipairs(self.bodies) do
+        if body.alive then
+            recover_position(self, body)
+            enforce_motion(self, body, "pre_step")
+        end
         if body.alive and body.dynamic and not body.asleep then
             body.previous_x, body.previous_y = body.x, body.y
-            clamp_speed(self, body)
         end
     end
 
@@ -878,6 +1082,7 @@ function World:step(dt)
     for _, body in ipairs(self.bodies) do
         if body.alive and body.dynamic and not body.asleep then
             body.vx, body.vy = body.vx * damping, body.vy * damping
+            enforce_motion(self, body, "post_step")
         end
     end
     update_sleep(self)
@@ -931,6 +1136,11 @@ function World:snapshot()
             vx = quantize(body.vx), vy = quantize(body.vy),
             radius = body.radius, mass = body.mass, restitution = body.restitution,
             dynamic = body.dynamic, asleep = body.asleep, alive = body.alive,
+            motion_active = body.motion_active,
+            minimum_speed = body.minimum_speed,
+            motion_fallback_x = quantize(body.motion_fallback_x),
+            motion_fallback_y = quantize(body.motion_fallback_y),
+            return_wall = body.return_wall,
             data = copy_table(body.data),
         }
     end

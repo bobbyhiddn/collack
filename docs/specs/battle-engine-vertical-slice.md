@@ -158,13 +158,18 @@ freeze are fixed-step fields/statuses. Shatter, shell break, core release,
 baseline blowback and scorch apply damage or radial impulse to every qualifying
 marble regardless of owner. Presentation-only hits are forbidden.
 
-An active marble settles after its speed remains below the sleep threshold for
-the configured number of ticks, or is destroyed when its final shell releases.
-Both active marbles and transient fields must settle before the next exchange.
-The battle ends at that boundary when either formation has no live bricks or
-either roster has no live marbles. Simultaneous winning conditions draw. A
-40-exchange cap and a per-exchange simulated-time cap produce explicit draws,
-never a frame-rate-dependent result.
+Each launched or blowback-activated marble carries an authored minimum speed
+derived from its launch class and current control status. Damping, collision,
+fields and status effects preserve its response direction while enforcing that
+floor and the world energy cap. A marble leaves active play only through
+physical home-edge return, final-shell core release/removal, or a documented
+terminal safety return. Wall-only no-progress paths receive a seeded, visible
+canonical redirect before that hard bound. The next exchange begins only after
+every active marble has one of those outcomes; sleep and velocity decay are not
+lifecycle signals. The battle ends at that boundary when either formation has
+no live bricks or either roster has no live marbles. Simultaneous winning
+conditions draw, and the 40-exchange cap remains an explicit draw independent
+of frame rate.
 
 ## 6. State, events and presentation APIs
 

@@ -323,8 +323,9 @@ function M.run(t)
         })
         t:eq(result.reason, "exchange_limit", "battle cap produces an explicit draw")
         local boundary = has_event(battle, "exchange_end")
-        t:eq(boundary.reason, "timeout", "per-exchange simulated-time cap is explicit")
-        t:eq(boundary.duration_ticks, 1, "timeout is measured in canonical ticks")
+        t:eq(boundary.reason, "safety_return",
+            "per-exchange bound resolves through an explicit terminal lifecycle outcome")
+        t:eq(boundary.duration_ticks, 1, "safety return is measured in canonical ticks")
     end
 end
 
