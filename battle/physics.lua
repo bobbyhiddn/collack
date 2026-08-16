@@ -7,12 +7,21 @@
 -- iteration bound; collision safety never depends on sampled overlap
 -- microsteps.  Every public snapshot is a value-only copy.
 
+local numeric = require("battle.numeric")
+
 local M = {}
 local World = {}
 World.__index = World
 
 M.FIXED_DT = 1 / 120
 M.SCHEMA_VERSION = 2
+M.NUMERIC_LIMITS = {
+    max_geometry_magnitude = numeric.MAX_GEOMETRY_MAGNITUDE,
+    min_mass = numeric.MIN_MASS,
+    max_mass = numeric.MAX_MASS,
+    max_force_magnitude = numeric.MAX_FORCE_MAGNITUDE,
+    max_canonical_magnitude = numeric.MAX_CANONICAL_MAGNITUDE,
+}
 
 local abs, ceil, floor, max, min, sqrt =
     math.abs, math.ceil, math.floor, math.max, math.min, math.sqrt
@@ -22,12 +31,7 @@ local GEOMETRY_EPSILON = 1e-12
 local VELOCITY_EPSILON = 1e-14
 local POSITION_SLOP = 1e-9
 
-local function finite(value)
-    return type(value) == "number"
-        and value == value
-        and value ~= math.huge
-        and value ~= -math.huge
-end
+local finite = numeric.is_finite
 
 local function clamp(value, lo, hi)
     if value < lo then return lo end
@@ -35,16 +39,12 @@ local function clamp(value, lo, hi)
     return value
 end
 
-local function copy_table(source)
-    local out = {}
-    for key, value in pairs(source or {}) do
-        if type(value) == "table" then
-            out[key] = copy_table(value)
-        else
-            out[key] = value
-        end
-    end
-    return out
+local function copy_table(source, name)
+    return numeric.input_copy(source or {}, name or "physics data")
+end
+
+local function copy_output_table(source, name)
+    return numeric.canonical_copy(source or {}, name or "physics output")
 end
 
 local function ordered_insert(list, value)
@@ -58,11 +58,16 @@ local function ordered_insert(list, value)
     table.insert(list, at, value)
 end
 
-local function require_number(value, name)
-    if not finite(value) then
-        error(name .. " must be a finite number")
-    end
-    return value
+local function require_number(value, name, minimum, maximum)
+    return numeric.require_number(value, name, minimum, maximum)
+end
+
+local function velocity_requires_recovery(body, recovered)
+    return recovered
+        or not finite(body.vx)
+        or not finite(body.vy)
+        or abs(body.vx) > numeric.MAX_GEOMETRY_MAGNITUDE
+        or abs(body.vy) > numeric.MAX_GEOMETRY_MAGNITUDE
 end
 
 local function normalise(x, y, fallback_x, fallback_y)
@@ -76,13 +81,7 @@ local function normalise(x, y, fallback_x, fallback_y)
     return sx / scaled_length, sy / scaled_length, scale * scaled_length
 end
 
-local function quantize(value)
-    if abs(value) < 0.0000005 then return 0 end
-    if value >= 0 then
-        return floor(value * 1000000 + 0.5) / 1000000
-    end
-    return ceil(value * 1000000 - 0.5) / 1000000
-end
+local quantize = numeric.quantize
 
 local function emit(world, kind, fields)
     world.event_seq = world.event_seq + 1
@@ -92,24 +91,52 @@ local function emit(world, kind, fields)
         time = quantize(world.time),
         type = kind,
     }
-    for key, value in pairs(fields or {}) do event[key] = value end
+    local canonical_fields, recoveries = numeric.canonical_copy(
+        fields or {},
+        "physics event " .. tostring(kind)
+    )
+    for key, value in pairs(canonical_fields) do event[key] = value end
+    if recoveries > 0 then event.numeric_recovery_count = recoveries end
     world.events[#world.events + 1] = event
     return event
 end
 
 function M.new(opts)
     opts = opts or {}
-    local width = require_number(opts.width or 70, "width")
-    local height = require_number(opts.height or 120, "height")
-    local fixed_dt = require_number(opts.fixed_dt or M.FIXED_DT, "fixed_dt")
-    local max_speed = require_number(opts.max_speed or 240, "max_speed")
-    local linear_damping = require_number(opts.linear_damping or 0.996, "linear_damping")
-    local sleep_speed = require_number(opts.sleep_speed or 1.25, "sleep_speed")
-    local sleep_ticks = require_number(opts.sleep_ticks or 36, "sleep_ticks")
-    local restitution = require_number(opts.restitution or 0.82, "restitution")
+    local geometry_limit = numeric.MAX_GEOMETRY_MAGNITUDE
+    local width = require_number(opts.width or 70, "width", 0, geometry_limit)
+    local height = require_number(opts.height or 120, "height", 0, geometry_limit)
+    local fixed_dt = require_number(
+        opts.fixed_dt or M.FIXED_DT,
+        "fixed_dt",
+        0,
+        numeric.MAX_FIXED_DT
+    )
+    local max_speed = require_number(opts.max_speed or 240, "max_speed", 0, geometry_limit)
+    local linear_damping = require_number(
+        opts.linear_damping or 0.996,
+        "linear_damping",
+        0,
+        1
+    )
+    local sleep_speed = require_number(opts.sleep_speed or 1.25, "sleep_speed", 0, geometry_limit)
+    local sleep_ticks = require_number(
+        opts.sleep_ticks or 36,
+        "sleep_ticks",
+        1,
+        numeric.MAX_SAFE_INTEGER
+    )
+    local restitution = require_number(
+        opts.restitution or 0.82,
+        "restitution",
+        0,
+        numeric.MAX_RESTITUTION
+    )
     local max_collision_iterations = require_number(
         opts.max_collision_iterations or 128,
-        "max_collision_iterations"
+        "max_collision_iterations",
+        1,
+        numeric.MAX_SAFE_INTEGER
     )
     if width <= 0 or height <= 0 then error("world bounds must be positive") end
     if fixed_dt <= 0 then error("fixed_dt must be positive") end
@@ -128,8 +155,18 @@ function M.new(opts)
         max_speed = max_speed,
         -- Retained as value-compatible legacy configuration/snapshot state.
         -- Continuous collision detection always uses one authoritative tick.
-        max_substeps = opts.max_substeps or 64,
-        substep_fraction = opts.substep_fraction or 0.35,
+        max_substeps = floor(require_number(
+            opts.max_substeps or 64,
+            "max_substeps",
+            1,
+            numeric.MAX_SAFE_INTEGER
+        )),
+        substep_fraction = require_number(
+            opts.substep_fraction or 0.35,
+            "substep_fraction",
+            0,
+            1
+        ),
         max_collision_iterations = max(1, floor(max_collision_iterations)),
         linear_damping = linear_damping,
         sleep_speed = sleep_speed,
@@ -154,17 +191,38 @@ end
 
 function World:add_body(spec)
     assert(type(spec) == "table", "body spec must be a table")
-    local id = assert(spec.id, "body id is required")
+    local id = numeric.require_identifier(assert(spec.id, "body id is required"), "body id")
     if self.body_by_id[id] then error("duplicate body id: " .. tostring(id)) end
-    local radius = require_number(spec.radius or 1, "body radius")
-    local mass = require_number(spec.mass or 1, "body mass")
+    local geometry_limit = numeric.MAX_GEOMETRY_MAGNITUDE
+    local radius = require_number(spec.radius or 1, "body radius", 0, geometry_limit)
+    local mass = require_number(
+        spec.mass or 1,
+        "body mass",
+        numeric.MIN_MASS,
+        numeric.MAX_MASS
+    )
     if radius <= 0 or mass <= 0 then error("body radius and mass must be positive") end
 
-    local restitution = require_number(spec.restitution or self.restitution, "body restitution")
-    local fallback_x = require_number(spec.motion_fallback_x or 1, "motion fallback x")
-    local fallback_y = require_number(spec.motion_fallback_y or 0, "motion fallback y")
+    local restitution = require_number(
+        spec.restitution or self.restitution,
+        "body restitution",
+        0,
+        numeric.MAX_RESTITUTION
+    )
+    local fallback_x = require_number(
+        spec.motion_fallback_x or 1,
+        "motion fallback x",
+        -geometry_limit,
+        geometry_limit
+    )
+    local fallback_y = require_number(
+        spec.motion_fallback_y or 0,
+        "motion fallback y",
+        -geometry_limit,
+        geometry_limit
+    )
     fallback_x, fallback_y = normalise(fallback_x, fallback_y, 1, 0)
-    local minimum_speed = require_number(spec.minimum_speed or 0, "minimum speed")
+    local minimum_speed = require_number(spec.minimum_speed or 0, "minimum speed", 0, self.max_speed)
     if minimum_speed < 0 or minimum_speed > self.max_speed then
         error("minimum speed must be between zero and max_speed")
     end
@@ -172,12 +230,12 @@ function World:add_body(spec)
         id = id,
         kind = spec.kind or "circle",
         owner = spec.owner,
-        x = require_number(spec.x or 0, "body x"),
-        y = require_number(spec.y or 0, "body y"),
+        x = require_number(spec.x or 0, "body x", -geometry_limit, geometry_limit),
+        y = require_number(spec.y or 0, "body y", -geometry_limit, geometry_limit),
         previous_x = spec.x or 0,
         previous_y = spec.y or 0,
-        vx = require_number(spec.vx or 0, "body vx"),
-        vy = require_number(spec.vy or 0, "body vy"),
+        vx = require_number(spec.vx or 0, "body vx", -geometry_limit, geometry_limit),
+        vy = require_number(spec.vy or 0, "body vy", -geometry_limit, geometry_limit),
         radius = radius,
         mass = mass,
         inv_mass = 1 / mass,
@@ -185,7 +243,12 @@ function World:add_body(spec)
         dynamic = spec.dynamic ~= false,
         sensor = spec.sensor == true,
         asleep = spec.asleep == true,
-        sleep_counter = spec.sleep_counter or 0,
+        sleep_counter = floor(require_number(
+            spec.sleep_counter or 0,
+            "body sleep_counter",
+            0,
+            numeric.MAX_SAFE_INTEGER
+        )),
         alive = spec.alive ~= false,
         motion_active = spec.motion_active == true,
         minimum_speed = minimum_speed,
@@ -193,10 +256,13 @@ function World:add_body(spec)
         motion_fallback_y = fallback_y,
         return_wall = spec.return_wall,
         floor_limited = false,
-        data = copy_table(spec.data),
+        data = copy_table(spec.data, "body data"),
     }
     if body.motion_active and not body.dynamic then
         error("an active motion body must be dynamic")
+    end
+    if body.motion_active and body.minimum_speed <= 0 then
+        error("an active motion body must have a positive minimum speed")
     end
     self.body_by_id[id] = body
     ordered_insert(self.bodies, body)
@@ -206,25 +272,31 @@ end
 
 function World:add_box(spec)
     assert(type(spec) == "table", "box spec must be a table")
-    local id = assert(spec.id, "box id is required")
+    local id = numeric.require_identifier(assert(spec.id, "box id is required"), "box id")
     if self.box_by_id[id] then error("duplicate box id: " .. tostring(id)) end
-    local width = require_number(spec.width, "box width")
-    local height = require_number(spec.height, "box height")
-    local restitution = require_number(spec.restitution or self.restitution, "box restitution")
+    local geometry_limit = numeric.MAX_GEOMETRY_MAGNITUDE
+    local width = require_number(spec.width, "box width", 0, geometry_limit)
+    local height = require_number(spec.height, "box height", 0, geometry_limit)
+    local restitution = require_number(
+        spec.restitution or self.restitution,
+        "box restitution",
+        0,
+        numeric.MAX_RESTITUTION
+    )
     if width <= 0 or height <= 0 then error("box dimensions must be positive") end
     if restitution < 0 then error("box restitution must be non-negative") end
     local box = {
         id = id,
         kind = spec.kind or "box",
         owner = spec.owner,
-        x = require_number(spec.x, "box x"),
-        y = require_number(spec.y, "box y"),
+        x = require_number(spec.x, "box x", -geometry_limit, geometry_limit),
+        y = require_number(spec.y, "box y", -geometry_limit, geometry_limit),
         width = width,
         height = height,
         restitution = restitution,
         sensor = spec.sensor == true,
         alive = spec.alive ~= false,
-        data = copy_table(spec.data),
+        data = copy_table(spec.data, "box data"),
     }
     self.box_by_id[id] = box
     ordered_insert(self.boxes, box)
@@ -234,23 +306,34 @@ end
 
 function World:add_field(spec)
     assert(type(spec) == "table", "field spec must be a table")
-    local id = assert(spec.id, "field id is required")
+    local id = numeric.require_identifier(assert(spec.id, "field id is required"), "field id")
     if self.field_by_id[id] then error("duplicate field id: " .. tostring(id)) end
+    local geometry_limit = numeric.MAX_GEOMETRY_MAGNITUDE
     local field = {
         id = id,
         kind = spec.kind or "radial",
         owner = spec.owner,
-        x = require_number(spec.x or 0, "field x"),
-        y = require_number(spec.y or 0, "field y"),
-        radius = require_number(spec.radius or 1, "field radius"),
-        strength = require_number(spec.strength or 0, "field strength"),
-        dx = require_number(spec.dx or 0, "field dx"),
-        dy = require_number(spec.dy or 0, "field dy"),
+        x = require_number(spec.x or 0, "field x", -geometry_limit, geometry_limit),
+        y = require_number(spec.y or 0, "field y", -geometry_limit, geometry_limit),
+        radius = require_number(spec.radius or 1, "field radius", 0, geometry_limit),
+        strength = require_number(
+            spec.strength or 0,
+            "field strength",
+            -numeric.MAX_FORCE_MAGNITUDE,
+            numeric.MAX_FORCE_MAGNITUDE
+        ),
+        dx = require_number(spec.dx or 0, "field dx", -geometry_limit, geometry_limit),
+        dy = require_number(spec.dy or 0, "field dy", -geometry_limit, geometry_limit),
         falloff = spec.falloff ~= false,
-        duration = spec.duration and require_number(spec.duration, "field duration") or nil,
+        duration = spec.duration and floor(require_number(
+            spec.duration,
+            "field duration",
+            1,
+            numeric.MAX_SAFE_INTEGER
+        )) or nil,
         age = 0,
         alive = true,
-        data = copy_table(spec.data),
+        data = copy_table(spec.data, "field data"),
     }
     if field.radius <= 0 then error("field radius must be positive") end
     if field.duration and field.duration < 1 then error("field duration must be positive") end
@@ -320,14 +403,18 @@ end
 
 function World:set_position(id, x, y)
     local body = assert(self.body_by_id[id], "unknown body: " .. tostring(id))
-    body.x, body.y = require_number(x, "body x"), require_number(y, "body y")
+    local limit = numeric.MAX_GEOMETRY_MAGNITUDE
+    body.x, body.y = require_number(x, "body x", -limit, limit),
+        require_number(y, "body y", -limit, limit)
     body.previous_x, body.previous_y = body.x, body.y
     return body
 end
 
 function World:set_velocity(id, vx, vy)
     local body = assert(self.body_by_id[id], "unknown body: " .. tostring(id))
-    body.vx, body.vy = require_number(vx, "body vx"), require_number(vy, "body vy")
+    local limit = numeric.MAX_GEOMETRY_MAGNITUDE
+    body.vx, body.vy = require_number(vx, "body vx", -limit, limit),
+        require_number(vy, "body vy", -limit, limit)
     body.asleep = false
     body.sleep_counter = 0
     if body.motion_active then self:enforce_motion(id, "set_velocity") end
@@ -342,7 +429,9 @@ function World:set_motion_active(id, active, profile)
     if active then
         local minimum_speed = require_number(
             profile.minimum_speed or body.minimum_speed,
-            "minimum speed"
+            "minimum speed",
+            0,
+            self.max_speed
         )
         if minimum_speed <= 0 or minimum_speed > self.max_speed then
             error("active minimum speed must be positive and no greater than max_speed")
@@ -354,11 +443,15 @@ function World:set_motion_active(id, active, profile)
         if profile.fallback_x ~= nil or profile.fallback_y ~= nil then
             local fallback_x = require_number(
                 profile.fallback_x or body.motion_fallback_x,
-                "motion fallback x"
+                "motion fallback x",
+                -numeric.MAX_GEOMETRY_MAGNITUDE,
+                numeric.MAX_GEOMETRY_MAGNITUDE
             )
             local fallback_y = require_number(
                 profile.fallback_y or body.motion_fallback_y,
-                "motion fallback y"
+                "motion fallback y",
+                -numeric.MAX_GEOMETRY_MAGNITUDE,
+                numeric.MAX_GEOMETRY_MAGNITUDE
             )
             body.motion_fallback_x, body.motion_fallback_y = normalise(
                 fallback_x,
@@ -384,7 +477,7 @@ end
 
 function World:set_motion_floor(id, minimum_speed)
     local body = assert(self.body_by_id[id], "unknown body: " .. tostring(id))
-    minimum_speed = require_number(minimum_speed, "minimum speed")
+    minimum_speed = require_number(minimum_speed, "minimum speed", 0, self.max_speed)
     if minimum_speed <= 0 or minimum_speed > self.max_speed then
         error("active minimum speed must be positive and no greater than max_speed")
     end
@@ -399,21 +492,64 @@ function World:apply_impulse(id, ix, iy, opts)
     opts = opts or {}
     if not body.dynamic and opts.wake_static then body.dynamic = true end
     if not body.dynamic then return false end
-    body.vx = body.vx + require_number(ix, "impulse x") * body.inv_mass
-    body.vy = body.vy + require_number(iy, "impulse y") * body.inv_mass
+    ix = require_number(
+        ix,
+        "impulse x",
+        -numeric.MAX_FORCE_MAGNITUDE,
+        numeric.MAX_FORCE_MAGNITUDE
+    )
+    iy = require_number(
+        iy,
+        "impulse y",
+        -numeric.MAX_FORCE_MAGNITUDE,
+        numeric.MAX_FORCE_MAGNITUDE
+    )
+    local delta_x, recovered_x = numeric.saturating_product(
+        numeric.MAX_CANONICAL_MAGNITUDE,
+        ix,
+        body.inv_mass
+    )
+    local delta_y, recovered_y = numeric.saturating_product(
+        numeric.MAX_CANONICAL_MAGNITUDE,
+        iy,
+        body.inv_mass
+    )
+    local added_x, add_recovered_x = numeric.saturating_add(
+        body.vx,
+        delta_x,
+        numeric.MAX_CANONICAL_MAGNITUDE
+    )
+    local added_y, add_recovered_y = numeric.saturating_add(
+        body.vy,
+        delta_y,
+        numeric.MAX_CANONICAL_MAGNITUDE
+    )
+    body.vx, body.vy = added_x, added_y
     body.asleep = false
     body.sleep_counter = 0
-    if body.motion_active then self:enforce_motion(id, "impulse") end
+    local recovered = recovered_x or recovered_y or add_recovered_x or add_recovered_y
+    if body.motion_active or velocity_requires_recovery(body, recovered) then
+        self:enforce_motion(id, "impulse")
+    end
+    if recovered then
+        emit(self, "numeric_saturation", { body = id, component = "impulse_velocity" })
+    end
     emit(self, "impulse", { body = id, ix = quantize(ix), iy = quantize(iy), source = opts.source })
     return true
 end
 
 function World:apply_radial_impulse(x, y, radius, strength, opts)
     opts = opts or {}
-    x = require_number(x, "radial impulse x")
-    y = require_number(y, "radial impulse y")
-    radius = require_number(radius, "radial impulse radius")
-    strength = require_number(strength, "radial impulse strength")
+    local geometry_limit = numeric.MAX_GEOMETRY_MAGNITUDE
+    x = require_number(x, "radial impulse x", -geometry_limit, geometry_limit)
+    y = require_number(y, "radial impulse y", -geometry_limit, geometry_limit)
+    radius = require_number(radius, "radial impulse radius", 0, geometry_limit)
+    strength = require_number(
+        strength,
+        "radial impulse strength",
+        -numeric.MAX_FORCE_MAGNITUDE,
+        numeric.MAX_FORCE_MAGNITUDE
+    )
     if radius <= 0 then error("radial impulse radius must be positive") end
     local affected = {}
     for _, body in ipairs(self.bodies) do
@@ -423,15 +559,50 @@ function World:apply_radial_impulse(x, y, radius, strength, opts)
                 tostring(body.id) < tostring(opts.source or "") and -1 or 1, 0)
             if distance <= radius + body.radius then
                 local scale = opts.falloff == false and 1 or max(0, 1 - distance / radius)
-                local force = strength * scale
+                local force, force_recovered = numeric.saturating_product(
+                    numeric.MAX_FORCE_MAGNITUDE,
+                    strength,
+                    scale
+                )
                 if opts.invert then force = -force end
                 if abs(force) > VELOCITY_EPSILON then
                     if not body.dynamic and opts.wake_static then body.dynamic = true end
-                    body.vx = body.vx + nx * force * body.inv_mass
-                    body.vy = body.vy + ny * force * body.inv_mass
+                    local delta_x, recovered_x = numeric.saturating_product(
+                        numeric.MAX_CANONICAL_MAGNITUDE,
+                        nx,
+                        force,
+                        body.inv_mass
+                    )
+                    local delta_y, recovered_y = numeric.saturating_product(
+                        numeric.MAX_CANONICAL_MAGNITUDE,
+                        ny,
+                        force,
+                        body.inv_mass
+                    )
+                    local added_x, add_recovered_x = numeric.saturating_add(
+                        body.vx,
+                        delta_x,
+                        numeric.MAX_CANONICAL_MAGNITUDE
+                    )
+                    local added_y, add_recovered_y = numeric.saturating_add(
+                        body.vy,
+                        delta_y,
+                        numeric.MAX_CANONICAL_MAGNITUDE
+                    )
+                    body.vx, body.vy = added_x, added_y
                     body.asleep = false
                     body.sleep_counter = 0
-                    if body.motion_active then self:enforce_motion(body.id, "radial_impulse") end
+                    local recovered = force_recovered or recovered_x or recovered_y
+                        or add_recovered_x or add_recovered_y
+                    if body.motion_active or velocity_requires_recovery(body, recovered) then
+                        self:enforce_motion(body.id, "radial_impulse")
+                    end
+                    if recovered then
+                        emit(self, "numeric_saturation", {
+                            body = body.id,
+                            component = "radial_impulse_velocity",
+                        })
+                    end
                     affected[#affected + 1] = body.id
                     emit(self, "radial_impulse", {
                         body = body.id, source = opts.source, strength = quantize(force),
@@ -458,9 +629,30 @@ end
 local function record_contact(world, contacts, kind, left, right, fields)
     local key = kind .. ":" .. contact_key(left, right)
     local prior = contacts[key]
-    local impulse = fields.impulse or 0
-    local sort_toi = fields.sort_toi or fields.toi or 0
+    local impulse, impulse_recovered = numeric.bound(
+        fields.impulse or 0,
+        0,
+        numeric.MAX_CANONICAL_MAGNITUDE
+    )
+    local sort_toi, toi_recovered = numeric.bound(
+        fields.sort_toi or fields.toi or 0,
+        0,
+        numeric.MAX_FIXED_DT
+    )
     fields.sort_toi = nil
+    fields.impulse = impulse
+    local canonical_fields, recovery_count = numeric.canonical_copy(
+        fields,
+        "physics contact " .. tostring(kind)
+    )
+    fields = canonical_fields
+    if not impulse_recovered and not toi_recovered and recovery_count == 0 then
+        fields.numeric_recovery_count = nil
+    else
+        fields.numeric_recovery_count = recovery_count
+            + (impulse_recovered and 1 or 0)
+            + (toi_recovered and 1 or 0)
+    end
     if not prior or impulse > prior.impulse then
         contacts[key] = {
             kind = kind,
@@ -554,8 +746,52 @@ function World:enforce_motion(id, reason)
     return body
 end
 
+local function add_velocity(world, body, delta_x, delta_y, reason)
+    local next_x, recovered_x = numeric.saturating_add(
+        body.vx,
+        delta_x,
+        numeric.MAX_CANONICAL_MAGNITUDE
+    )
+    local next_y, recovered_y = numeric.saturating_add(
+        body.vy,
+        delta_y,
+        numeric.MAX_CANONICAL_MAGNITUDE
+    )
+    body.vx, body.vy = next_x, next_y
+    local recovered = recovered_x or recovered_y
+    if velocity_requires_recovery(body, recovered) then
+        enforce_motion(world, body, reason)
+    end
+    if recovered then
+        emit(world, "numeric_saturation", {
+            body = body.id,
+            component = reason or "velocity",
+        })
+    end
+end
+
+local function dot_product(ax, ay, bx, by)
+    local x, recovered_x = numeric.saturating_product(
+        numeric.MAX_CANONICAL_MAGNITUDE,
+        ax,
+        bx
+    )
+    local y, recovered_y = numeric.saturating_product(
+        numeric.MAX_CANONICAL_MAGNITUDE,
+        ay,
+        by
+    )
+    local value, recovered_add = numeric.saturating_add(
+        x,
+        y,
+        numeric.MAX_CANONICAL_MAGNITUDE
+    )
+    return value, recovered_x or recovered_y or recovered_add
+end
+
 local function choose_earlier(best, candidate, remaining)
     if not candidate then return best end
+    if not finite(candidate.time) then return best end
     if candidate.time < -TIME_EPSILON or candidate.time > remaining + TIME_EPSILON then
         return best
     end
@@ -847,8 +1083,34 @@ local function advance_bodies(world, amount)
     if amount <= 0 then return end
     for _, body in ipairs(world.bodies) do
         if body_moves(body) then
-            body.x = body.x + body.vx * amount
-            body.y = body.y + body.vy * amount
+            local displacement_x, recovered_x = numeric.saturating_product(
+                numeric.MAX_CANONICAL_MAGNITUDE,
+                body.vx,
+                amount
+            )
+            local displacement_y, recovered_y = numeric.saturating_product(
+                numeric.MAX_CANONICAL_MAGNITUDE,
+                body.vy,
+                amount
+            )
+            local next_x, recovered_add_x = numeric.saturating_add(
+                body.x,
+                displacement_x,
+                numeric.MAX_CANONICAL_MAGNITUDE
+            )
+            local next_y, recovered_add_y = numeric.saturating_add(
+                body.y,
+                displacement_y,
+                numeric.MAX_CANONICAL_MAGNITUDE
+            )
+            body.x, body.y = next_x, next_y
+            if recovered_x or recovered_y or recovered_add_x or recovered_add_y then
+                recover_position(world, body)
+                emit(world, "numeric_saturation", {
+                    body = body.id,
+                    component = "displacement",
+                })
+            end
         end
     end
 end
@@ -861,7 +1123,12 @@ local function resolve_collision(world, hit, contacts, ignored_sensors, toi, ite
         elseif hit.wall == "top" then body.y = body.radius
         else body.y = world.height - body.radius end
 
-        local normal_velocity = body.vx * hit.nx + body.vy * hit.ny
+        local normal_velocity, velocity_recovered = dot_product(
+            body.vx,
+            body.vy,
+            hit.nx,
+            hit.ny
+        )
         local impulse = 0
         local returned = body.motion_active and body.return_wall == hit.wall
         if returned then
@@ -872,9 +1139,35 @@ local function resolve_collision(world, hit, contacts, ignored_sensors, toi, ite
             body.motion_active = false
             body.floor_limited = false
         elseif normal_velocity < 0 then
-            impulse = -(1 + body.restitution) * normal_velocity * body.mass
-            body.vx = body.vx + hit.nx * impulse * body.inv_mass
-            body.vy = body.vy + hit.ny * impulse * body.inv_mass
+            local impulse_recovered
+            impulse, impulse_recovered = numeric.saturating_product(
+                numeric.MAX_CANONICAL_MAGNITUDE,
+                -(1 + body.restitution),
+                normal_velocity,
+                body.mass
+            )
+            local delta_x, delta_recovered_x = numeric.saturating_product(
+                numeric.MAX_CANONICAL_MAGNITUDE,
+                hit.nx,
+                impulse,
+                body.inv_mass
+            )
+            local delta_y, delta_recovered_y = numeric.saturating_product(
+                numeric.MAX_CANONICAL_MAGNITUDE,
+                hit.ny,
+                impulse,
+                body.inv_mass
+            )
+            add_velocity(world, body, delta_x, delta_y, "wall_collision")
+            if impulse_recovered or delta_recovered_x or delta_recovered_y then
+                emit(world, "numeric_saturation", {
+                    body = body.id,
+                    component = "wall_impulse",
+                })
+            end
+        end
+        if velocity_recovered then
+            emit(world, "numeric_saturation", { body = body.id, component = "wall_velocity" })
         end
         record_contact(world, contacts, "wall", body.id, hit.wall, {
             body = body.id, wall = hit.wall,
@@ -895,13 +1188,44 @@ local function resolve_collision(world, hit, contacts, ignored_sensors, toi, ite
             body.x = body.x + hit.nx * correction
             body.y = body.y + hit.ny * correction
         end
-        local normal_velocity = body.vx * hit.nx + body.vy * hit.ny
+        local normal_velocity, velocity_recovered = dot_product(
+            body.vx,
+            body.vy,
+            hit.nx,
+            hit.ny
+        )
         local impulse = 0
         if normal_velocity < 0 and not sensor then
             local restitution = min(body.restitution, box.restitution)
-            impulse = -(1 + restitution) * normal_velocity * body.mass
-            body.vx = body.vx + hit.nx * impulse * body.inv_mass
-            body.vy = body.vy + hit.ny * impulse * body.inv_mass
+            local impulse_recovered
+            impulse, impulse_recovered = numeric.saturating_product(
+                numeric.MAX_CANONICAL_MAGNITUDE,
+                -(1 + restitution),
+                normal_velocity,
+                body.mass
+            )
+            local delta_x, delta_recovered_x = numeric.saturating_product(
+                numeric.MAX_CANONICAL_MAGNITUDE,
+                hit.nx,
+                impulse,
+                body.inv_mass
+            )
+            local delta_y, delta_recovered_y = numeric.saturating_product(
+                numeric.MAX_CANONICAL_MAGNITUDE,
+                hit.ny,
+                impulse,
+                body.inv_mass
+            )
+            add_velocity(world, body, delta_x, delta_y, "box_collision")
+            if impulse_recovered or delta_recovered_x or delta_recovered_y then
+                emit(world, "numeric_saturation", {
+                    body = body.id,
+                    component = "box_impulse",
+                })
+            end
+        end
+        if velocity_recovered then
+            emit(world, "numeric_saturation", { body = body.id, component = "box_velocity" })
         end
         record_contact(world, contacts, sensor and "sensor" or "box", body.id, box.id, {
             body = body.id, box = box.id,
@@ -926,18 +1250,74 @@ local function resolve_collision(world, hit, contacts, ignored_sensors, toi, ite
         right.y = right.y + hit.ny * correction * inv_right / inv_sum
     end
 
-    local rvx, rvy = right.vx - left.vx, right.vy - left.vy
-    local normal_velocity = rvx * hit.nx + rvy * hit.ny
+    local rvx = numeric.saturating_add(
+        right.vx,
+        -left.vx,
+        numeric.MAX_CANONICAL_MAGNITUDE
+    )
+    local rvy = numeric.saturating_add(
+        right.vy,
+        -left.vy,
+        numeric.MAX_CANONICAL_MAGNITUDE
+    )
+    local normal_velocity, velocity_recovered = dot_product(rvx, rvy, hit.nx, hit.ny)
     local impulse = 0
     if normal_velocity < 0 and not sensor then
         local restitution = min(left.restitution, right.restitution)
-        impulse = -(1 + restitution) * normal_velocity / inv_sum
-        left.vx = left.vx - hit.nx * impulse * inv_left
-        left.vy = left.vy - hit.ny * impulse * inv_left
-        right.vx = right.vx + hit.nx * impulse * inv_right
-        right.vy = right.vy + hit.ny * impulse * inv_right
+        local numerator, numerator_recovered = numeric.saturating_product(
+            numeric.MAX_CANONICAL_MAGNITUDE,
+            -(1 + restitution),
+            normal_velocity
+        )
+        local divide_recovered
+        impulse, divide_recovered = numeric.saturating_divide(
+            numerator,
+            inv_sum,
+            numeric.MAX_CANONICAL_MAGNITUDE
+        )
+        local left_delta_x, left_recovered_x = numeric.saturating_product(
+            numeric.MAX_CANONICAL_MAGNITUDE,
+            -hit.nx,
+            impulse,
+            inv_left
+        )
+        local left_delta_y, left_recovered_y = numeric.saturating_product(
+            numeric.MAX_CANONICAL_MAGNITUDE,
+            -hit.ny,
+            impulse,
+            inv_left
+        )
+        local right_delta_x, right_recovered_x = numeric.saturating_product(
+            numeric.MAX_CANONICAL_MAGNITUDE,
+            hit.nx,
+            impulse,
+            inv_right
+        )
+        local right_delta_y, right_recovered_y = numeric.saturating_product(
+            numeric.MAX_CANONICAL_MAGNITUDE,
+            hit.ny,
+            impulse,
+            inv_right
+        )
+        add_velocity(world, left, left_delta_x, left_delta_y, "body_collision")
+        add_velocity(world, right, right_delta_x, right_delta_y, "body_collision")
+        if numerator_recovered or divide_recovered
+            or left_recovered_x or left_recovered_y
+            or right_recovered_x or right_recovered_y
+        then
+            emit(world, "numeric_saturation", {
+                body = tostring(left.id) .. "|" .. tostring(right.id),
+                component = "body_impulse",
+            })
+        end
         left.asleep, right.asleep = false, false
         left.sleep_counter, right.sleep_counter = 0, 0
+    end
+    if velocity_recovered then
+        emit(world, "numeric_saturation", {
+            body = tostring(left.id) .. "|" .. tostring(right.id),
+            component = "body_velocity",
+        })
     end
     record_contact(world, contacts, "body", left.id, right.id, {
         a = left.id, b = right.id,
@@ -958,14 +1338,56 @@ local function apply_fields(world, dt, contacts)
                         tostring(body.id) < tostring(field.id) and -1 or 1, 0)
                     if distance <= field.radius + body.radius then
                         local scale = field.falloff and max(0, 1 - distance / field.radius) or 1
-                        local fx, fy
+                        local fx, fy, force_recovered_x, force_recovered_y
                         if field.kind == "directional" then
-                            fx, fy = direction_x * field.strength * scale, direction_y * field.strength * scale
+                            fx, force_recovered_x = numeric.saturating_product(
+                                numeric.MAX_FORCE_MAGNITUDE,
+                                direction_x,
+                                field.strength,
+                                scale
+                            )
+                            fy, force_recovered_y = numeric.saturating_product(
+                                numeric.MAX_FORCE_MAGNITUDE,
+                                direction_y,
+                                field.strength,
+                                scale
+                            )
                         else
-                            fx, fy = nx * field.strength * scale, ny * field.strength * scale
+                            fx, force_recovered_x = numeric.saturating_product(
+                                numeric.MAX_FORCE_MAGNITUDE,
+                                nx,
+                                field.strength,
+                                scale
+                            )
+                            fy, force_recovered_y = numeric.saturating_product(
+                                numeric.MAX_FORCE_MAGNITUDE,
+                                ny,
+                                field.strength,
+                                scale
+                            )
                         end
-                        body.vx = body.vx + fx * dt * body.inv_mass
-                        body.vy = body.vy + fy * dt * body.inv_mass
+                        local delta_x, delta_recovered_x = numeric.saturating_product(
+                            numeric.MAX_CANONICAL_MAGNITUDE,
+                            fx,
+                            dt,
+                            body.inv_mass
+                        )
+                        local delta_y, delta_recovered_y = numeric.saturating_product(
+                            numeric.MAX_CANONICAL_MAGNITUDE,
+                            fy,
+                            dt,
+                            body.inv_mass
+                        )
+                        add_velocity(world, body, delta_x, delta_y, "field")
+                        if force_recovered_x or force_recovered_y
+                            or delta_recovered_x or delta_recovered_y
+                        then
+                            emit(world, "numeric_saturation", {
+                                body = body.id,
+                                field = field.id,
+                                component = "field_acceleration",
+                            })
+                        end
                         record_contact(world, contacts, "field", body.id, field.id, {
                             body = body.id, field = field.id, kind = field.kind,
                             fx = quantize(fx), fy = quantize(fy), impulse = 0,
@@ -1024,9 +1446,12 @@ local function update_sleep(world)
 end
 
 function World:step(dt)
-    dt = require_number(dt or self.fixed_dt, "dt")
+    dt = require_number(dt or self.fixed_dt, "dt", 0, numeric.MAX_FIXED_DT)
     if abs(dt - self.fixed_dt) > 1e-12 then
         error(string.format("physics step must equal fixed_dt %.12f, got %.12f", self.fixed_dt, dt))
+    end
+    if self.tick >= numeric.MAX_SAFE_INTEGER then
+        error("physics tick exceeds the exact integer boundary")
     end
     self.tick = self.tick + 1
     self.time = self.tick * self.fixed_dt
@@ -1081,16 +1506,26 @@ function World:step(dt)
     local damping = self.linear_damping
     for _, body in ipairs(self.bodies) do
         if body.alive and body.dynamic and not body.asleep then
-            body.vx, body.vy = body.vx * damping, body.vy * damping
+            body.vx = numeric.saturating_product(
+                numeric.MAX_CANONICAL_MAGNITUDE,
+                body.vx,
+                damping
+            )
+            body.vy = numeric.saturating_product(
+                numeric.MAX_CANONICAL_MAGNITUDE,
+                body.vy,
+                damping
+            )
             enforce_motion(self, body, "post_step")
         end
+        if body.alive then recover_position(self, body) end
     end
     update_sleep(self)
     flush_contacts(self, contacts)
 
     local expired = {}
     for _, field in ipairs(self.fields) do
-        field.age = field.age + 1
+        field.age = min(numeric.MAX_SAFE_INTEGER, field.age + 1)
         if field.duration and field.age >= field.duration then expired[#expired + 1] = field.id end
     end
     for _, id in ipairs(expired) do self:remove_field(id, "expired") end
@@ -1141,7 +1576,7 @@ function World:snapshot()
             motion_fallback_x = quantize(body.motion_fallback_x),
             motion_fallback_y = quantize(body.motion_fallback_y),
             return_wall = body.return_wall,
-            data = copy_table(body.data),
+            data = copy_output_table(body.data, "body snapshot data"),
         }
     end
     for _, box in ipairs(self.boxes) do
@@ -1150,7 +1585,7 @@ function World:snapshot()
             x = quantize(box.x), y = quantize(box.y),
             width = box.width, height = box.height,
             restitution = box.restitution, sensor = box.sensor, alive = box.alive,
-            data = copy_table(box.data),
+            data = copy_output_table(box.data, "box snapshot data"),
         }
     end
     for _, field in ipairs(self.fields) do
@@ -1159,10 +1594,12 @@ function World:snapshot()
             x = quantize(field.x), y = quantize(field.y), radius = field.radius,
             strength = field.strength, dx = field.dx, dy = field.dy,
             duration = field.duration, age = field.age, alive = field.alive,
-            data = copy_table(field.data),
+            data = copy_output_table(field.data, "field snapshot data"),
         }
     end
-    return snapshot
+    local canonical, recoveries = numeric.canonical_copy(snapshot, "physics snapshot")
+    if recoveries > 0 then canonical.numeric_recovery_count = recoveries end
+    return canonical
 end
 
 M.World = World

@@ -3,6 +3,7 @@
 -- The canonical engine owns movement and outcomes.  This module only
 -- interpolates two BattleFrame values and turns exact-tick events into cues.
 
+local numeric = require("battle.numeric")
 local rule_ast = require("battle.rule_ast")
 
 local M = {}
@@ -250,21 +251,35 @@ end
 function M.from_recording(recording)
     assert(type(recording) == "table" and #recording.frames > 0,
         "from_recording needs canonical frames")
-    local owned = copy(recording)
+    local owned, recoveries = numeric.canonical_copy(copy(recording), "replay recording")
+    if recoveries > 0 then owned.numeric_recovery_count = recoveries end
+    local interval = numeric.saturating_product(
+        numeric.MAX_CANONICAL_MAGNITUDE,
+        owned.frame_interval,
+        owned.fixed_dt
+    )
+    if not numeric.is_finite(interval) or interval <= 0 then
+        error("replay interval must be positive, finite, and bounded")
+    end
     return {
         schema_version = M.SCHEMA_VERSION,
         recording = owned,
         cursor = 1,
         event_cursor = 0,
         elapsed = 0,
-        interval = owned.frame_interval * owned.fixed_dt,
+        interval = interval,
         playing = true,
         finished = #owned.frames == 1,
     }
 end
 
 function M.replay_step(replay, count)
-    count = count or 1
+    count = numeric.require_integer(
+        count or 1,
+        "replay step count",
+        0,
+        numeric.MAX_SAFE_INTEGER
+    )
     replay.cursor = math.min(#replay.recording.frames, replay.cursor + count)
     if replay.cursor >= #replay.recording.frames then
         replay.playing = false
@@ -275,7 +290,28 @@ end
 
 function M.replay_update(replay, dt, speed)
     if not replay.playing then return end
-    replay.elapsed = replay.elapsed + math.max(0, tonumber(dt) or 0) * (speed or 1)
+    dt = numeric.require_number(
+        tonumber(dt) or 0,
+        "replay dt",
+        0,
+        numeric.MAX_GEOMETRY_MAGNITUDE
+    )
+    speed = numeric.require_number(
+        speed or 1,
+        "replay speed",
+        0,
+        numeric.MAX_GEOMETRY_MAGNITUDE
+    )
+    local delta = numeric.saturating_product(
+        numeric.MAX_CANONICAL_MAGNITUDE,
+        dt,
+        speed
+    )
+    replay.elapsed = numeric.saturating_add(
+        replay.elapsed,
+        delta,
+        numeric.MAX_CANONICAL_MAGNITUDE
+    )
     while replay.elapsed >= replay.interval and replay.playing do
         replay.elapsed = replay.elapsed - replay.interval
         M.replay_step(replay, 1)
@@ -283,6 +319,12 @@ function M.replay_update(replay, dt, speed)
 end
 
 function M.replay_seek(replay, tick)
+    tick = numeric.require_number(
+        tick,
+        "replay tick",
+        -numeric.MAX_SAFE_INTEGER,
+        numeric.MAX_SAFE_INTEGER
+    )
     local frames = replay.recording.frames
     local selected = 1
     for index, frame in ipairs(frames) do

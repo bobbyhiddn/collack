@@ -9,6 +9,7 @@ local Log = require("battle.battlelog")
 local effects = require("battle.effects")
 local formation_mod = require("battle.formation")
 local marble_mod = require("battle.marble")
+local numeric = require("battle.numeric")
 local physics = require("battle.physics")
 local rule_ast = require("battle.rule_ast")
 local setup_rules = require("battle.setup_rules")
@@ -58,12 +59,7 @@ M.ARENA = {
 local abs, floor, max, min, sqrt =
     math.abs, math.floor, math.max, math.min, math.sqrt
 
-local function finite(value)
-    return type(value) == "number"
-        and value == value
-        and value ~= math.huge
-        and value ~= -math.huge
-end
+local finite = numeric.is_finite
 
 local function clamp(value, lo, hi)
     if value < lo then return lo end
@@ -97,12 +93,7 @@ local function equal_values(left, right, seen)
     return true
 end
 
-local function quantize(value)
-    if type(value) ~= "number" then return value end
-    if abs(value) < 0.0000005 then return 0 end
-    if value >= 0 then return floor(value * 1000000 + 0.5) / 1000000 end
-    return math.ceil(value * 1000000 - 0.5) / 1000000
-end
+local quantize = numeric.quantize
 
 local function remove_from(list, item)
     for index = 1, #list do
@@ -583,13 +574,24 @@ function M.new(opts)
     local seed = tonumber(opts.battle_seed or opts.seed) or 1
     local max_exchanges = opts.max_exchanges or opts.max_volleys or M.DEFAULT_MAX_EXCHANGES
     local max_exchange_ticks = opts.max_exchange_ticks or M.DEFAULT_EXCHANGE_TICKS
-    if not finite(seed) then error("battle seed must be a finite number") end
-    if not finite(max_exchanges) or max_exchanges < 1 then
-        error("max_exchanges must be a positive finite number")
-    end
-    if not finite(max_exchange_ticks) or max_exchange_ticks < 1 then
-        error("max_exchange_ticks must be a positive finite number")
-    end
+    seed = numeric.require_number(
+        seed,
+        "battle seed",
+        -numeric.MAX_SAFE_INTEGER,
+        numeric.MAX_SAFE_INTEGER
+    )
+    max_exchanges = numeric.require_number(
+        max_exchanges,
+        "max_exchanges",
+        1,
+        numeric.MAX_SAFE_INTEGER
+    )
+    max_exchange_ticks = numeric.require_number(
+        max_exchange_ticks,
+        "max_exchange_ticks",
+        1,
+        numeric.MAX_SAFE_INTEGER
+    )
     seed = floor(seed)
     max_exchanges = floor(max_exchanges)
     max_exchange_ticks = floor(max_exchange_ticks)
@@ -2617,6 +2619,14 @@ local function process_physics_events(battle, events)
                 marble = entry and entry.marble.uid or nil,
                 component = event.component,
             })
+        elseif event.type == "numeric_saturation" then
+            local entry = battle.marble_by_body[event.body]
+            append_event(battle, entry and entry.owner.id or "-", "numeric_saturation", {
+                marble = entry and entry.marble.uid or nil,
+                body = event.body,
+                field = event.field,
+                component = event.component,
+            })
         elseif event.type == "body_sleep" then
             local entry = battle.marble_by_body[event.body]
             if entry then
@@ -2992,7 +3002,9 @@ function M.simulate(opts)
 end
 
 function M.result(battle)
-    return battle.result and copy(battle.result) or nil
+    if not battle.result then return nil end
+    local result = numeric.canonical_copy(copy(battle.result), "battle result")
+    return result
 end
 
 function M.drain_events(battle)
@@ -3065,7 +3077,7 @@ local function snapshot_side(battle, player)
 end
 
 function M.snapshot(battle)
-    return {
+    local snapshot = {
         schema_version = M.SCHEMA_VERSION,
         rules_version = battle.rules_version,
         seed = battle.seed,
@@ -3084,12 +3096,17 @@ function M.snapshot(battle)
         },
         result = battle.result and copy(battle.result) or nil,
     }
+    local canonical, recoveries = numeric.canonical_copy(snapshot, "battle snapshot")
+    if recoveries > 0 then canonical.numeric_recovery_count = recoveries end
+    return canonical
 end
 
 function M.recording(battle)
     local recording = copy(battle.recording)
     if battle.result and not recording.final then recording.final = M.snapshot(battle) end
-    return recording
+    local canonical, recoveries = numeric.canonical_copy(recording, "battle recording")
+    if recoveries > 0 then canonical.numeric_recovery_count = recoveries end
+    return canonical
 end
 
 return M

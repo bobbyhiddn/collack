@@ -114,6 +114,7 @@ REQUIRED_RUNTIME_FILES=(
     "ui/art_tokens.lua"
     "ui/procedural_audio.lua"
     "battle/engine.lua"
+    "battle/numeric.lua"
     "battle/physics.lua"
     "battle/runtime_verification.lua"
     "battle/checkpoints.lua"
