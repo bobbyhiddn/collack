@@ -7,10 +7,11 @@
 
 local M = {}
 
--- Geometry participates in fourth-order swept-collision expressions
--- (projection^2 and speed^2 * distance^2). 1e64 leaves ample IEEE-754
--- headroom while remaining far beyond any authored arena value.
-M.MAX_GEOMETRY_MAGNITUDE = 1e64
+-- Geometry and speed are deliberately much tighter than the general canonical
+-- domain. They remain many orders of magnitude above authored arenas while
+-- keeping every swept-collision square/product comfortably inside IEEE-754.
+M.MAX_GEOMETRY_MAGNITUDE = 1e9
+M.MAX_SPEED = 1e6
 
 -- Mass and force use a wider range. The exact exponent-boundary regression
 -- (1e-160 mass with 1e160 field strength) remains accepted; products involving
@@ -20,20 +21,53 @@ M.MAX_MASS = 1e200
 M.MAX_FORCE_MAGNITUDE = 1e200
 
 -- Published derived values (for example a collision impulse) may be larger
--- than any single input. Keeping them below 1e280 also leaves room for the
--- six-decimal quantizer without overflowing.
-M.MAX_CANONICAL_MAGNITUDE = 1e280
+-- than authored values. The canonical limit leaves six decimal places of
+-- quantization headroom without approaching IEEE-754 overflow.
+M.MAX_CANONICAL_MAGNITUDE = 1e200
 M.MAX_SAFE_INTEGER = 9007199254740991
 M.MAX_RESTITUTION = 4
 M.MAX_FIXED_DT = 1
+M.MAX_TICKS = 1e9
+M.MAX_COLLISION_ITERATIONS = 4096
+M.VECTOR_EPSILON = 1e-14
 
-local abs, ceil, floor = math.abs, math.ceil, math.floor
+local abs, ceil, floor, max, sqrt =
+    math.abs, math.ceil, math.floor, math.max, math.sqrt
 
 function M.is_finite(value)
     return type(value) == "number"
         and value == value
         and value ~= math.huge
         and value ~= -math.huge
+end
+
+function M.is_bounded(value, limit)
+    return M.is_finite(value) and abs(value) <= (limit or M.MAX_CANONICAL_MAGNITUDE)
+end
+
+-- Scale-first vector normalisation avoids overflowing x*x + y*y. The
+-- fallback is normalised by the same path so recovery never invents a
+-- non-unit direction.
+function M.normalise(x, y, fallback_x, fallback_y, epsilon)
+    epsilon = epsilon or M.VECTOR_EPSILON
+    fallback_x, fallback_y = fallback_x or 1, fallback_y or 0
+
+    local function fallback()
+        local scale = max(abs(fallback_x), abs(fallback_y))
+        if not M.is_finite(scale) or scale <= epsilon then return 1, 0, 0 end
+        local sx, sy = fallback_x / scale, fallback_y / scale
+        local length = sqrt(sx * sx + sy * sy)
+        return sx / length, sy / length, 0
+    end
+
+    if not M.is_finite(x) or not M.is_finite(y) then return fallback() end
+    local scale = max(abs(x), abs(y))
+    if scale <= epsilon then return fallback() end
+    local sx, sy = x / scale, y / scale
+    local scaled_length = sqrt(sx * sx + sy * sy)
+    local length = scale * scaled_length
+    if length > M.MAX_CANONICAL_MAGNITUDE then length = M.MAX_CANONICAL_MAGNITUDE end
+    return sx / scaled_length, sy / scaled_length, length
 end
 
 function M.require_number(value, name, minimum, maximum)
@@ -105,6 +139,46 @@ function M.saturating_product(limit, ...)
         result = result * value
     end
     return result, recovered
+end
+
+-- Multiply finite factors against the mathematical final magnitude, not the
+-- largest sequential intermediate. This matters for physically cancelling
+-- terms such as mass * inverse_mass at opposite exponent boundaries.
+function M.limited_product(limit, ...)
+    limit = M.require_number(limit, "product limit", 0, M.MAX_CANONICAL_MAGNITUDE)
+    local direct = 1
+    local direct_safe = true
+    local count = select("#", ...)
+    for index = 1, count do
+        local factor = select(index, ...)
+        if not M.is_finite(factor) then return 0, true end
+        if factor == 0 then return 0, false end
+        if abs(direct) > limit / abs(factor) then
+            direct_safe = false
+            break
+        end
+        direct = direct * factor
+    end
+    if direct_safe then return direct, false end
+
+    local sign, mantissa, exponent = 1, 1, 0
+    for index = 1, count do
+        local factor = select(index, ...)
+        if factor < 0 then sign = -sign end
+        local factor_mantissa, factor_exponent = math.frexp(abs(factor))
+        mantissa = mantissa * factor_mantissa
+        exponent = exponent + factor_exponent
+    end
+    local shift
+    mantissa, shift = math.frexp(mantissa)
+    exponent = exponent + shift
+    local limit_mantissa, limit_exponent = math.frexp(limit)
+    if exponent > limit_exponent
+        or (exponent == limit_exponent and mantissa > limit_mantissa)
+    then
+        return sign * limit, true
+    end
+    return sign * math.ldexp(mantissa, exponent), false
 end
 
 function M.saturating_divide(numerator, denominator, limit)

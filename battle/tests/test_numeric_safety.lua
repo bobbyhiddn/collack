@@ -10,10 +10,13 @@ package.path = table.concat({
 
 local checkpoints = require("battle.checkpoints")
 local engine = require("battle.engine")
+local effects = require("battle.effects")
 local harness = require("battle.tests.harness")
 local numeric = require("battle.numeric")
 local physics = require("battle.physics")
 local presentation = require("presentation")
+local rule_ast = require("battle.rule_ast")
+local rulebook = require("battle.content.rules")
 local util = require("battle.run_util")
 
 local M = { name = "numeric_boundary_safety" }
@@ -164,29 +167,37 @@ function M.run(t)
     end
 
     do
-        local cases = {
-            { 1e-200, 1e200 },
-            { 1e-160, 1e160 },
-            { 1e-80, 1e200 },
-            { 1, 1e200 },
-            { 1e80, 1e200 },
-            { 1e200, 1e200 },
-        }
+        local product, saturated = numeric.limited_product(0.2, 0.5, 0.5, 0.5)
+        t:eq(product, 0.125,
+            "limited products normalise three-factor mantissas without false saturation")
+        t:ok(not saturated, "an in-range three-factor product is not marked saturated")
+        product, saturated = numeric.limited_product(0.1, 0.5, 0.5, 0.5)
+        t:eq(product, 0.1, "limited products cap at their declared magnitude")
+        t:ok(saturated, "an over-limit three-factor product reports saturation")
+    end
+
+    do
+        local masses = { 1e-200, 1e-160, 1e-80, 1, 1e80, 1e160, 1e200 }
+        local strengths = { -1e200, -1e160, -1e80, -1, 0, 1, 1e80, 1e160, 1e200 }
+        local cases = 0
         for _, kind in ipairs({ "directional", "radial" }) do
-            for _, sign in ipairs({ -1, 1 }) do
-                for index, values in ipairs(cases) do
-                    local strength = sign * values[2]
-                    local first = field_run(kind, values[1], strength)
-                    local second = field_run(kind, values[1], strength)
+            for _, mass in ipairs(masses) do
+                for _, strength in ipairs(strengths) do
+                    local first = field_run(kind, mass, strength)
+                    local second = field_run(kind, mass, strength)
                     assert_canonical(t, first,
-                        string.format("%s exponent case %d sign %d", kind, index, sign))
+                        string.format("%s mass=%g strength=%g", kind, mass, strength))
                     t:ok(speed(first.body) <= 70.000001 and speed(first.body) >= 0.999999,
-                        string.format("%s exponent case %d stays inside motion bounds", kind, index))
+                        string.format("%s mass=%g strength=%g stays inside motion bounds",
+                            kind, mass, strength))
                     t:ok(util.deep_equal(first, second),
-                        string.format("%s exponent case %d replays equally", kind, index))
+                        string.format("%s mass=%g strength=%g replays equally",
+                            kind, mass, strength))
+                    cases = cases + 1
                 end
             end
         end
+        t:eq(cases, 126, "field exponent property matrix covers 126 combinations")
     end
 
     do
@@ -208,6 +219,100 @@ function M.run(t)
         t:ok(not inactive.dynamic and inactive.asleep and speed(inactive) == 0,
             "extreme impulses do not resurrect an inactive terminal body")
         assert_canonical(t, world:snapshot(), "extreme impulse snapshot")
+    end
+
+    do
+        local masses = { 1e-200, 1e-160, 1, 1e160, 1e200 }
+        local impulses = { -1e200, -1e160, -1, 1, 1e160, 1e200 }
+        local cases = 0
+        for _, mass in ipairs(masses) do
+            for _, impulse in ipairs(impulses) do
+                local world = physics.new({ width = 100, height = 100, max_speed = 300 })
+                local body = world:add_body({
+                    id = "impulse:" .. tostring(cases), x = 50, y = 50, vx = 2, radius = 1,
+                    mass = mass, motion_active = true, minimum_speed = 2,
+                })
+                world:drain_events()
+                world:apply_impulse(body.id, impulse, -impulse, { source = "matrix" })
+                local events = world:step(physics.FIXED_DT)
+                assert_canonical(t, { events = events, snapshot = world:snapshot() },
+                    string.format("impulse mass=%g impulse=%g", mass, impulse))
+                t:ok(speed(body) >= body.minimum_speed and speed(body) <= world.max_speed,
+                    string.format("impulse mass=%g impulse=%g stays inside motion bounds",
+                        mass, impulse))
+                cases = cases + 1
+            end
+        end
+        t:eq(cases, 30, "impulse exponent property matrix covers 30 combinations")
+    end
+
+    do
+        local world = physics.new({ width = 100, height = 100, max_speed = 240 })
+        local body = world:add_body({
+            id = "vector-boundary", x = 50, y = 50, radius = 1,
+            mass = 1e-200, vx = 1, motion_active = true, minimum_speed = 1,
+        })
+        world:add_field({
+            id = "vector-field", kind = "directional", x = 50, y = 50,
+            radius = 20, strength = 1e200, dx = 1e9, dy = -1e9,
+            falloff = false, duration = 2,
+        })
+        world:drain_events()
+        local field_events = world:step(physics.FIXED_DT)
+        world:apply_radial_impulse(50, 50, 1e9, -1e200, {
+            source = "radial-boundary", falloff = false,
+        })
+        local radial_events = world:drain_events()
+        assert_canonical(t, { field_events, radial_events, world:snapshot() },
+            "direction-vector and radial-impulse exponent boundaries")
+        t:ok(speed(body) >= body.minimum_speed and speed(body) <= world.max_speed + 0.000001,
+            "combined extreme effects retain bounded active momentum")
+    end
+
+    do
+        local masses = { 1e-200, 1e-160, 1, 1e160, 1e200 }
+        local cases = 0
+        for _, left_mass in ipairs(masses) do
+            for _, right_mass in ipairs(masses) do
+                local world = physics.new({
+                    width = 200, height = 100, max_speed = 240, linear_damping = 1,
+                })
+                local left = world:add_body({
+                    id = "left", x = 98.5, y = 50, vx = 120, radius = 1,
+                    mass = left_mass, restitution = 1,
+                    motion_active = true, minimum_speed = 10,
+                })
+                local right = world:add_body({
+                    id = "right", x = 101.5, y = 50, vx = -120, radius = 1,
+                    mass = right_mass, restitution = 1,
+                    motion_active = true, minimum_speed = 10,
+                })
+                world:drain_events()
+                local events = world:step(physics.FIXED_DT)
+                t:ok(event_of(events, "body_collision") ~= nil,
+                    string.format("collision resolves for masses=%g/%g",
+                        left_mass, right_mass))
+                assert_canonical(t, { events = events, snapshot = world:snapshot() },
+                    string.format("collision masses=%g/%g", left_mass, right_mass))
+                t:ok(speed(left) >= left.minimum_speed and speed(left) <= world.max_speed
+                        and speed(right) >= right.minimum_speed and speed(right) <= world.max_speed,
+                    string.format("collision masses=%g/%g preserve bounded active momentum",
+                        left_mass, right_mass))
+                cases = cases + 1
+            end
+        end
+        t:eq(cases, 25, "collision exponent property matrix covers 25 mass pairs")
+    end
+
+    do
+        local authored = rule_ast.copy(rulebook.brick_behaviours.magnetic)
+        authored.rules[1].cadence.interval = 1e200
+        assert_canonical(t, effects.brick_profile("magnetic", authored),
+            "effect profiles accept the canonical exponent boundary")
+        authored.rules[1].cadence.interval = 1e201
+        t:raises(function()
+            effects.brick_profile("magnetic", authored)
+        end, "no greater", "effect profiles reject finite values beyond the shared boundary")
     end
 
     do
@@ -279,6 +384,36 @@ function M.run(t)
     end
 
     do
+        local world = physics.new({ width = 40, height = 40, max_speed = 80 })
+        local body = world:add_body({
+            id = "recovery", x = 20, y = 20, vx = 10, radius = 1,
+            motion_active = true, minimum_speed = 8,
+            data = { effect = "authored" },
+        })
+        local field = world:add_field({
+            id = "recovery-field", kind = "directional", x = 20, y = 20,
+            radius = 30, strength = 10, dx = 1, duration = 2,
+            data = { effect = "authored" },
+        })
+        world:drain_events()
+        body.mass, body.inv_mass, body.data.bad = 0, math.huge, 0 / 0
+        field.strength, field.dx, field.data.bad = math.huge, 0 / 0, math.huge
+        local events = world:step(physics.FIXED_DT)
+        t:ok(event_of(events, "non_finite_recovered") ~= nil,
+            "fixed-step preflight reports contaminated body and field recovery")
+        assert_canonical(t, { events = events, snapshot = world:snapshot() },
+            "fixed-step contaminated-state recovery")
+        t:ok(speed(body) >= body.minimum_speed and speed(body) <= world.max_speed,
+            "fixed-step recovery preserves bounded active momentum")
+    end
+
+    do
+        t:raises(function()
+            physics.new({ linear_damping = 1.0001 })
+        end, "no greater", "energy-creating damping is rejected")
+        t:raises(function()
+            physics.new({ max_speed = numeric.MAX_SPEED * 2 })
+        end, "no greater", "unbounded authored speed is rejected")
         t:raises(function()
             physics.new({ width = 1e65 })
         end, "no greater", "geometry beyond the swept-safe exponent is rejected")
@@ -289,6 +424,9 @@ function M.run(t)
         t:raises(function()
             world:add_body({ id = "too-heavy", mass = 1e201 })
         end, "no greater", "mass above the impulse-safe exponent is rejected")
+        t:raises(function()
+            world:add_body({ id = "too-bouncy", restitution = numeric.MAX_RESTITUTION + 0.01 })
+        end, "no greater", "unbounded restitution is rejected")
         t:raises(function()
             world:add_field({ id = "too-strong", strength = 1e201 })
         end, "no greater", "field strength beyond the shared force bound is rejected")

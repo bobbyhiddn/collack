@@ -55,9 +55,10 @@ local function format_number(value)
     then
         error("event numbers must be finite and bounded")
     end
-    if value == math.floor(value) then
+    if math.abs(value) <= numeric.MAX_SAFE_INTEGER and value == math.floor(value) then
         return string.format("%d", value)
     end
+    if math.abs(value) >= 1e15 then return string.format("%.17g", value) end
     -- No engine value is fractional today; if one ever is, pin the
     -- formatting so it cannot drift between platforms.
     return string.format("%.6f", value)

@@ -54,6 +54,14 @@ the tick under a deterministic 128-collision bound. If unsatisfiable geometry
 exhausts the bound, it stops the remaining motion conservatively and exposes
 `collision_iteration_limit` audit/snapshot telemetry instead of tunnelling.
 
+`battle.numeric` defines the shared finite domain used by physics inputs,
+effect profiles, impulses, contacts, events, snapshots, and recordings. Masses
+from `1e-200` through `1e200` are reciprocal-safe; scale-first vectors and
+exponent-aware products cap acceleration before it can create an infinite
+velocity or displacement. Ordinary authored arithmetic stays on its original
+path, while an out-of-domain input is rejected and contaminated derived state
+is recovered deterministically before a public value escapes.
+
 ## Battle model
 
 Both sides remove their ordered bag head and receive launch velocity on the
