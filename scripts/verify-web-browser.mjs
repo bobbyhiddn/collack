@@ -905,6 +905,13 @@ try {
     "procedural audio did not initialize in both browser layouts");
   for (const label of ["phone", "desktop"]) {
     const guidance = guidanceSamples.filter((sample) => sample.label === label);
+    for (const screen of ["draft", "setup", "battle"]) {
+      assert(guidance.some((sample) =>
+        sample.text.includes(`screen=${screen}`)
+          && sample.text.includes("concepts=marbles_offense,bricks_defense")
+          && sample.text.includes("interaction=hits_wear_down")),
+      `${label}: ${screen} did not publish first-player marble/brick comprehension guidance`);
+    }
     assert(guidance.some((sample) =>
       /screen=draft .*scout=(?!none)[^ ]+ .*pressure=(?!none)[^ ]+ .*mechanic_cards=3/.test(sample.text)),
     `${label}: refit did not publish next-scout and canonical mechanic guidance`);

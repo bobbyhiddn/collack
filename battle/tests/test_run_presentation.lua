@@ -57,6 +57,20 @@ local function complete_draft(model)
     return model
 end
 
+local function assert_first_player_concepts(t, projected, phase)
+    t:eq(projected.concepts.marbles.id, "marbles_offense",
+        phase .. " labels marbles as the attacking piece")
+    t:eq(projected.concepts.bricks.id, "bricks_defense",
+        phase .. " labels bricks as the defending piece")
+    t:ok(projected.concepts.marbles.description:find("automatically", 1, true) ~= nil,
+        phase .. " explains that marble movement needs no battle input")
+    t:ok(projected.concepts.bricks.description:find("absorb hits", 1, true) ~= nil,
+        phase .. " explains what bricks do during battle")
+    t:ok(projected.concepts.interaction.description:find(
+        "Clear all rival bricks or marbles to win.", 1, true
+    ) ~= nil, phase .. " explains how marble-brick contact advances the battle")
+end
+
 function M.run(t)
     local model = controller.new({ run_seed = 77 })
     local projected = controller.project(model)
@@ -67,6 +81,7 @@ function M.run(t)
     t:eq(projected.minimum_target, 48, "projection applies the art contract's touch minimum")
     t:eq(projected.art_direction, "warm_handcrafted_tabletop",
         "all screens carry the accepted tabletop direction")
+    assert_first_player_concepts(t, projected, "draft")
     t:eq(#projected.draft.cards, 3, "draft projects three individual cards")
     t:eq(#projected.opponent.scout_tags, 2, "first screen projects honest CPU scouting")
     for _, tag in ipairs(projected.opponent.scout_tags) do
@@ -139,6 +154,7 @@ function M.run(t)
     model = complete_draft(model)
     projected = controller.project(model)
     t:eq(projected.screen, "setup", "complete draft projects setup surface")
+    assert_first_player_concepts(t, projected, "setup")
     t:eq(#projected.setup.bricks, 8, "setup projects eight separately selectable bricks")
     t:eq(#projected.setup.bag, 4, "setup projects explicit four-marble order")
     t:eq(#projected.setup.insertion_slots, 5, "bag projects before-each and tail slots")
@@ -211,6 +227,7 @@ function M.run(t)
     local current = completion.recording.frames[2]
     projected = controller.project(model, previous, current, 0.5)
     t:eq(projected.screen, "battle", "lock projects battle surface")
+    assert_first_player_concepts(t, projected, "battle")
     t:eq(projected.battle.status, "running", "canonical frames mark the battle surface running")
     t:eq(projected.battle.frame.entities[1].x, 195.5,
         "renderer interpolation uses adjacent canonical frames")
