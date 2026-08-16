@@ -18,8 +18,8 @@
   "executableEvidence": {
     "archive": {
       "path": "dist/collack-spike.love",
-      "size": 171577,
-      "sha256": "39daa955fad09f037a90183e4f71c0db72b0355739b61fbf1231a15b6560cf02"
+      "size": 169479,
+      "sha256": "e1e5b1e5f6429be3a7210ed5028fd5e10e4783323ccdf0b9979d9419d55b7781"
     },
     "webFiles": [
       {
@@ -63,7 +63,7 @@
         "sha256": "b991b00f74b61804d52f8e5590337f4ef1311fa8bb4315337a1bbc7c8bd262cd"
       }
     ],
-    "aggregateDigest": "b2c3717f05342a0637f42ee0e6bf99301acb365ae6c916eec99823545adffb8c"
+    "aggregateDigest": "a1b12d1a57a09103e2006ee60ccd970feacd06266782d88e93b843cab3017832"
   },
   "canonicalSweeps": [
     {
@@ -1219,5 +1219,5 @@
       "sha256": "a4ef3b714cd0f1d74e610308bd27d86afd8db4d352e0adb9df55bd88eda80d1c"
     }
   ],
-  "evidenceDigest": "5ff8562530250f40b3c3d79d67b50707953a3b94c49d543d6cef8e9145723228"
+  "evidenceDigest": "f496caf61b4efa6c469756794a9e86705432b4f97689a2bd68e3bd1ca9527dbe"
 }
