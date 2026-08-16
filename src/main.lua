@@ -692,7 +692,7 @@ local function draw_concept_legend(x, y, width)
     draw_brick(x + 50, y + 7, 36, 24, "defensive", "absorb", 1, false)
     love.graphics.setFont(fonts.micro)
     set_color(COLORS.brass)
-    love.graphics.printf("MARBLES ATTACK  →  BRICKS DEFEND", x + 100, y + 2,
+    love.graphics.printf("MARBLES ATTACK  >  BRICKS DEFEND", x + 100, y + 2,
         width - 100, "left")
     set_color(COLORS.muted)
     draw_wrapped_limited(
@@ -1480,7 +1480,7 @@ local function selected_setup_copy()
     local selected = view.setup.selected_detail
     if not selected then
         return "BATTLE FLOW",
-            "Place bricks to defend. Order marbles to attack automatically; clear every rival brick or marble to win."
+            "Bricks defend. Marbles attack automatically. Clear all rival bricks or marbles to win."
     end
     if selected.type == "brick" then
         return string.upper(selected.name),
@@ -1619,11 +1619,11 @@ local function draw_setup_phone()
         love.graphics.print(selected_title, 26, 704)
         love.graphics.setFont(fonts.micro)
         set_color(COLORS.muted)
-        love.graphics.printf(selected_copy, 26, 724, 338, "left")
+        draw_wrapped_limited(selected_copy, 26, 720, 338, 2, "left")
     end
     love.graphics.setFont(fonts.micro)
     set_color(view.setup.valid and COLORS.restore or COLORS.muted)
-    love.graphics.printf(setup_progress_text(), 26, 739, 338, "right")
+    love.graphics.printf(setup_progress_text(), 26, 746, 338, "right")
     draw_button("lock_setup", "LOCK FORMATION", COLORS.player)
 end
 
@@ -1982,7 +1982,7 @@ local function draw_battle_overlay(replay)
         set_color(COLORS.ink)
         love.graphics.printf("EXCHANGE", 564, 172, 152, "center")
         set_color(COLORS.brass_ink)
-        love.graphics.printf("MARBLES ATTACK → BRICKS DEFEND", 552, 194, 176, "center")
+        love.graphics.printf("MARBLES ATTACK > BRICKS DEFEND", 552, 194, 176, "center")
         local inspected = not replay and battle.inspected or nil
         if inspected then
             local inspection = inspected.rule_inspection or {}
@@ -2083,7 +2083,7 @@ local function draw_battle_overlay(replay)
         set_color(COLORS.ink)
         love.graphics.setFont(fonts.micro)
         set_color(COLORS.brass_ink)
-        love.graphics.printf("MARBLES ATTACK → BRICKS DEFEND • AUTOMATIC", 28, 324, 334, "center")
+        love.graphics.printf("MARBLES ATTACK > BRICKS DEFEND • AUTOMATIC", 28, 324, 334, "center")
         love.graphics.setFont(fonts.section)
         set_color(COLORS.ink)
         love.graphics.printf(replay and "RECORDED BATTLE"
