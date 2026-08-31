@@ -148,7 +148,7 @@ assert(currentPaddleManifest.assetSetSha256
     === "bf1c77c2efb56c1a73635d0d6894855d4d49da9a6dd0ecf1261eec4e528b15dc",
 "paddle generated runtime bytes changed from the merged candidate");
 assert(currentWebManifest.assetSetSha256
-    === "2a786fa65031932b736aaf8c0ea1ab1ea4f0b992ca0c5408f0da7fe157e7a9bb",
+    === "b9997280830e617b5b419eaa965e51c28b1611909929d66160cacd332e2e4866",
 "auto-battler generated runtime bytes changed from the merged candidate");
 
 await expectFailure("dist/web artifact-path substitution", () => verifyPaddleRelease(root, {
