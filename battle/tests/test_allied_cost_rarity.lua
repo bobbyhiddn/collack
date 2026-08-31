@@ -1228,12 +1228,13 @@ function M.run(t)
         "the rarity balance counterexample repeats its winner")
     t:eq(table.concat(second_hashes, ","), table.concat(first_hashes, ","),
         "the rarity balance counterexample repeats every checkpoint hash")
-    t:eq(#first_hashes, 37, "the stored rarity balance trace has 37 checkpoints")
+    t:eq(#first_hashes, 17,
+        "the stored continuous-motion rarity balance trace has 17 checkpoints")
     for index, expected in pairs({
-        [1] = "000000:19ae9243",
-        [13] = "001440:7c20598e",
-        [25] = "002880:00964a05",
-        [37] = "004217:0b361697",
+        [1] = "000000:1255a49c",
+        [7] = "000720:60861a9e",
+        [13] = "001440:6b205613",
+        [17] = "001819:59066cb1",
     }) do
         t:eq(first_hashes[index], expected,
             "rarity balance checkpoint " .. index .. " matches its stored hash")

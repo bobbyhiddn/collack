@@ -1,9 +1,17 @@
 -- Runtime profiles compiled from the canonical rule AST.
 
 local ast = require("battle.rule_ast")
+local numeric = require("battle.numeric")
 local rulebook = require("battle.content.rules")
 
 local M = {}
+
+local function canonical_profile(profile, kind, id)
+    return numeric.input_copy(
+        profile,
+        string.format("%s effect profile %s", kind, tostring(id))
+    )
+end
 
 local function assert_identity(kind, id, profile, stat)
     if profile[stat] ~= id then
@@ -24,7 +32,7 @@ local function normalize_collision(id, rule_set)
     profile.pierces_absorb = profile.pierces_absorb == true
     profile.splash_behind = profile.splash_behind or 0
     profile.durability_cost = profile.durability_cost or 0
-    return profile
+    return canonical_profile(profile, "collision", id)
 end
 
 local function normalize_release(id, rule_set)
@@ -34,12 +42,13 @@ local function normalize_release(id, rule_set)
     profile.invert = profile.invert == true
     profile.scorch = profile.scorch or 0
     profile.shrapnel = profile.shrapnel or 0
-    return profile
+    return canonical_profile(profile, "release", id)
 end
 
 local function normalize_status(id, rule_set)
     local profile = ast.project_prefix(rule_set, "status." .. id .. ".")
-    return assert_identity("status", id, profile, "status")
+    assert_identity("status", id, profile, "status")
+    return canonical_profile(profile, "status", id)
 end
 
 function M.release_profile(release_id, source_rule_set)
@@ -58,7 +67,8 @@ end
 function M.brick_profile(behaviour, source_rule_set)
     local rule_set = source_rule_set or rulebook.brick_behaviours[behaviour]
     if not rule_set then error("unknown brick behaviour: " .. tostring(behaviour)) end
-    return assert_identity("brick", behaviour, ast.project(rule_set), "behaviour")
+    local profile = assert_identity("brick", behaviour, ast.project(rule_set), "behaviour")
+    return canonical_profile(profile, "brick", behaviour)
 end
 
 function M.status_profile(status_id, source_rule_set)

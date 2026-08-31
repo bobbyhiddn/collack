@@ -233,6 +233,15 @@ local function telemetry_tags(tags, counted)
     return #out > 0 and table.concat(out, ",") or "none"
 end
 
+local function telemetry_concepts()
+    local concepts = view and view.concepts or {}
+    local marbles = concepts.marbles or {}
+    local bricks = concepts.bricks or {}
+    local interaction = concepts.interaction or {}
+    return telemetry_value(marbles.id), telemetry_value(bricks.id),
+        telemetry_value(interaction.id)
+end
+
 local function telemetry_rule(inspection)
     local rule = inspection and inspection.rule or {}
     local trigger = rule.trigger or {}
@@ -286,6 +295,7 @@ end
 
 local function report_guidance()
     local signature
+    local marble_concept, brick_concept, interaction_concept = telemetry_concepts()
     if view.screen == "draft" and view.draft then
         local counter_cards = 0
         local mechanic_cards = 0
@@ -296,7 +306,7 @@ local function report_guidance()
             end
         end
         signature = string.format(
-            "screen=draft rival=%s scout=%s pressure=%s counter_cards=%d mechanic_cards=%d offer=%s",
+            "screen=draft rival=%s scout=%s pressure=%s counter_cards=%d mechanic_cards=%d offer=%s concepts=%s,%s interaction=%s",
             telemetry_value(view.opponent and view.opponent.name),
             telemetry_tags(view.draft.scout_tags),
             telemetry_value(view.opponent
@@ -305,7 +315,10 @@ local function report_guidance()
                 and view.opponent.pressure[1].name),
             counter_cards,
             mechanic_cards,
-            telemetry_value(view.draft.offer_id)
+            telemetry_value(view.draft.offer_id),
+            marble_concept,
+            brick_concept,
+            interaction_concept
         )
     elseif view.screen == "setup" and view.setup then
         local active_links = 0
@@ -313,7 +326,7 @@ local function report_guidance()
             if link.active_synergy then active_links = active_links + 1 end
         end
         signature = string.format(
-            "screen=setup rival=%s scout=%s pressure=%s build=%s active_links=%d ability_links=%d",
+            "screen=setup rival=%s scout=%s pressure=%s build=%s active_links=%d ability_links=%d concepts=%s,%s interaction=%s",
             telemetry_value(view.opponent and view.opponent.name),
             telemetry_tags(view.opponent and view.opponent.scout_tags),
             telemetry_value(view.opponent
@@ -322,7 +335,17 @@ local function report_guidance()
                 and view.opponent.pressure[1].name),
             telemetry_tags(view.setup.build_tags, true),
             active_links,
-            #(view.setup.ability_links or {})
+            #(view.setup.ability_links or {}),
+            marble_concept,
+            brick_concept,
+            interaction_concept
+        )
+    elseif view.screen == "battle" and view.battle then
+        signature = string.format(
+            "screen=battle concepts=%s,%s interaction=%s automatic=true",
+            marble_concept,
+            brick_concept,
+            interaction_concept
         )
     end
     if signature and signature ~= last_guidance_signature then
@@ -606,6 +629,8 @@ local FAMILY_MINERAL = {
     rare = "silver",
 }
 
+local draw_wrapped_limited
+
 local function draw_brick(x, y, width, height, family, behaviour, hp_ratio, selected)
     family = family or "basic"
     behaviour = behaviour or "inert"
@@ -653,6 +678,28 @@ local function draw_brick(x, y, width, height, family, behaviour, hp_ratio, sele
         love.graphics.rectangle("fill", x + 4 + (index - 1) * math.max(5, (width - 10) / 4),
             y + height - 5, math.max(3, (width - 16) / 4), 2)
     end
+end
+
+local function draw_concept_legend(x, y, width)
+    local concepts = view.concepts or {}
+    local interaction = concepts.interaction or {}
+    draw_marble(x + 14, y + 18, 10, "common", "quartz", 1, nil, false)
+    set_color(COLORS.brass)
+    love.graphics.setLineWidth(2)
+    love.graphics.line(x + 29, y + 18, x + 44, y + 18)
+    love.graphics.polygon("fill", x + 44, y + 18, x + 38, y + 14, x + 38, y + 22)
+    love.graphics.setLineWidth(1)
+    draw_brick(x + 50, y + 7, 44, 24, "defensive", "absorb", 1, false)
+    love.graphics.setFont(fonts.micro)
+    set_color(COLORS.brass)
+    love.graphics.printf("MARBLES ATTACK  >  BRICKS DEFEND", x + 100, y + 2,
+        width - 100, "left")
+    set_color(COLORS.muted)
+    draw_wrapped_limited(
+        interaction.description
+            or "Marble hits wear pieces down. Clear all rival bricks or marbles to win.",
+        x + 100, y + 20, width - 100, 3, "left"
+    )
 end
 
 local function draw_sling(x, y, scale, label)
@@ -801,7 +848,7 @@ local function choice_cause_summary(card)
     )
 end
 
-local function draw_wrapped_limited(text, x, y, width, max_lines, alignment)
+draw_wrapped_limited = function(text, x, y, width, max_lines, alignment)
     local font = love.graphics.getFont()
     local normalized = tostring(text or ""):gsub("[\r\n]+", " ")
     local _, wrapped = font:getWrap(normalized, width)
@@ -1280,10 +1327,7 @@ local function draw_draft_phone()
             view.draft.selected_choice_id and "CHOICE SET" or "CHOOSE " .. view.draft.inspected.name,
             COLORS.brass)
     else
-        love.graphics.setFont(fonts.meta)
-        set_color(COLORS.muted)
-        love.graphics.printf("Tap a card for exact trigger, target, effect, limit, and drawback.",
-            16, 722, 358, "center")
+        draw_concept_legend(16, 704, 358)
     end
     local selected_name = "CHOOSE AN OFFER"
     for _, card in ipairs(view.draft.cards) do
@@ -1371,10 +1415,7 @@ local function draw_draft_desktop()
         draw_button("select:" .. view.draft.inspected.choice_id,
             view.draft.selected_choice_id and "CHOICE SET" or "CHOOSE CARD", COLORS.brass)
     else
-        love.graphics.setFont(fonts.body)
-        set_color(COLORS.muted)
-        love.graphics.printf("Inspect a card to compare its mechanic and scout response.",
-            44, 716, 690, "left")
+        draw_concept_legend(44, 700, 690)
     end
     draw_button("confirm_offer", "CONFIRM PICK", COLORS.player)
 end
@@ -1438,8 +1479,8 @@ end
 local function selected_setup_copy()
     local selected = view.setup.selected_detail
     if not selected then
-        return string.upper(setup_sling().name),
-            "Sling committed • select a brick or marble for its mechanic."
+        return "BATTLE FLOW",
+            "Bricks defend. Marbles attack automatically. Clear all rival bricks or marbles to win."
     end
     if selected.type == "brick" then
         return string.upper(selected.name),
@@ -1494,7 +1535,7 @@ local function draw_setup_phone()
     panel(16, 124, 358, 220, "felt", 12)
     love.graphics.setFont(fonts.micro)
     set_color(COLORS.brass)
-    love.graphics.print("FRONT ROW FACES THE ARENA", 24, 136)
+    love.graphics.print("BRICKS • DEFENSE  /  FACE THE ARENA", 24, 136)
     draw_setup_links(22, 158, 49, 44)
     for row = 1, 3 do
         for col = 1, 7 do
@@ -1519,7 +1560,7 @@ local function draw_setup_phone()
     panel(16, 356, 358, 128, "paper", 12)
     love.graphics.setFont(fonts.micro)
     set_color(COLORS.brass)
-    love.graphics.print("MINERAL BRICK BENCH", 22, 344)
+    love.graphics.print("BRICKS • DEFENSE  /  ABSORB MARBLE HITS", 22, 344)
     for _, brick in ipairs(view.setup.bricks) do
         local x, y, width, height = action_bounds(action_by_id(brick.action_id))
         draw_brick(x, y, width, height, brick.family, brick.behaviour,
@@ -1528,7 +1569,7 @@ local function draw_setup_phone()
     panel(16, 496, 358, 140, "walnut", 12)
     love.graphics.setFont(fonts.micro)
     set_color(COLORS.brass)
-    love.graphics.print("ORDERED BAG  /  FIRST LAUNCHES FIRST", 26, 504)
+    love.graphics.print("MARBLES • OFFENSE  /  FIRST LAUNCHES FIRST", 26, 504)
     for _, marble in ipairs(view.setup.bag) do
         local x, y, width, height = action_bounds(action_by_id(marble.action_id))
         set_color(marble.selected and COLORS.focus or COLORS.brass_dark, 0.76)
@@ -1578,11 +1619,11 @@ local function draw_setup_phone()
         love.graphics.print(selected_title, 26, 704)
         love.graphics.setFont(fonts.micro)
         set_color(COLORS.muted)
-        love.graphics.printf(selected_copy, 26, 724, 338, "left")
+        draw_wrapped_limited(selected_copy, 26, 720, 338, 2, "left")
     end
     love.graphics.setFont(fonts.micro)
     set_color(view.setup.valid and COLORS.restore or COLORS.muted)
-    love.graphics.printf(setup_progress_text(), 26, 739, 338, "right")
+    love.graphics.printf(setup_progress_text(), 26, 746, 338, "right")
     draw_button("lock_setup", "LOCK FORMATION", COLORS.player)
 end
 
@@ -1593,7 +1634,7 @@ local function draw_setup_desktop()
     panel(968, 96, 288, 568, "walnut", 16)
     love.graphics.setFont(fonts.section)
     set_color(COLORS.ink)
-    love.graphics.print("BRICK CATALOG", 44, 116)
+    love.graphics.print("BRICKS • DEFENSE", 44, 116)
     for _, brick in ipairs(view.setup.bricks) do
         local x, y, width, height = action_bounds(action_by_id(brick.action_id))
         draw_brick(x, y, width, 62, brick.family, brick.behaviour,
@@ -1604,10 +1645,10 @@ local function draw_setup_desktop()
     end
     love.graphics.setFont(fonts.section)
     set_color(COLORS.chalk)
-    love.graphics.print("FORMATION", 352, 120)
+    love.graphics.print("BRICK FORMATION", 352, 120)
     love.graphics.setFont(fonts.body)
     set_color(COLORS.muted)
-    love.graphics.print("Front row faces the brass line", 352, 156)
+    love.graphics.print("Place bricks to absorb rival marble hits", 352, 156)
     set_color(COLORS.brass)
     love.graphics.rectangle("fill", 348, 207, 576, 3)
     draw_setup_links(356, 220, 80, 72)
@@ -1656,10 +1697,10 @@ local function draw_setup_desktop()
     )
     love.graphics.setFont(fonts.section)
     set_color(COLORS.brass)
-    love.graphics.print("ORDERED BAG", 990, 116)
+    love.graphics.print("MARBLES • OFFENSE", 990, 116)
     love.graphics.setFont(fonts.micro)
     set_color(COLORS.muted)
-    love.graphics.print("FIRST LAUNCHES FIRST", 990, 144)
+    love.graphics.print("AUTO-MOVING • FIRST LAUNCHES FIRST", 990, 144)
     for _, marble in ipairs(view.setup.bag) do
         local x, y, width, height = action_bounds(action_by_id(marble.action_id))
         set_color(marble.selected and COLORS.focus or COLORS.felt_mid)
@@ -1940,6 +1981,9 @@ local function draw_battle_overlay(replay)
         love.graphics.setFont(fonts.micro)
         set_color(COLORS.ink)
         love.graphics.printf("EXCHANGE", 564, 172, 152, "center")
+        set_color(COLORS.brass_ink)
+        love.graphics.printf("MARBLES  >  BRICKS", 552, 190, 176, "center")
+        love.graphics.printf("ATTACK       DEFEND", 552, 202, 176, "center")
         local inspected = not replay and battle.inspected or nil
         if inspected then
             local inspection = inspected.rule_inspection or {}
@@ -2022,11 +2066,7 @@ local function draw_battle_overlay(replay)
                     tostring(last_rule_callout.target):upper():gsub("_", " ")),
                     102, 748, 620, "left")
             else
-                love.graphics.setFont(fonts.body)
-                set_color(COLORS.muted)
-                love.graphics.printf(
-                    "Click any marble or brick to inspect  /  outcomes stay automatic",
-                    48, 719, 680, "left")
+                draw_concept_legend(48, 701, 680)
             end
             draw_button("battle_pause", battle.view.paused and "RESUME" or "PAUSE")
             draw_button("battle_speed", tostring(battle.view.speed) .. "X")
@@ -2040,6 +2080,11 @@ local function draw_battle_overlay(replay)
         set_color(COLORS.player)
         love.graphics.printf("COLLECTOR  /  YOU", 28, 710, 334, "right")
         local inspected = not replay and battle.inspected or nil
+        love.graphics.setFont(fonts.section)
+        set_color(COLORS.ink)
+        love.graphics.setFont(fonts.micro)
+        set_color(COLORS.brass_ink)
+        love.graphics.printf("MARBLES ATTACK > BRICKS DEFEND • AUTOMATIC", 28, 324, 334, "center")
         love.graphics.setFont(fonts.section)
         set_color(COLORS.ink)
         love.graphics.printf(replay and "RECORDED BATTLE"
@@ -2094,16 +2139,19 @@ local function draw_battle_overlay(replay)
                     tostring(last_rule_callout.target):upper():gsub("_", " ")),
                     92, 452, 260, "left")
             else
-                love.graphics.setFont(fonts.body)
-                set_color(COLORS.ink)
-                love.graphics.printf(replay and view.subtitle or last_cue,
-                    38, 378, 314, "center")
+                if replay then
+                    love.graphics.setFont(fonts.body)
+                    set_color(COLORS.ink)
+                    love.graphics.printf(view.subtitle, 38, 378, 314, "center")
+                else
+                    draw_concept_legend(38, 374, 314)
+                end
             end
             if not replay and not last_rule_callout then
                 love.graphics.setFont(fonts.micro)
                 set_color(COLORS.ink, 0.52)
                 love.graphics.printf("TAP A PIECE FOR THE SAME RULE IDENTITY",
-                    38, 430, 314, "center")
+                    38, 446, 314, "center")
             end
         end
         if not inspected then

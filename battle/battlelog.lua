@@ -11,6 +11,8 @@
 -- table iteration order, which is NOT stable across runs or builds. Nothing in
 -- this file may iterate an event's fields with pairs() and emit in that order.
 
+local numeric = require("battle.numeric")
+
 local Log = {}
 Log.__index = Log
 
@@ -22,6 +24,11 @@ end
 
 --- Append an event. `fields` may be nil.
 function Log:add(volley, side, kind, fields)
+    numeric.require_integer(self.seq, "battle event sequence", 0, numeric.MAX_TICKS)
+    if self.seq >= numeric.MAX_TICKS then
+        error("battle event sequence exceeded its canonical bound")
+    end
+    volley = numeric.require_integer(volley, "battle event volley", 0, numeric.MAX_TICKS)
     self.seq = self.seq + 1
     local event = {
         seq = self.seq,
@@ -30,21 +37,33 @@ function Log:add(volley, side, kind, fields)
         type = kind,
     }
     if fields then
-        for key, value in pairs(fields) do
+        local canonical_fields, recoveries = numeric.canonical_copy(
+            fields,
+            "battle event " .. tostring(kind)
+        )
+        for key, value in pairs(canonical_fields) do
             if RESERVED[key] then
                 error("event field shadows a reserved key: " .. key)
             end
             event[key] = value
         end
+        if recoveries > 0 then event.numeric_recovery_count = recoveries end
     end
+    event = numeric.canonical_copy(event, "battle event " .. tostring(kind))
     self.events[#self.events + 1] = event
     return event
 end
 
 local function format_number(value)
-    if value == math.floor(value) then
+    if not numeric.is_finite(value)
+        or math.abs(value) > numeric.MAX_CANONICAL_MAGNITUDE
+    then
+        error("event numbers must be finite and bounded")
+    end
+    if math.abs(value) <= numeric.MAX_SAFE_INTEGER and value == math.floor(value) then
         return string.format("%d", value)
     end
+    if math.abs(value) >= 1e15 then return string.format("%.17g", value) end
     -- No engine value is fractional today; if one ever is, pin the
     -- formatting so it cannot drift between platforms.
     return string.format("%.6f", value)

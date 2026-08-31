@@ -1,6 +1,8 @@
 -- Stable same-build checkpoint signatures for canonical recorded frames.
 -- This is verification metadata, not a combat rule or a serialization format.
 
+local numeric = require("battle.numeric")
+
 local M = {}
 
 local MODULUS = 2147483647
@@ -19,6 +21,11 @@ local function append_value(parts, value, seen)
     elseif kind == "boolean" then
         parts[#parts + 1] = value and "b1;" or "b0;"
     elseif kind == "number" then
+        if not numeric.is_finite(value)
+            or math.abs(value) > numeric.MAX_CANONICAL_MAGNITUDE
+        then
+            error("checkpoint numbers must be finite and bounded")
+        end
         parts[#parts + 1] = "d" .. string.format("%.17g", value) .. ";"
     elseif kind == "string" then
         parts[#parts + 1] = "s" .. #value .. ":" .. value .. ";"

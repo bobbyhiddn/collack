@@ -683,6 +683,14 @@ async function completeMobile(runtime) {
   await replayResultReached;
   await runtime.page.waitForTimeout(1_000);
   await screenshot(runtime, "phone-result-after-replay.png");
+  const restarted = waitForConsole(
+    runtime.page,
+    "CALLACK_ACTION phase_setup",
+    20_000
+  );
+  await touchAction(runtime, 195, 720, "new_run");
+  await restarted;
+  await screenshot(runtime, "phone-restarted.png");
 }
 
 async function completeDesktop(runtime) {
@@ -826,6 +834,14 @@ async function completeDesktop(runtime) {
   await replayResultReached;
   await runtime.page.waitForTimeout(1_000);
   await screenshot(runtime, "desktop-result-after-replay.png");
+  const restarted = waitForConsole(
+    runtime.page,
+    "CALLACK_ACTION phase_setup",
+    20_000
+  );
+  await mouseAction(runtime, 1122, 732, "new_run");
+  await restarted;
+  await screenshot(runtime, "desktop-restarted.png");
 }
 
 try {
@@ -889,6 +905,13 @@ try {
     "procedural audio did not initialize in both browser layouts");
   for (const label of ["phone", "desktop"]) {
     const guidance = guidanceSamples.filter((sample) => sample.label === label);
+    for (const screen of ["draft", "setup", "battle"]) {
+      assert(guidance.some((sample) =>
+        sample.text.includes(`screen=${screen}`)
+          && sample.text.includes("concepts=marbles_offense,bricks_defense")
+          && sample.text.includes("interaction=hits_wear_down")),
+      `${label}: ${screen} did not publish first-player marble/brick comprehension guidance`);
+    }
     assert(guidance.some((sample) =>
       /screen=draft .*scout=(?!none)[^ ]+ .*pressure=(?!none)[^ ]+ .*mechanic_cards=3/.test(sample.text)),
     `${label}: refit did not publish next-scout and canonical mechanic guidance`);
@@ -966,14 +989,14 @@ try {
     "battle-inspection", "battle-settings", "battle-trigger", "battle",
     "draft-inspection", "draft-scout", "draft", "refit-1",
     "refit-2", "refit-inspection", "refit-rule-2", "result-after-replay",
-    "result", "reward", "scout", "setup-start", "setup-terminal",
+    "restarted", "result", "reward", "scout", "setup-start", "setup-terminal",
     "setup", "splice-guard", "terminal-result",
   ];
   const expectedScreenshotNames = ["desktop", "phone"]
     .flatMap((label) => surfaces.map((surface) => `${label}-${surface}.png`))
     .sort();
-  assert(screenshotNames.length === 40,
-    `evidence must bind all 40 generated screenshots, got ${screenshotNames.length}`);
+  assert(screenshotNames.length === 42,
+    `evidence must bind all 42 generated screenshots, got ${screenshotNames.length}`);
   assert(JSON.stringify(screenshotNames) === JSON.stringify(expectedScreenshotNames),
     `evidence screenshot set is stale, missing, or crossed: ${screenshotNames.join(",")}`);
   const screenshotHashes = {};
@@ -1044,7 +1067,7 @@ try {
 
   console.log(
     `[web-browser] OK: phone + desktop scout/draft, exact refit inspection, reward, `
-      + `canonical battle trigger, terminal result, replay, and settings; `
+      + `canonical battle trigger, terminal result, replay, restart, and settings; `
       + `real Splice Guard trigger → apply → prevent → expiry on both viewports; `
       + `${physicsSamples.length} canonical moving-physics samples; swept TOI + allied/enemy `
       + `blowback; screenshots and evidence manifest in dist/verification`

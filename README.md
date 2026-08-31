@@ -98,6 +98,12 @@ toggles generated audio and `V` toggles reduced motion. On the result screen,
 `R` opens replay and `N` starts the next seeded run. Mute and reduced-motion
 preferences persist across runs.
 
+The first-time path teaches the board in place: draft cards distinguish moving
+marble attackers from stationary brick defenders, setup repeats those labels
+beside the pieces, and battle shows the marble-to-brick hit cue. The same copy
+explains that hits wear pieces down and that clearing all enemy bricks or
+marbles wins; it does not introduce manual battle control.
+
 ## Paddle Fly release path
 
 The existing `deploy/fly/Dockerfile` and `deploy/fly/fly.toml` remain the

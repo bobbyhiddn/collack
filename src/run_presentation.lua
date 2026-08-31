@@ -17,6 +17,27 @@ M.LOGICAL_WIDTH = 390
 M.LOGICAL_HEIGHT = 844
 M.MIN_TARGET = art.touch.minimum
 
+-- First-run teaching belongs to the serializable presentation contract so
+-- every adapter (LÖVE, browser verification, or a future native shell) uses
+-- the same plain-language roles instead of inventing local help copy.
+local PLAYER_CONCEPTS = {
+    marbles = {
+        id = "marbles_offense",
+        label = "MARBLES • OFFENSE",
+        description = "Launch and move automatically to strike rival bricks.",
+    },
+    bricks = {
+        id = "bricks_defense",
+        label = "BRICKS • DEFENSE",
+        description = "Hold the formation and absorb hits from rival marbles.",
+    },
+    interaction = {
+        id = "hits_wear_down",
+        label = "HOW BATTLE ADVANCES",
+        description = "Marble hits wear pieces down. Clear all rival bricks or marbles to win.",
+    },
+}
+
 local function clamp(value, low, high)
     return math.max(low, math.min(high, value))
 end
@@ -1172,6 +1193,7 @@ function M.project(run_snapshot, previous_frame, current_frame, alpha, view_stat
             seed = string.format("SEED %d", state.run_seed),
             phase = string.upper(state.phase),
         },
+        concepts = util.deep_copy(PLAYER_CONCEPTS),
         art_direction = "warm_handcrafted_tabletop",
         short_run = state.mode == "comprehension_first_three_fight" and {
             fight_index = state.fight.index,

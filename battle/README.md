@@ -43,13 +43,24 @@ the same implementation. They do not implement a second rules path.
 
 The lower-level `battle.physics` API supplies `new`, `add_body`, `add_box`,
 `add_field`, `step`, `apply_impulse`, `apply_radial_impulse`, `snapshot`,
-`drain_events`, and `is_settled`. Its step rejects variable `dt`. Within each
+`set_motion_active`, `set_motion_floor`, `enforce_motion`, `drain_events`, and
+`is_settled`. Its step rejects variable `dt`. `is_settled` remains available for
+non-playable generic physics bodies; battle volley progression does not consume
+it. Within each
 authoritative tick, exact swept time-of-impact queries advance all bodies to the
 earliest circle/wall, circle/AABB face or rounded-corner, or relative
 circle/circle contact. The solver resolves that contact and continues through
 the tick under a deterministic 128-collision bound. If unsatisfiable geometry
 exhausts the bound, it stops the remaining motion conservatively and exposes
 `collision_iteration_limit` audit/snapshot telemetry instead of tunnelling.
+
+`battle.numeric` defines the shared finite domain used by physics inputs,
+effect profiles, impulses, contacts, events, snapshots, and recordings. Masses
+from `1e-200` through `1e200` are reciprocal-safe; scale-first vectors and
+exponent-aware products cap acceleration before it can create an infinite
+velocity or displacement. Ordinary authored arithmetic stays on its original
+path, while an out-of-domain input is rejected and contaminated derived state
+is recovered deterministically before a public value escapes.
 
 ## Battle model
 
@@ -64,7 +75,11 @@ circle/circle contacts resolve overlap recovery and time-of-impact impulse
 response. Sling
 momentum changes launch speed and mass, core trajectory changes launch angle,
 and ricochet/reflect change physical rebound. Poison, freeze, and magnetism
-advance in fixed ticks.
+advance in fixed ticks. Every launched or blowback-active marble has a
+per-marble minimum derived from its authored launch speed and current control
+status. Canonical post-step enforcement preserves response direction, rejects
+or recovers non-finite state, and caps speed without affecting ready, returned,
+removed, or destroyed marbles.
 
 Collision impulse activates canonical shell and brick RuleSet abilities.
 Powder Keg Chain wears only enemy marble shells; Splice grants bounded,
@@ -82,10 +97,12 @@ ability-group, MCU, and copy ceilings. Draft and refit tier tickets, availabilit
 setup legality, inspection copy, rarity beads, and balance ledgers all project
 that same authority.
 
-An exchange ends only after its dynamic bodies sleep and transient fields
-expire, or after the explicit simulated-time cap. Survivors return to the bag
-tail. Win conditions are evaluated once at this boundary. Simultaneous
-conditions draw, as do the 40-exchange and per-exchange caps.
+An exchange ends only after every active marble physically returns through its
+home edge, is destroyed/released/removed, or reaches the explicit safety-return
+outcome. A seeded canonical redirect makes a wall-only no-progress trajectory
+visible before the hard bound; neither sleep nor passive speed decay closes a
+volley. Survivors return to the bag tail. Win conditions are evaluated once at
+this boundary. Simultaneous conditions draw, as does the 40-exchange cap.
 
 ## Snapshots, recording, and events
 

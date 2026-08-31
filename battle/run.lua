@@ -9,6 +9,7 @@
 
 local contract = require("battle.vslice_contract")
 local draft = require("battle.draft")
+local numeric = require("battle.numeric")
 local opponent = require("battle.opponent")
 local setup_rules = require("battle.setup_rules")
 local short_run = require("battle.short_run")
@@ -460,7 +461,8 @@ end
 
 local function plain_value(value, seen)
     local kind = type(value)
-    if kind == "nil" or kind == "boolean" or kind == "number" or kind == "string" then
+    if kind == "number" then return numeric.is_canonical_tree(value) end
+    if kind == "nil" or kind == "boolean" or kind == "string" then
         return true
     end
     if kind ~= "table" or getmetatable(value) ~= nil then return false end
