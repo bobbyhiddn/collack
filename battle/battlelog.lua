@@ -24,6 +24,11 @@ end
 
 --- Append an event. `fields` may be nil.
 function Log:add(volley, side, kind, fields)
+    numeric.require_integer(self.seq, "battle event sequence", 0, numeric.MAX_TICKS)
+    if self.seq >= numeric.MAX_TICKS then
+        error("battle event sequence exceeded its canonical bound")
+    end
+    volley = numeric.require_integer(volley, "battle event volley", 0, numeric.MAX_TICKS)
     self.seq = self.seq + 1
     local event = {
         seq = self.seq,

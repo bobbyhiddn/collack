@@ -689,7 +689,7 @@ local function draw_concept_legend(x, y, width)
     love.graphics.line(x + 29, y + 18, x + 44, y + 18)
     love.graphics.polygon("fill", x + 44, y + 18, x + 38, y + 14, x + 38, y + 22)
     love.graphics.setLineWidth(1)
-    draw_brick(x + 50, y + 7, 36, 24, "defensive", "absorb", 1, false)
+    draw_brick(x + 50, y + 7, 44, 24, "defensive", "absorb", 1, false)
     love.graphics.setFont(fonts.micro)
     set_color(COLORS.brass)
     love.graphics.printf("MARBLES ATTACK  >  BRICKS DEFEND", x + 100, y + 2,
@@ -1982,7 +1982,8 @@ local function draw_battle_overlay(replay)
         set_color(COLORS.ink)
         love.graphics.printf("EXCHANGE", 564, 172, 152, "center")
         set_color(COLORS.brass_ink)
-        love.graphics.printf("MARBLES ATTACK > BRICKS DEFEND", 552, 194, 176, "center")
+        love.graphics.printf("MARBLES  >  BRICKS", 552, 190, 176, "center")
+        love.graphics.printf("ATTACK       DEFEND", 552, 202, 176, "center")
         local inspected = not replay and battle.inspected or nil
         if inspected then
             local inspection = inspected.rule_inspection or {}

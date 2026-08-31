@@ -95,8 +95,16 @@ end
 function M.project_battle(current, previous, alpha)
     assert(type(current) == "table" and current.schema_version,
         "presentation.project needs a BattleFrame")
+    if not numeric.is_canonical_tree(current) then
+        error("presentation current frame must be finite and bounded")
+    end
     previous = previous or current
-    alpha = clamp(tonumber(alpha) or 1, 0, 1)
+    if not numeric.is_canonical_tree(previous) then
+        error("presentation previous frame must be finite and bounded")
+    end
+    alpha = tonumber(alpha)
+    if not numeric.is_finite(alpha) then alpha = 1 end
+    alpha = clamp(alpha, 0, 1)
     local state = {
         schema_version = M.SCHEMA_VERSION,
         screen = current.result and "result" or "battle",
@@ -155,7 +163,9 @@ function M.project_battle(current, previous, alpha)
             end
         end
     end
-    return state
+    local canonical, recoveries = numeric.canonical_copy(state, "presentation battle state")
+    if recoveries > 0 then canonical.numeric_recovery_count = recoveries end
+    return canonical
 end
 
 local function readable(value)

@@ -64,12 +64,37 @@ local function require_number(value, name, minimum, maximum)
     return numeric.require_number(value, name, minimum, maximum)
 end
 
-local function velocity_requires_recovery(body, recovered)
-    return recovered
-        or not finite(body.vx)
-        or not finite(body.vy)
-        or abs(body.vx) > numeric.MAX_GEOMETRY_MAGNITUDE
-        or abs(body.vy) > numeric.MAX_GEOMETRY_MAGNITUDE
+local function validate_world_boundary(world)
+    require_number(world.width, "world width", 0, numeric.MAX_GEOMETRY_MAGNITUDE)
+    require_number(world.height, "world height", 0, numeric.MAX_GEOMETRY_MAGNITUDE)
+    require_number(world.fixed_dt, "world fixed_dt", 0, numeric.MAX_FIXED_DT)
+    require_number(world.max_speed, "world max_speed", 0, numeric.MAX_SPEED)
+    require_number(world.linear_damping, "world linear_damping", 0, 1)
+    require_number(world.sleep_speed, "world sleep_speed", 0, numeric.MAX_GEOMETRY_MAGNITUDE)
+    numeric.require_integer(world.sleep_ticks, "world sleep_ticks", 1, numeric.MAX_TICKS)
+    require_number(world.restitution, "world restitution", 0, numeric.MAX_RESTITUTION)
+    numeric.require_integer(
+        world.max_collision_iterations,
+        "world max_collision_iterations",
+        1,
+        numeric.MAX_COLLISION_ITERATIONS
+    )
+    numeric.require_integer(world.tick, "world tick", 0, numeric.MAX_TICKS)
+    numeric.require_integer(world.event_seq, "world event sequence", 0, numeric.MAX_TICKS)
+    require_number(world.time, "world time", 0, numeric.MAX_GEOMETRY_MAGNITUDE)
+    if world.width <= 0 or world.height <= 0 or world.fixed_dt <= 0 or world.max_speed <= 0 then
+        error("world dimensions, fixed_dt, and max_speed must remain positive")
+    end
+    if type(world.bodies) ~= "table"
+        or type(world.boxes) ~= "table"
+        or type(world.fields) ~= "table"
+        or type(world.events) ~= "table"
+    then
+        error("world collections must remain tables")
+    end
+    if world.can_collide ~= nil and type(world.can_collide) ~= "function" then
+        error("world can_collide must remain a function")
+    end
 end
 
 local function normalise(x, y, fallback_x, fallback_y)
@@ -268,6 +293,37 @@ function World:add_body(spec)
     self.body_by_id[id] = body
     ordered_insert(self.bodies, body)
     emit(self, "body_added", { body = id })
+    local initial_nx, initial_ny, initial_speed = normalise(
+        body.vx,
+        body.vy,
+        body.motion_fallback_x,
+        body.motion_fallback_y
+    )
+    if initial_speed > self.max_speed then
+        body.vx, body.vy = initial_nx * self.max_speed, initial_ny * self.max_speed
+        initial_speed = self.max_speed
+        emit(self, "speed_clamped", { body = id, speed = self.max_speed })
+    end
+    if body.motion_active then
+        body.asleep = false
+        body.sleep_counter = 0
+        if initial_speed < body.minimum_speed then
+            body.vx, body.vy = initial_nx * body.minimum_speed, initial_ny * body.minimum_speed
+            body.floor_limited = true
+            emit(self, "motion_floor_applied", {
+                body = id,
+                minimum_speed = quantize(body.minimum_speed),
+                prior_speed = quantize(initial_speed),
+                reason = "added",
+            })
+        end
+        body.motion_fallback_x, body.motion_fallback_y = normalise(
+            body.vx,
+            body.vy,
+            body.motion_fallback_x,
+            body.motion_fallback_y
+        )
+    end
     return body
 end
 
@@ -418,7 +474,7 @@ function World:set_velocity(id, vx, vy)
         require_number(vy, "body vy", -limit, limit)
     body.asleep = false
     body.sleep_counter = 0
-    if body.motion_active then self:enforce_motion(id, "set_velocity") end
+    self:enforce_motion(id, "set_velocity")
     return body
 end
 
@@ -527,9 +583,7 @@ function World:apply_impulse(id, ix, iy, opts)
     body.asleep = false
     body.sleep_counter = 0
     local recovered = recovered_x or recovered_y or add_recovered_x or add_recovered_y
-    if body.motion_active or velocity_requires_recovery(body, recovered) then
-        self:enforce_motion(id, "impulse")
-    end
+    self:enforce_motion(id, "impulse")
     if recovered then
         emit(self, "numeric_saturation", { body = id, component = "impulse_velocity" })
     end
@@ -593,9 +647,7 @@ function World:apply_radial_impulse(x, y, radius, strength, opts)
                     body.sleep_counter = 0
                     local recovered = force_recovered or recovered_x or recovered_y
                         or add_recovered_x or add_recovered_y
-                    if body.motion_active or velocity_requires_recovery(body, recovered) then
-                        self:enforce_motion(body.id, "radial_impulse")
-                    end
+                    self:enforce_motion(body.id, "radial_impulse")
                     if recovered then
                         emit(self, "numeric_saturation", {
                             body = body.id,
@@ -884,6 +936,27 @@ function World:enforce_motion(id, reason)
     return body
 end
 
+-- Derived velocity must respect the canonical energy ceiling before any more
+-- movement in this tick.  Keep the playable momentum floor on its established
+-- pre/post-step boundary, though: applying that floor between contacts changes
+-- ordinary authored collision timing and released deterministic replays.
+local function enforce_velocity_ceiling(world, body, reason)
+    if not finite(body.vx) or not finite(body.vy) then
+        enforce_motion(world, body, reason)
+        return
+    end
+    local nx, ny, speed = normalise(
+        body.vx,
+        body.vy,
+        body.motion_fallback_x,
+        body.motion_fallback_y
+    )
+    if speed > world.max_speed then
+        body.vx, body.vy = nx * world.max_speed, ny * world.max_speed
+        emit(world, "speed_clamped", { body = body.id, speed = world.max_speed })
+    end
+end
+
 local function add_velocity(world, body, delta_x, delta_y, reason)
     local next_x, recovered_x = numeric.saturating_add(
         body.vx,
@@ -897,9 +970,7 @@ local function add_velocity(world, body, delta_x, delta_y, reason)
     )
     body.vx, body.vy = next_x, next_y
     local recovered = recovered_x or recovered_y
-    if velocity_requires_recovery(body, recovered) then
-        enforce_motion(world, body, reason)
-    end
+    enforce_velocity_ceiling(world, body, reason)
     if recovered then
         emit(world, "numeric_saturation", {
             body = body.id,
@@ -1131,7 +1202,7 @@ local function swept_pair(world, left, right, remaining, ignored_sensors)
     end
     local inv_left = left.dynamic and left.inv_mass or 0
     local inv_right = right.dynamic and right.inv_mass or 0
-    if inv_left + inv_right <= 0 then return nil end
+    if inv_left <= 0 and inv_right <= 0 then return nil end
 
     local sensor_key = "body:" .. contact_key(left.id, right.id)
     if (left.sensor or right.sensor) and ignored_sensors[sensor_key] then return nil end
@@ -1447,7 +1518,8 @@ local function resolve_collision(world, hit, contacts, ignored_sensors, toi, ite
             right_delta_y = numeric.saturating_product(
                 numeric.MAX_CANONICAL_MAGNITUDE, hit.ny, impulse, inv_right)
         else
-            impulse = numeric.limited_product(
+            local impulse_recovered
+            impulse, impulse_recovered = numeric.limited_product(
                 numeric.MAX_CANONICAL_MAGNITUDE,
                 response,
                 inv_scale > 0 and 1 / inv_scale or 0,
@@ -1461,7 +1533,7 @@ local function resolve_collision(world, hit, contacts, ignored_sensors, toi, ite
                 numeric.MAX_CANONICAL_MAGNITUDE, hit.nx, response, right_share)
             right_delta_y = numeric.saturating_product(
                 numeric.MAX_CANONICAL_MAGNITUDE, hit.ny, response, right_share)
-            saturated = true
+            saturated = impulse_recovered
         end
         add_velocity(world, left, left_delta_x, left_delta_y, "body_collision")
         add_velocity(world, right, right_delta_x, right_delta_y, "body_collision")
@@ -1607,6 +1679,7 @@ local function update_sleep(world)
 end
 
 function World:step(dt)
+    validate_world_boundary(self)
     dt = require_number(dt or self.fixed_dt, "dt", 0, numeric.MAX_FIXED_DT)
     if abs(dt - self.fixed_dt) > 1e-12 then
         error(string.format("physics step must equal fixed_dt %.12f, got %.12f", self.fixed_dt, dt))
@@ -1706,8 +1779,9 @@ function World:is_settled()
 end
 
 function World:drain_events()
-    local out = self.events
+    local out, recoveries = numeric.canonical_copy(self.events, "physics event queue")
     self.events = {}
+    if recoveries > 0 then out.numeric_recovery_count = recoveries end
     return out
 end
 

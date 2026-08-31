@@ -146,6 +146,15 @@ end
 -- terms such as mass * inverse_mass at opposite exponent boundaries.
 function M.limited_product(limit, ...)
     limit = M.require_number(limit, "product limit", 0, M.MAX_CANONICAL_MAGNITUDE)
+    if limit == 0 then
+        local has_zero = false
+        for index = 1, select("#", ...) do
+            local factor = select(index, ...)
+            if not M.is_finite(factor) then return 0, true end
+            if factor == 0 then has_zero = true end
+        end
+        return 0, not has_zero
+    end
     local direct = 1
     local direct_safe = true
     local count = select("#", ...)

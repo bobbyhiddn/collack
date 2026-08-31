@@ -2952,7 +2952,12 @@ end
 function M.step(battle, dt)
     assert(type(battle) == "table" and battle.world, "battle.step needs a BattleWorld")
     if battle.result then return {} end
-    dt = dt or M.FIXED_DT
+    dt = numeric.require_number(
+        dt or M.FIXED_DT,
+        "battle dt",
+        0,
+        numeric.MAX_FIXED_DT
+    )
     if abs(dt - M.FIXED_DT) > 1e-12 then
         error(string.format("battle step must equal fixed dt %.12f", M.FIXED_DT))
     end
@@ -3008,8 +3013,12 @@ function M.result(battle)
 end
 
 function M.drain_events(battle)
-    local events = battle.pending_events
+    local events, recoveries = numeric.canonical_copy(
+        battle.pending_events,
+        "battle event queue"
+    )
     battle.pending_events = {}
+    if recoveries > 0 then events.numeric_recovery_count = recoveries end
     return events
 end
 
