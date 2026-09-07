@@ -453,6 +453,7 @@ export async function verifyLiveRoute({
   browserType = chromium,
 } = {}) {
   const route = new URL(routeUrl);
+  route.searchParams.set("seed", String(expectedSeed));
   const routePath = route.pathname.endsWith("/") ? route.pathname : `${route.pathname}/`;
   const runtimePattern = new RegExp(
     `^${escapedRegExp(routePath)}(?:game|love)\\.[0-9a-f]{16}\\.(?:js|data|wasm)$`,
@@ -465,7 +466,10 @@ export async function verifyLiveRoute({
   let browser;
 
   try {
-    browser = await browserType.launch({ headless: true });
+    browser = await browserType.launch({ headless: true,
+      executablePath: process.env.CALLACK_BROWSER_EXECUTABLE || undefined,
+      args: ["--enable-unsafe-swiftshader"],
+    });
     const context = await browser.newContext({
       viewport: expectedViewport,
       deviceScaleFactor: 1,
@@ -506,7 +510,7 @@ export async function verifyLiveRoute({
       after: 0,
       timeout: 60_000,
     });
-    const response = await page.goto(routeUrl, {
+    const response = await page.goto(route.toString(), {
       waitUntil: "networkidle",
       timeout: 60_000,
     });
@@ -532,6 +536,16 @@ export async function verifyLiveRoute({
       Math.abs(bounds.height - expectedViewport.height) < 0.5,
       `#canvas height is ${bounds.height}, expected ${expectedViewport.height}`,
     );
+
+    // Start through the same front door as a player. The public seed query
+    // makes this journey repeatable without enabling verification mode.
+    const expeditionStarted = page.waitForEvent("console", {
+      predicate: (message) => message.text() === "COLLACK_MENU new",
+      timeout: actionTimeout,
+    });
+    await page.mouse.click(bounds.x + 195, bounds.y + 532);
+    await expeditionStarted;
+    await settleRuntime(page);
 
     const replayHash = await completeSupportedRun({
       page,
