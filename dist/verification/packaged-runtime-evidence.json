@@ -1,8 +1,8 @@
 {
   "schemaVersion": 6,
-  "sourceDigest": "ae5ee7183c418b9d6176c0967de2c49d3b73da60d2ab96f47ed0743d40cf1a62",
-  "sourceCommit": "aa33e96e8ae5ba899f54156e191fd1b0e3dba18b",
-  "sourceTree": "729921086a88db167cca747527c8cc1339699014",
+  "sourceDigest": "2539dd684c913dbbf6184d8fb6feb1783e9d6cbed0dd1cf49849b03e3ba993b4",
+  "sourceCommit": "78ffd8f4ac94a769905f28b2302b0e16a88025a5",
+  "sourceTree": "f273d11dcef7f01a89c55e0628bda6705b7eca95",
   "viewports": {
     "phone": {
       "width": 390,
@@ -18,29 +18,29 @@
   "executableEvidence": {
     "archive": {
       "path": "dist/collack-spike.love",
-      "size": 177499,
-      "sha256": "42b0a1e0934dbc4409e361af61a7c48bc6d7238bf7b57bb76a0d47c0371dce4b"
+      "size": 185468,
+      "sha256": "17c5a66371cb3e2e35980b4fb31feda552902820e9a8616414e9a650b0528b16"
     },
     "webFiles": [
       {
         "path": "dist/web/callack-toolchain-identity.json",
         "size": 1915,
-        "sha256": "693285cd8e7db3ef8a66c51c66e38cdd92f11f46f43e32d2500dd4821c83dc9f"
+        "sha256": "dd6bafab316548a5e1e47ebd0916905f847586cb771f49d5dd7319858ceb5123"
       },
       {
-        "path": "dist/web/game.1ef9ae99d8bdc99e.js",
+        "path": "dist/web/game.17c5a66371cb3e2e.data",
+        "size": 185468,
+        "sha256": "17c5a66371cb3e2e35980b4fb31feda552902820e9a8616414e9a650b0528b16"
+      },
+      {
+        "path": "dist/web/game.b2ccf30faddaa26d.js",
         "size": 11516,
-        "sha256": "1ef9ae99d8bdc99e2982236ca5c2c00c5f70a05550228879c15a424e081dace5"
-      },
-      {
-        "path": "dist/web/game.42b0a1e0934dbc44.data",
-        "size": 177499,
-        "sha256": "42b0a1e0934dbc4409e361af61a7c48bc6d7238bf7b57bb76a0d47c0371dce4b"
+        "sha256": "b2ccf30faddaa26d07fcc7f2af523b5c92cba5cef4bbf70a4b431acb56594685"
       },
       {
         "path": "dist/web/index.html",
-        "size": 8558,
-        "sha256": "e4dea79c34cb80964c21653a28f96995a3904055a29779144361a718b79529be"
+        "size": 11001,
+        "sha256": "380acf7049186ccecd763a965df353d9c1a85e986bd5829eca0f809178242c5d"
       },
       {
         "path": "dist/web/love.cc23a2a709781e03.js",
@@ -63,7 +63,7 @@
         "sha256": "b991b00f74b61804d52f8e5590337f4ef1311fa8bb4315337a1bbc7c8bd262cd"
       }
     ],
-    "aggregateDigest": "6bdc6fb125c517d997ce84a432138bd1a436d594165bc30bdd487a5f5cf48dff"
+    "aggregateDigest": "841e1735129e03dd8064351b759eda709c559c5cce3548d1c4ef69fa6294265f"
   },
   "canonicalSweeps": [
     {
@@ -556,7 +556,7 @@
       "reason": "hostile_collision",
       "screenshot": {
         "name": "phone-splice-guard.png",
-        "sha256": "9d39aef493f8ae48c632bc55cda4271014f7000b0697002e56f0b6eeb31e9500",
+        "sha256": "5bae43b69f2b5492cbed30255e4540bca9ac483ddec4eb47f24b2ed2ee29116f",
         "width": 390,
         "height": 844
       }
@@ -595,7 +595,7 @@
       "reason": "adjacent_allied_guard",
       "screenshot": {
         "name": "phone-splice-guard.png",
-        "sha256": "9d39aef493f8ae48c632bc55cda4271014f7000b0697002e56f0b6eeb31e9500",
+        "sha256": "5bae43b69f2b5492cbed30255e4540bca9ac483ddec4eb47f24b2ed2ee29116f",
         "width": 390,
         "height": 844
       }
@@ -634,7 +634,7 @@
       "reason": "hostile_damage",
       "screenshot": {
         "name": "phone-splice-guard.png",
-        "sha256": "9d39aef493f8ae48c632bc55cda4271014f7000b0697002e56f0b6eeb31e9500",
+        "sha256": "5bae43b69f2b5492cbed30255e4540bca9ac483ddec4eb47f24b2ed2ee29116f",
         "width": 390,
         "height": 844
       }
@@ -673,7 +673,7 @@
       "reason": "duration",
       "screenshot": {
         "name": "phone-splice-guard.png",
-        "sha256": "9d39aef493f8ae48c632bc55cda4271014f7000b0697002e56f0b6eeb31e9500",
+        "sha256": "5bae43b69f2b5492cbed30255e4540bca9ac483ddec4eb47f24b2ed2ee29116f",
         "width": 390,
         "height": 844
       }
@@ -712,7 +712,7 @@
       "reason": "hostile_collision",
       "screenshot": {
         "name": "desktop-splice-guard.png",
-        "sha256": "4afa42abd66b39d1f92bbf06f7438a32aa38c4ea41736a13b3c7500bd43804c0",
+        "sha256": "6b81bc0aac78ce0b4def37c245067097521c42e11856c348a9caa0673d8700bc",
         "width": 1280,
         "height": 800
       }
@@ -751,7 +751,7 @@
       "reason": "adjacent_allied_guard",
       "screenshot": {
         "name": "desktop-splice-guard.png",
-        "sha256": "4afa42abd66b39d1f92bbf06f7438a32aa38c4ea41736a13b3c7500bd43804c0",
+        "sha256": "6b81bc0aac78ce0b4def37c245067097521c42e11856c348a9caa0673d8700bc",
         "width": 1280,
         "height": 800
       }
@@ -790,7 +790,7 @@
       "reason": "hostile_damage",
       "screenshot": {
         "name": "desktop-splice-guard.png",
-        "sha256": "4afa42abd66b39d1f92bbf06f7438a32aa38c4ea41736a13b3c7500bd43804c0",
+        "sha256": "6b81bc0aac78ce0b4def37c245067097521c42e11856c348a9caa0673d8700bc",
         "width": 1280,
         "height": 800
       }
@@ -829,7 +829,7 @@
       "reason": "duration",
       "screenshot": {
         "name": "desktop-splice-guard.png",
-        "sha256": "4afa42abd66b39d1f92bbf06f7438a32aa38c4ea41736a13b3c7500bd43804c0",
+        "sha256": "6b81bc0aac78ce0b4def37c245067097521c42e11856c348a9caa0673d8700bc",
         "width": 1280,
         "height": 800
       }
@@ -862,48 +862,48 @@
     }
   ],
   "screenshotHashes": {
-    "desktop-battle-inspection.png": "3249aaef07ca4c2a822c16047929c81121e528a1cc3efc115b217457bb4e0804",
-    "desktop-battle-settings.png": "6d69a96f8bac2797dcbc95d7b98ab3be74e4feb172d5883610b506b18b8174a6",
-    "desktop-battle-trigger.png": "5dca3bed7a01e1333cc999fd10a898cee25d9ea9094d2e781da68608acea6bc4",
-    "desktop-battle.png": "6d69a96f8bac2797dcbc95d7b98ab3be74e4feb172d5883610b506b18b8174a6",
-    "desktop-draft-inspection.png": "dce32339878d698e299ef6a9dde18e33c1b9e4790c75e542cf79be9ea2f3f4e7",
-    "desktop-draft-scout.png": "35f7fba3af0b40b20445cd3cce2bff09c07a028634265826ac709e14e2ef8961",
-    "desktop-draft.png": "35f7fba3af0b40b20445cd3cce2bff09c07a028634265826ac709e14e2ef8961",
-    "desktop-refit-1.png": "35f7fba3af0b40b20445cd3cce2bff09c07a028634265826ac709e14e2ef8961",
-    "desktop-refit-2.png": "10f0e45c6c4f2fdb54ac4465e595aad4dab72522cbadf9a5862cc778734e7221",
-    "desktop-refit-inspection.png": "dce32339878d698e299ef6a9dde18e33c1b9e4790c75e542cf79be9ea2f3f4e7",
-    "desktop-refit-rule-2.png": "4db3a4085daacb4721917458f1235e818c5f3b354abcc485533bd30b1c02ca82",
-    "desktop-restarted.png": "143a6a86f443ad2c95b37807c40ca85001c959bea6d23585f83b0da980d8e5b2",
-    "desktop-result-after-replay.png": "894839904534ec8f206f4f043c4402c86cf8bd7a3370833a3ea5e3bcf86309cd",
-    "desktop-result.png": "cf7c4293f3288469fd1108c2a71c2bd7d15961a8e309503cfb534df921e6530c",
-    "desktop-reward.png": "64ed90986cff94e01b8de73df8081190bd1c7a6f37071708488c698b758b9c1c",
-    "desktop-scout.png": "68c3f306b293d43a5769af4f93267e4c914f1e69a623ca2939e032086fa9eaaf",
-    "desktop-setup-start.png": "68c3f306b293d43a5769af4f93267e4c914f1e69a623ca2939e032086fa9eaaf",
-    "desktop-setup-terminal.png": "304a2949c12cc25426a05bc27f94749e57fada59a3ab2aabef1cc75979e509e4",
-    "desktop-setup.png": "5f2ae9a13ae67432409fc5a4c334d6c91612af971f00359d45971a917fc41cf5",
-    "desktop-splice-guard.png": "4afa42abd66b39d1f92bbf06f7438a32aa38c4ea41736a13b3c7500bd43804c0",
-    "desktop-terminal-result.png": "cf7c4293f3288469fd1108c2a71c2bd7d15961a8e309503cfb534df921e6530c",
-    "phone-battle-inspection.png": "550e6927ea141400a7e88e90356bbf32611a444d13a12ae580963233d28bb38b",
-    "phone-battle-settings.png": "41c57d6823eb141dd902c31135711633b2d1f69706a2b1202ff42c381ccdf23c",
-    "phone-battle-trigger.png": "2bd0149470708d52ca863737eae4ab725c9f5fca0dbfea6504d9fdfc42c830be",
-    "phone-battle.png": "41c57d6823eb141dd902c31135711633b2d1f69706a2b1202ff42c381ccdf23c",
-    "phone-draft-inspection.png": "418eb88cf0bc12d081aaf1b2902d4ebd7fb096e46077968ec2d15852950b0156",
-    "phone-draft-scout.png": "4b9c8345c90926e5db54f36b3cf48ed7626d8c2a27002e97d044528fae344d56",
-    "phone-draft.png": "4b9c8345c90926e5db54f36b3cf48ed7626d8c2a27002e97d044528fae344d56",
-    "phone-refit-1.png": "4b9c8345c90926e5db54f36b3cf48ed7626d8c2a27002e97d044528fae344d56",
-    "phone-refit-2.png": "58b5cdd396e7559dfdd4dbdebaf3f0e676e30fb0eec7576d3f4f32a06ceca5cc",
-    "phone-refit-inspection.png": "418eb88cf0bc12d081aaf1b2902d4ebd7fb096e46077968ec2d15852950b0156",
-    "phone-refit-rule-2.png": "c97a5b5b4f903a0882d0a3646c0fbb805393a75278e2da026f1ebf81aa6ae8eb",
-    "phone-restarted.png": "6099cdc0b9ff3b202cda3f9a078ae2582834599ebd914a38e0f54be0cfeb1816",
-    "phone-result-after-replay.png": "0963bda1826bcb4829253f898edb6419bab815dfad850ece8a3393be20155908",
-    "phone-result.png": "3222becba037fe8491fd4b32af92e89ad34bf722ed5834f25c180fb2588c821f",
-    "phone-reward.png": "a8d37a571834591682a2f96acd91787da800cf61ff7fd45a28382ec691afbde5",
-    "phone-scout.png": "cdc175ed19291da4d31ba144a932ed5343355eedd35a015aa8da6af458f6413a",
-    "phone-setup-start.png": "cdc175ed19291da4d31ba144a932ed5343355eedd35a015aa8da6af458f6413a",
-    "phone-setup-terminal.png": "8036c879008d39aa7a0af1d365e8ae8ac0a02a67bcc9886cebf58075f1b4685d",
-    "phone-setup.png": "5fa493a766d5fec160ce20c37df55332b2a7a630bab16faa7dd7d1607f2ea47b",
-    "phone-splice-guard.png": "9d39aef493f8ae48c632bc55cda4271014f7000b0697002e56f0b6eeb31e9500",
-    "phone-terminal-result.png": "3222becba037fe8491fd4b32af92e89ad34bf722ed5834f25c180fb2588c821f"
+    "desktop-battle-inspection.png": "9268c29cb504443826cac5b498aa908f8b02476920db0d1f538c659a3cba4ee0",
+    "desktop-battle-settings.png": "fda7b417e909a9545fcada22286a9de49cb856ca9ae2633f0ea22d9e22ba3c6a",
+    "desktop-battle-trigger.png": "45b120eabce530c78bb5f407005dc57178e2c78ee580fc21d43ff6d269142f23",
+    "desktop-battle.png": "fda7b417e909a9545fcada22286a9de49cb856ca9ae2633f0ea22d9e22ba3c6a",
+    "desktop-draft-inspection.png": "92d544d127baf98343e0e14253aa3b8ea5c97c169f30b2ee4aff7d60e3fe4a3f",
+    "desktop-draft-scout.png": "1c1593e59f49da0ee0bce5fe61e480a27cd0ec89ea05795a030a93e36c6411de",
+    "desktop-draft.png": "1c1593e59f49da0ee0bce5fe61e480a27cd0ec89ea05795a030a93e36c6411de",
+    "desktop-refit-1.png": "1c1593e59f49da0ee0bce5fe61e480a27cd0ec89ea05795a030a93e36c6411de",
+    "desktop-refit-2.png": "920f225dab9c6bb9d6d95b02b6450236cc5059cb6e3488301b751ee2084aeb0e",
+    "desktop-refit-inspection.png": "92d544d127baf98343e0e14253aa3b8ea5c97c169f30b2ee4aff7d60e3fe4a3f",
+    "desktop-refit-rule-2.png": "10037bb82be4be6dc9a7c738226b754fdb8ea0a69c74870bbd3b8193fa61fcc7",
+    "desktop-restarted.png": "9280acdab8557fed516a6896b4504a021e059e5e350ff04b09e724925dd30b39",
+    "desktop-result-after-replay.png": "ed76e5461901bc93767af6302ec712cf2fa956c02ba31e949e2ac9a00e63ec1d",
+    "desktop-result.png": "45fe06045604b031e2c5d32001c024a298ed8cc9afdddd3ff5f595139dd3d2da",
+    "desktop-reward.png": "d0cd562a0056d90f1acbcf66557191d29d2c767a7097b478ae9a96c236388b6a",
+    "desktop-scout.png": "cdf9facd31043e9c94bb9474289fc7a61df39bc2b57cc10b2be46127d9f65dd6",
+    "desktop-setup-start.png": "cdf9facd31043e9c94bb9474289fc7a61df39bc2b57cc10b2be46127d9f65dd6",
+    "desktop-setup-terminal.png": "d43f8083c3c4776360fe654c56cd935a5c42201425dc8e410330b4a3982a9eb8",
+    "desktop-setup.png": "e63737a88cd5cd585d028ca9f53229653f46facb2047d3d990aa050d356cffc6",
+    "desktop-splice-guard.png": "6b81bc0aac78ce0b4def37c245067097521c42e11856c348a9caa0673d8700bc",
+    "desktop-terminal-result.png": "45fe06045604b031e2c5d32001c024a298ed8cc9afdddd3ff5f595139dd3d2da",
+    "phone-battle-inspection.png": "2d912899bb7f511e5a2e1b62d5ca3e0791a597866364ef15c7686227fbf130f7",
+    "phone-battle-settings.png": "0f8e222abb4b17890fd4e8996bfd998b3a6cfd20eacc8a1212ff7f6e05615e16",
+    "phone-battle-trigger.png": "36c0a039b602c8e802327b56a83a50ff7bc33641e1f81d859bd33495ec0d577b",
+    "phone-battle.png": "0f8e222abb4b17890fd4e8996bfd998b3a6cfd20eacc8a1212ff7f6e05615e16",
+    "phone-draft-inspection.png": "24dec3c6b8509eea0f729f12e45e65218340c91fdfba9fbd4ec934abb46809a4",
+    "phone-draft-scout.png": "beea8e6c2fc16f1d28574e2806fd668ad2f4a84f5bf499f47a1262aef6481ff7",
+    "phone-draft.png": "beea8e6c2fc16f1d28574e2806fd668ad2f4a84f5bf499f47a1262aef6481ff7",
+    "phone-refit-1.png": "beea8e6c2fc16f1d28574e2806fd668ad2f4a84f5bf499f47a1262aef6481ff7",
+    "phone-refit-2.png": "70e4f2ba7fa77964d71142b4f1432dba93f01267b76ec1b8f20098266e3161a0",
+    "phone-refit-inspection.png": "24dec3c6b8509eea0f729f12e45e65218340c91fdfba9fbd4ec934abb46809a4",
+    "phone-refit-rule-2.png": "820c77ae4fc51e151be8f2c3c4e60dfa708d0e346864089551253cb974cf8192",
+    "phone-restarted.png": "baa058b8c60ac94cce20f198ae5429b7a903046ebe86ce7ddbd00c63a1bae167",
+    "phone-result-after-replay.png": "a2fb36654d429f2f155557d29d9ef9a2fe1e77e2cb1d0bcd065164dbc1b1d7ae",
+    "phone-result.png": "24feda7b8f8b894951fa91adf96650c529ed06ec281830288c74427c5927dfdf",
+    "phone-reward.png": "f1882b4826b919ada9a3847a3b71d96da4e850d8aaa0c4d11fa4997db3ec0319",
+    "phone-scout.png": "1da3d2625de1b531c356c98d0a5d8e31258860ec57c3cbf8cb1ce3bbab59d8f1",
+    "phone-setup-start.png": "1da3d2625de1b531c356c98d0a5d8e31258860ec57c3cbf8cb1ce3bbab59d8f1",
+    "phone-setup-terminal.png": "39be0b063befa593fd9a852758951416e58ab47b67e6520a5e639887cabf30e6",
+    "phone-setup.png": "1722510e6f1094ab6a898406d1ac116487f0e3d08afca67cb5a9a57e04eac297",
+    "phone-splice-guard.png": "5bae43b69f2b5492cbed30255e4540bca9ac483ddec4eb47f24b2ed2ee29116f",
+    "phone-terminal-result.png": "24feda7b8f8b894951fa91adf96650c529ed06ec281830288c74427c5927dfdf"
   },
   "screenshotRecords": [
     {
@@ -912,7 +912,7 @@
       "surface": "battle-inspection",
       "width": 1280,
       "height": 800,
-      "sha256": "3249aaef07ca4c2a822c16047929c81121e528a1cc3efc115b217457bb4e0804"
+      "sha256": "9268c29cb504443826cac5b498aa908f8b02476920db0d1f538c659a3cba4ee0"
     },
     {
       "name": "desktop-battle-settings.png",
@@ -920,7 +920,7 @@
       "surface": "battle-settings",
       "width": 1280,
       "height": 800,
-      "sha256": "6d69a96f8bac2797dcbc95d7b98ab3be74e4feb172d5883610b506b18b8174a6"
+      "sha256": "fda7b417e909a9545fcada22286a9de49cb856ca9ae2633f0ea22d9e22ba3c6a"
     },
     {
       "name": "desktop-battle-trigger.png",
@@ -928,7 +928,7 @@
       "surface": "battle-trigger",
       "width": 1280,
       "height": 800,
-      "sha256": "5dca3bed7a01e1333cc999fd10a898cee25d9ea9094d2e781da68608acea6bc4"
+      "sha256": "45b120eabce530c78bb5f407005dc57178e2c78ee580fc21d43ff6d269142f23"
     },
     {
       "name": "desktop-battle.png",
@@ -936,7 +936,7 @@
       "surface": "battle",
       "width": 1280,
       "height": 800,
-      "sha256": "6d69a96f8bac2797dcbc95d7b98ab3be74e4feb172d5883610b506b18b8174a6"
+      "sha256": "fda7b417e909a9545fcada22286a9de49cb856ca9ae2633f0ea22d9e22ba3c6a"
     },
     {
       "name": "desktop-draft-inspection.png",
@@ -944,7 +944,7 @@
       "surface": "draft-inspection",
       "width": 1280,
       "height": 800,
-      "sha256": "dce32339878d698e299ef6a9dde18e33c1b9e4790c75e542cf79be9ea2f3f4e7"
+      "sha256": "92d544d127baf98343e0e14253aa3b8ea5c97c169f30b2ee4aff7d60e3fe4a3f"
     },
     {
       "name": "desktop-draft-scout.png",
@@ -952,7 +952,7 @@
       "surface": "draft-scout",
       "width": 1280,
       "height": 800,
-      "sha256": "35f7fba3af0b40b20445cd3cce2bff09c07a028634265826ac709e14e2ef8961"
+      "sha256": "1c1593e59f49da0ee0bce5fe61e480a27cd0ec89ea05795a030a93e36c6411de"
     },
     {
       "name": "desktop-draft.png",
@@ -960,7 +960,7 @@
       "surface": "draft",
       "width": 1280,
       "height": 800,
-      "sha256": "35f7fba3af0b40b20445cd3cce2bff09c07a028634265826ac709e14e2ef8961"
+      "sha256": "1c1593e59f49da0ee0bce5fe61e480a27cd0ec89ea05795a030a93e36c6411de"
     },
     {
       "name": "desktop-refit-1.png",
@@ -968,7 +968,7 @@
       "surface": "refit-1",
       "width": 1280,
       "height": 800,
-      "sha256": "35f7fba3af0b40b20445cd3cce2bff09c07a028634265826ac709e14e2ef8961"
+      "sha256": "1c1593e59f49da0ee0bce5fe61e480a27cd0ec89ea05795a030a93e36c6411de"
     },
     {
       "name": "desktop-refit-2.png",
@@ -976,7 +976,7 @@
       "surface": "refit-2",
       "width": 1280,
       "height": 800,
-      "sha256": "10f0e45c6c4f2fdb54ac4465e595aad4dab72522cbadf9a5862cc778734e7221"
+      "sha256": "920f225dab9c6bb9d6d95b02b6450236cc5059cb6e3488301b751ee2084aeb0e"
     },
     {
       "name": "desktop-refit-inspection.png",
@@ -984,7 +984,7 @@
       "surface": "refit-inspection",
       "width": 1280,
       "height": 800,
-      "sha256": "dce32339878d698e299ef6a9dde18e33c1b9e4790c75e542cf79be9ea2f3f4e7"
+      "sha256": "92d544d127baf98343e0e14253aa3b8ea5c97c169f30b2ee4aff7d60e3fe4a3f"
     },
     {
       "name": "desktop-refit-rule-2.png",
@@ -992,7 +992,7 @@
       "surface": "refit-rule-2",
       "width": 1280,
       "height": 800,
-      "sha256": "4db3a4085daacb4721917458f1235e818c5f3b354abcc485533bd30b1c02ca82"
+      "sha256": "10037bb82be4be6dc9a7c738226b754fdb8ea0a69c74870bbd3b8193fa61fcc7"
     },
     {
       "name": "desktop-restarted.png",
@@ -1000,7 +1000,7 @@
       "surface": "restarted",
       "width": 1280,
       "height": 800,
-      "sha256": "143a6a86f443ad2c95b37807c40ca85001c959bea6d23585f83b0da980d8e5b2"
+      "sha256": "9280acdab8557fed516a6896b4504a021e059e5e350ff04b09e724925dd30b39"
     },
     {
       "name": "desktop-result-after-replay.png",
@@ -1008,7 +1008,7 @@
       "surface": "result-after-replay",
       "width": 1280,
       "height": 800,
-      "sha256": "894839904534ec8f206f4f043c4402c86cf8bd7a3370833a3ea5e3bcf86309cd"
+      "sha256": "ed76e5461901bc93767af6302ec712cf2fa956c02ba31e949e2ac9a00e63ec1d"
     },
     {
       "name": "desktop-result.png",
@@ -1016,7 +1016,7 @@
       "surface": "result",
       "width": 1280,
       "height": 800,
-      "sha256": "cf7c4293f3288469fd1108c2a71c2bd7d15961a8e309503cfb534df921e6530c"
+      "sha256": "45fe06045604b031e2c5d32001c024a298ed8cc9afdddd3ff5f595139dd3d2da"
     },
     {
       "name": "desktop-reward.png",
@@ -1024,7 +1024,7 @@
       "surface": "reward",
       "width": 1280,
       "height": 800,
-      "sha256": "64ed90986cff94e01b8de73df8081190bd1c7a6f37071708488c698b758b9c1c"
+      "sha256": "d0cd562a0056d90f1acbcf66557191d29d2c767a7097b478ae9a96c236388b6a"
     },
     {
       "name": "desktop-scout.png",
@@ -1032,7 +1032,7 @@
       "surface": "scout",
       "width": 1280,
       "height": 800,
-      "sha256": "68c3f306b293d43a5769af4f93267e4c914f1e69a623ca2939e032086fa9eaaf"
+      "sha256": "cdf9facd31043e9c94bb9474289fc7a61df39bc2b57cc10b2be46127d9f65dd6"
     },
     {
       "name": "desktop-setup-start.png",
@@ -1040,7 +1040,7 @@
       "surface": "setup-start",
       "width": 1280,
       "height": 800,
-      "sha256": "68c3f306b293d43a5769af4f93267e4c914f1e69a623ca2939e032086fa9eaaf"
+      "sha256": "cdf9facd31043e9c94bb9474289fc7a61df39bc2b57cc10b2be46127d9f65dd6"
     },
     {
       "name": "desktop-setup-terminal.png",
@@ -1048,7 +1048,7 @@
       "surface": "setup-terminal",
       "width": 1280,
       "height": 800,
-      "sha256": "304a2949c12cc25426a05bc27f94749e57fada59a3ab2aabef1cc75979e509e4"
+      "sha256": "d43f8083c3c4776360fe654c56cd935a5c42201425dc8e410330b4a3982a9eb8"
     },
     {
       "name": "desktop-setup.png",
@@ -1056,7 +1056,7 @@
       "surface": "setup",
       "width": 1280,
       "height": 800,
-      "sha256": "5f2ae9a13ae67432409fc5a4c334d6c91612af971f00359d45971a917fc41cf5"
+      "sha256": "e63737a88cd5cd585d028ca9f53229653f46facb2047d3d990aa050d356cffc6"
     },
     {
       "name": "desktop-splice-guard.png",
@@ -1064,7 +1064,7 @@
       "surface": "splice-guard",
       "width": 1280,
       "height": 800,
-      "sha256": "4afa42abd66b39d1f92bbf06f7438a32aa38c4ea41736a13b3c7500bd43804c0"
+      "sha256": "6b81bc0aac78ce0b4def37c245067097521c42e11856c348a9caa0673d8700bc"
     },
     {
       "name": "desktop-terminal-result.png",
@@ -1072,7 +1072,7 @@
       "surface": "terminal-result",
       "width": 1280,
       "height": 800,
-      "sha256": "cf7c4293f3288469fd1108c2a71c2bd7d15961a8e309503cfb534df921e6530c"
+      "sha256": "45fe06045604b031e2c5d32001c024a298ed8cc9afdddd3ff5f595139dd3d2da"
     },
     {
       "name": "phone-battle-inspection.png",
@@ -1080,7 +1080,7 @@
       "surface": "battle-inspection",
       "width": 390,
       "height": 844,
-      "sha256": "550e6927ea141400a7e88e90356bbf32611a444d13a12ae580963233d28bb38b"
+      "sha256": "2d912899bb7f511e5a2e1b62d5ca3e0791a597866364ef15c7686227fbf130f7"
     },
     {
       "name": "phone-battle-settings.png",
@@ -1088,7 +1088,7 @@
       "surface": "battle-settings",
       "width": 390,
       "height": 844,
-      "sha256": "41c57d6823eb141dd902c31135711633b2d1f69706a2b1202ff42c381ccdf23c"
+      "sha256": "0f8e222abb4b17890fd4e8996bfd998b3a6cfd20eacc8a1212ff7f6e05615e16"
     },
     {
       "name": "phone-battle-trigger.png",
@@ -1096,7 +1096,7 @@
       "surface": "battle-trigger",
       "width": 390,
       "height": 844,
-      "sha256": "2bd0149470708d52ca863737eae4ab725c9f5fca0dbfea6504d9fdfc42c830be"
+      "sha256": "36c0a039b602c8e802327b56a83a50ff7bc33641e1f81d859bd33495ec0d577b"
     },
     {
       "name": "phone-battle.png",
@@ -1104,7 +1104,7 @@
       "surface": "battle",
       "width": 390,
       "height": 844,
-      "sha256": "41c57d6823eb141dd902c31135711633b2d1f69706a2b1202ff42c381ccdf23c"
+      "sha256": "0f8e222abb4b17890fd4e8996bfd998b3a6cfd20eacc8a1212ff7f6e05615e16"
     },
     {
       "name": "phone-draft-inspection.png",
@@ -1112,7 +1112,7 @@
       "surface": "draft-inspection",
       "width": 390,
       "height": 844,
-      "sha256": "418eb88cf0bc12d081aaf1b2902d4ebd7fb096e46077968ec2d15852950b0156"
+      "sha256": "24dec3c6b8509eea0f729f12e45e65218340c91fdfba9fbd4ec934abb46809a4"
     },
     {
       "name": "phone-draft-scout.png",
@@ -1120,7 +1120,7 @@
       "surface": "draft-scout",
       "width": 390,
       "height": 844,
-      "sha256": "4b9c8345c90926e5db54f36b3cf48ed7626d8c2a27002e97d044528fae344d56"
+      "sha256": "beea8e6c2fc16f1d28574e2806fd668ad2f4a84f5bf499f47a1262aef6481ff7"
     },
     {
       "name": "phone-draft.png",
@@ -1128,7 +1128,7 @@
       "surface": "draft",
       "width": 390,
       "height": 844,
-      "sha256": "4b9c8345c90926e5db54f36b3cf48ed7626d8c2a27002e97d044528fae344d56"
+      "sha256": "beea8e6c2fc16f1d28574e2806fd668ad2f4a84f5bf499f47a1262aef6481ff7"
     },
     {
       "name": "phone-refit-1.png",
@@ -1136,7 +1136,7 @@
       "surface": "refit-1",
       "width": 390,
       "height": 844,
-      "sha256": "4b9c8345c90926e5db54f36b3cf48ed7626d8c2a27002e97d044528fae344d56"
+      "sha256": "beea8e6c2fc16f1d28574e2806fd668ad2f4a84f5bf499f47a1262aef6481ff7"
     },
     {
       "name": "phone-refit-2.png",
@@ -1144,7 +1144,7 @@
       "surface": "refit-2",
       "width": 390,
       "height": 844,
-      "sha256": "58b5cdd396e7559dfdd4dbdebaf3f0e676e30fb0eec7576d3f4f32a06ceca5cc"
+      "sha256": "70e4f2ba7fa77964d71142b4f1432dba93f01267b76ec1b8f20098266e3161a0"
     },
     {
       "name": "phone-refit-inspection.png",
@@ -1152,7 +1152,7 @@
       "surface": "refit-inspection",
       "width": 390,
       "height": 844,
-      "sha256": "418eb88cf0bc12d081aaf1b2902d4ebd7fb096e46077968ec2d15852950b0156"
+      "sha256": "24dec3c6b8509eea0f729f12e45e65218340c91fdfba9fbd4ec934abb46809a4"
     },
     {
       "name": "phone-refit-rule-2.png",
@@ -1160,7 +1160,7 @@
       "surface": "refit-rule-2",
       "width": 390,
       "height": 844,
-      "sha256": "c97a5b5b4f903a0882d0a3646c0fbb805393a75278e2da026f1ebf81aa6ae8eb"
+      "sha256": "820c77ae4fc51e151be8f2c3c4e60dfa708d0e346864089551253cb974cf8192"
     },
     {
       "name": "phone-restarted.png",
@@ -1168,7 +1168,7 @@
       "surface": "restarted",
       "width": 390,
       "height": 844,
-      "sha256": "6099cdc0b9ff3b202cda3f9a078ae2582834599ebd914a38e0f54be0cfeb1816"
+      "sha256": "baa058b8c60ac94cce20f198ae5429b7a903046ebe86ce7ddbd00c63a1bae167"
     },
     {
       "name": "phone-result-after-replay.png",
@@ -1176,7 +1176,7 @@
       "surface": "result-after-replay",
       "width": 390,
       "height": 844,
-      "sha256": "0963bda1826bcb4829253f898edb6419bab815dfad850ece8a3393be20155908"
+      "sha256": "a2fb36654d429f2f155557d29d9ef9a2fe1e77e2cb1d0bcd065164dbc1b1d7ae"
     },
     {
       "name": "phone-result.png",
@@ -1184,7 +1184,7 @@
       "surface": "result",
       "width": 390,
       "height": 844,
-      "sha256": "3222becba037fe8491fd4b32af92e89ad34bf722ed5834f25c180fb2588c821f"
+      "sha256": "24feda7b8f8b894951fa91adf96650c529ed06ec281830288c74427c5927dfdf"
     },
     {
       "name": "phone-reward.png",
@@ -1192,7 +1192,7 @@
       "surface": "reward",
       "width": 390,
       "height": 844,
-      "sha256": "a8d37a571834591682a2f96acd91787da800cf61ff7fd45a28382ec691afbde5"
+      "sha256": "f1882b4826b919ada9a3847a3b71d96da4e850d8aaa0c4d11fa4997db3ec0319"
     },
     {
       "name": "phone-scout.png",
@@ -1200,7 +1200,7 @@
       "surface": "scout",
       "width": 390,
       "height": 844,
-      "sha256": "cdc175ed19291da4d31ba144a932ed5343355eedd35a015aa8da6af458f6413a"
+      "sha256": "1da3d2625de1b531c356c98d0a5d8e31258860ec57c3cbf8cb1ce3bbab59d8f1"
     },
     {
       "name": "phone-setup-start.png",
@@ -1208,7 +1208,7 @@
       "surface": "setup-start",
       "width": 390,
       "height": 844,
-      "sha256": "cdc175ed19291da4d31ba144a932ed5343355eedd35a015aa8da6af458f6413a"
+      "sha256": "1da3d2625de1b531c356c98d0a5d8e31258860ec57c3cbf8cb1ce3bbab59d8f1"
     },
     {
       "name": "phone-setup-terminal.png",
@@ -1216,7 +1216,7 @@
       "surface": "setup-terminal",
       "width": 390,
       "height": 844,
-      "sha256": "8036c879008d39aa7a0af1d365e8ae8ac0a02a67bcc9886cebf58075f1b4685d"
+      "sha256": "39be0b063befa593fd9a852758951416e58ab47b67e6520a5e639887cabf30e6"
     },
     {
       "name": "phone-setup.png",
@@ -1224,7 +1224,7 @@
       "surface": "setup",
       "width": 390,
       "height": 844,
-      "sha256": "5fa493a766d5fec160ce20c37df55332b2a7a630bab16faa7dd7d1607f2ea47b"
+      "sha256": "1722510e6f1094ab6a898406d1ac116487f0e3d08afca67cb5a9a57e04eac297"
     },
     {
       "name": "phone-splice-guard.png",
@@ -1232,7 +1232,7 @@
       "surface": "splice-guard",
       "width": 390,
       "height": 844,
-      "sha256": "9d39aef493f8ae48c632bc55cda4271014f7000b0697002e56f0b6eeb31e9500"
+      "sha256": "5bae43b69f2b5492cbed30255e4540bca9ac483ddec4eb47f24b2ed2ee29116f"
     },
     {
       "name": "phone-terminal-result.png",
@@ -1240,8 +1240,8 @@
       "surface": "terminal-result",
       "width": 390,
       "height": 844,
-      "sha256": "3222becba037fe8491fd4b32af92e89ad34bf722ed5834f25c180fb2588c821f"
+      "sha256": "24feda7b8f8b894951fa91adf96650c529ed06ec281830288c74427c5927dfdf"
     }
   ],
-  "evidenceDigest": "28d13b04b0d29a572a484025526f100a3b40c5ad7f0c7710606eb5adb2a87867"
+  "evidenceDigest": "27723f314abef4e178998f58c355ffca85e248bd1718d958771cf4c896d793fc"
 }
