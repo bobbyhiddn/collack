@@ -293,8 +293,14 @@ local function inspect_entity(model, action)
     local closing = tostring(next_model.ui.inspected_entity_id) == tostring(action.entity_id)
     if closing then
         next_model.ui.inspected_entity_id = nil
+        next_model.ui.paused = next_model.ui.inspection_previous_pause == true
+        next_model.ui.inspection_previous_pause = nil
     else
+        if not next_model.ui.inspected_entity_id then
+            next_model.ui.inspection_previous_pause = next_model.ui.paused
+        end
         next_model.ui.inspected_entity_id = action.entity_id
+        next_model.ui.paused = true
     end
     next_model.ui.inspection_rule_index = 1
     return accepted(next_model, {
@@ -318,6 +324,10 @@ local function battle_view_action(model, action)
     local next_model = util.deep_copy(model)
     if action.kind == "toggle_pause" then
         next_model.ui.paused = not next_model.ui.paused
+        if not next_model.ui.paused then
+            next_model.ui.inspected_entity_id = nil
+            next_model.ui.inspection_previous_pause = nil
+        end
     elseif action.kind == "cycle_speed" then
         next_model.ui.speed = next_model.ui.speed == 2 and 1 or 2
     elseif action.kind == "toggle_mute" then

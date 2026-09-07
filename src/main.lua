@@ -6,6 +6,9 @@ local art = require("ui.art_tokens")
 local battle_presentation = require("presentation")
 local procedural_audio = require("ui.procedural_audio")
 local run_loop = require("run_loop")
+local run_session = require("run_session")
+local expedition_menu = require("ui.expedition_menu")
+local run_util = require("battle.run_util")
 
 local PHONE_W = art.logical_surface.phone.width
 local PHONE_H = art.logical_surface.phone.height
@@ -42,6 +45,10 @@ local verification_mode = false
 local verification_splice_evidence
 local verification_splice_frame
 local verification_splice_view = false
+local menu_page, menu_focus, session_note = "home", 1, nil
+local session_started, last_save_signature = false, nil
+local requested_run_seed
+local menu_context, activate_menu, save_session
 
 local COLORS = {
     shadow = P.shadow.rgb,
@@ -213,7 +220,7 @@ end
 
 local function update_title()
     love.window.setTitle(string.format(
-        "Callack | %s | Seed %d",
+        "Collack | %s | Seed %d",
         string.upper(view.screen),
         view.run_seed
     ))
@@ -414,11 +421,63 @@ local function sync_settings()
     if audio_bank then procedural_audio.set_muted(audio_bank, app.model.ui.muted) end
     setting_write("muted.setting", app.model.ui.muted)
     setting_write("reduced-motion.setting", app.model.ui.reduced_motion)
+    if love.system.getOS() == "Web" and not verification_mode then
+        print("COLLACK_PREF " .. tostring(app.model.ui.muted) .. " " .. tostring(app.model.ui.reduced_motion))
+    end
+end
+
+save_session = function()
+    if verification_mode or not session_started or app.model.run.phase == "battle" then return end
+    local state = app.model.run
+    local signature = state.run_seed .. ":" .. state.phase .. ":" .. #state.journal
+    if signature == last_save_signature then return end
+    -- Retry on the next meaningful edit, not every animation frame. A full
+    -- recording can be expensive to serialize on a storage-limited device.
+    last_save_signature = signature
+    local bytes, err = run_session.encode(app)
+    if not bytes then session_note = err; return end
+    local ok, encoded = pcall(function()
+        local compressed = love.data.compress("string", "zlib", bytes, 6)
+        return "C1:" .. run_session.storage_digest(compressed) .. ":"
+            .. love.data.encode("string", "base64", compressed)
+    end)
+    if not ok then session_note = "Saving is unavailable on this device."; return end
+    local wrote, success = pcall(love.filesystem.write, "expedition.save", encoded)
+    if love.system.getOS() == "Web" then
+        print("COLLACK_SAVE " .. encoded)
+    elseif not wrote or not success then
+        session_note = "Your save could not be written. Keep this window open to continue."
+        return
+    end
+    session_note = "Expedition saved. Fight " .. state.fight.index .. " of " .. state.fight.total .. "."
+end
+
+local function session_actions()
+    local actions = { { id = "session_menu", label = "MENU", enabled = true,
+        bounds = mode() == "desktop" and { x = 1168, y = 24, width = 72, height = 48 }
+            or { x = 306, y = 14, width = 64, height = 48 } } }
+    if view.screen == "setup" then
+        actions[#actions + 1] = { id = "quick_arrange", label = "QUICK ARRANGE", enabled = true,
+            bounds = mode() == "desktop" and { x = 44, y = 594, width = 236, height = 48 }
+                or { x = 210, y = 300, width = 150, height = 44 } }
+    end
+    return actions
 end
 
 local function activate(action_id, source)
+    if action_id:match("^menu:") then return activate_menu(action_id:sub(6)) end
+    if action_id == "session_menu" then
+        save_session(); menu_page, menu_focus = "home", 1
+        return true
+    elseif action_id == "quick_arrange" then
+        local arranged, err = run_session.arrange(app)
+        last_cue = arranged and "Formation ready. You can move any brick before battle." or err
+        refresh_view(); save_session(); report_action("quick_arrange")
+        return arranged
+    end
     if view.enabled_actions[action_id] ~= true then return false end
     audio_unlock()
+    if action_id == "lock_setup" then save_session() end
     local accepted, action_error = run_loop.activate(app, action_id, source)
     if not accepted then
         last_cue = action_error and action_error.message or "That action is unavailable."
@@ -435,6 +494,7 @@ local function activate(action_id, source)
         app.model.ui.paused = true
     end
     refresh_view()
+    save_session()
     local inspected_choice = action_id:match("^offer:")
         and view.draft and view.draft.inspected or nil
     if inspected_choice then
@@ -491,6 +551,7 @@ local function enabled_actions()
     for _, action in ipairs(view.actions or {}) do
         if action.enabled then out[#out + 1] = action end
     end
+    for _, action in ipairs(session_actions()) do out[#out + 1] = action end
     return out
 end
 
@@ -671,7 +732,9 @@ local function draw_brick(x, y, width, height, family, behaviour, hp_ratio, sele
     love.graphics.setFont(fonts.micro)
     set_color((mineral == "silver" or mineral == "chalk" or mineral == "quartz")
         and COLORS.ink or COLORS.chalk)
-    love.graphics.printf(token.label, x + 3, y + height / 2 - 6, width - 6, "center")
+    local mark = token.label
+    if fonts.micro:getWidth(mark) > width - 6 then mark = mark:sub(1, 3) end
+    love.graphics.printf(mark, x + 3, y + height / 2 - 6, width - 6, "center")
     local pips = math.max(1, math.floor(hp_ratio * 4 + 0.5))
     for index = 1, 4 do
         set_color(index <= pips and COLORS.brass_light or COLORS.shadow, index <= pips and 0.9 or 0.35)
@@ -757,7 +820,7 @@ local function draw_chrome(phase_label, seed_label)
     panel(x, y, width, height, "walnut", 12)
     love.graphics.setFont(fonts.display)
     set_color(COLORS.chalk)
-    love.graphics.print("CALLACK", x + 12, y + (desktop and 14 or 8))
+    love.graphics.print("COLLACK", x + 12, y + (desktop and 14 or 8))
     set_color(COLORS.brass)
     love.graphics.setLineWidth(2)
     love.graphics.line(x + 13, y + height - 10, x + (desktop and 174 or 121), y + height - 10)
@@ -766,17 +829,17 @@ local function draw_chrome(phase_label, seed_label)
     set_color(COLORS.brass)
     love.graphics.printf(
         phase_label or view.labels.phase,
-        x + width - 210,
+        x + width - (desktop and 294 or 202),
         y + 12,
-        194,
+        desktop and 194 or 122,
         "right"
     )
     set_color(COLORS.muted)
     love.graphics.printf(
         seed_label or view.labels.seed,
-        x + width - 210,
+        x + width - (desktop and 294 or 202),
         y + 34,
-        194,
+        desktop and 194 or 122,
         "right"
     )
 end
@@ -967,15 +1030,17 @@ local function draw_draft_card(card, x, y, width, height, large, index)
     else
         local bricks = card.details and card.details.bricks or {}
         local first = bricks[1] or { family = "defensive", behaviour = "fortify" }
-        local second = bricks[2] or { family = "effect", behaviour = "shatter" }
+        local second = bricks[2]
         local brick_width = large and 94 or 58
         local brick_height = large and 58 or 34
         draw_brick(art_x - brick_width / 2 - (large and 10 or 0),
             art_y - brick_height / 2 - (large and 8 or 10),
             brick_width, brick_height, first.family, first.behaviour, 1)
-        draw_brick(art_x - brick_width / 2 + (large and 10 or 0),
-            art_y - brick_height / 2 + (large and 24 or 14),
-            brick_width, brick_height, second.family, second.behaviour, 1)
+        if second then
+            draw_brick(art_x - brick_width / 2 + (large and 10 or 0),
+                art_y - brick_height / 2 + (large and 24 or 14),
+                brick_width, brick_height, second.family, second.behaviour, 1)
+        end
     end
 
     local text_x = large and x + 18 or x + 94
@@ -983,7 +1048,7 @@ local function draw_draft_card(card, x, y, width, height, large, index)
     local text_width = large and width - 36 or width - 108
     love.graphics.setFont(fonts.card)
     set_color(COLORS.ink, alpha)
-    love.graphics.printf(card.name, text_x, text_y, text_width, large and "center" or "left")
+    draw_wrapped_limited(card.name, text_x, text_y, text_width, 1, large and "center" or "left")
     love.graphics.setFont(fonts.meta)
     set_color(COLORS.ink, 0.72 * alpha)
     love.graphics.printf(
@@ -996,14 +1061,14 @@ local function draw_draft_card(card, x, y, width, height, large, index)
     local lines = primary.comparison_lines or {}
     love.graphics.setFont(large and fonts.meta or fonts.micro)
     set_color(COLORS.brass_ink, alpha)
-    love.graphics.printf(comparison.operation or "", text_x, text_y + 52,
-        text_width, large and "center" or "left")
+    draw_wrapped_limited(comparison.operation or "", text_x, text_y + 52,
+        text_width, 1, large and "center" or "left")
     set_color(COLORS.ink, alpha)
-    love.graphics.printf(lines[1] or "INSPECT FOR CANONICAL RULES",
-        text_x, text_y + (large and 88 or 72), text_width,
+    draw_wrapped_limited(lines[1] or "TAP TO INSPECT",
+        text_x, text_y + (large and 88 or 72), text_width, large and 2 or 1,
         large and "center" or "left")
-    love.graphics.printf(lines[2] or "",
-        text_x, text_y + (large and 116 or 91), text_width,
+    draw_wrapped_limited(lines[2] or "",
+        text_x, text_y + (large and 126 or 89), text_width, large and 2 or 1,
         large and "center" or "left")
     local telegraph = card.telegraph or {}
     local authority_line = ""
@@ -1050,7 +1115,7 @@ local function draw_draft_card(card, x, y, width, height, large, index)
             telegraph.copy_cap or 1
         )
     end
-    if authority_line ~= "" then
+    if large and authority_line ~= "" then
         love.graphics.setFont(fonts.micro)
         set_color(COLORS.muted, alpha)
         love.graphics.printf(
@@ -1624,7 +1689,7 @@ local function draw_setup_phone()
     love.graphics.setFont(fonts.micro)
     set_color(view.setup.valid and COLORS.restore or COLORS.muted)
     love.graphics.printf(setup_progress_text(), 26, 746, 338, "right")
-    draw_button("lock_setup", "LOCK FORMATION", COLORS.player)
+    draw_button("lock_setup", "START AUTOBATTLE", COLORS.player)
 end
 
 local function draw_setup_desktop()
@@ -1740,7 +1805,7 @@ local function draw_setup_desktop()
             or (setup_progress_text() .. "  /  seat every drafted brick to lock.")
     end
     love.graphics.printf(footer_copy, 48, 716, 900, "left")
-    draw_button("lock_setup", "LOCK FORMATION", COLORS.player)
+    draw_button("lock_setup", "START AUTOBATTLE", COLORS.player)
 end
 
 local function frame_mapper(frame)
@@ -1808,16 +1873,20 @@ end
 
 local function draw_battle_world(frame)
     if mode() == "desktop" then
-        panel(24, 96, 500, 568, "felt", 16)
-        panel(548, 96, 184, 568, "paper", 16)
-        panel(756, 96, 500, 568, "felt", 16)
+        panel(24, 96, 1232, 568, "felt", 16)
     else
-        panel(16, 72, 358, 246, "felt", 14)
-        panel(16, 326, 358, 156, "paper", 12)
-        panel(16, 490, 358, 246, "felt", 14)
+        panel(16, 72, 358, 664, "felt", 14)
     end
     if not frame or not frame.arena then return end
     local map = frame_mapper(frame)
+    -- One physical arena, including the flight corridor between formations.
+    -- The quiet halfway marks are decoration, never a collision boundary.
+    set_color(COLORS.brass, 0.18)
+    if mode() == "desktop" then
+        for y = 148, 620, 22 do love.graphics.line(640, y, 640, y + 8) end
+    else
+        for x = 34, 352, 22 do love.graphics.line(x, 404, x + 8, 404) end
+    end
     for _, field in ipairs(frame.world.fields or {}) do
         local x, y = map(field.x, field.y)
         local radius_x, radius_y
@@ -1890,9 +1959,13 @@ local function draw_battle_world(frame)
         elseif entity.type == "marble" then
             local scale_x = mode() == "desktop" and 1200 / frame.arena.height or 342 / frame.arena.width
             local scale_y = mode() == "desktop" and 536 / frame.arena.width or 632 / frame.arena.height
-            local radius = math.max(6, entity.radius * math.min(scale_x, scale_y))
+            local radius = math.max(8, entity.radius * math.min(scale_x, scale_y))
             local marble = side_marble(frame, entity.owner, entity.uid)
             local shell = marble and marble.shells and marble.shells[1]
+            set_color(entity.owner == "A" and COLORS.player or COLORS.opponent, 0.9)
+            love.graphics.setLineWidth(2)
+            love.graphics.circle("line", x, y, radius + 3)
+            love.graphics.setLineWidth(1)
             if inspected then
                 set_color(COLORS.focus, 0.15)
                 love.graphics.circle("fill", x, y, radius + 12)
@@ -1969,6 +2042,53 @@ local function draw_battle_overlay(replay)
         view = app.model.ui,
     } or view.battle
     local frame = battle.frame
+    if replay or not battle.inspected then
+        local desktop = mode() == "desktop"
+        local a = frame and frame.sides and frame.sides.A or {}
+        local b = frame and frame.sides and frame.sides.B or {}
+        local function tally(side)
+            return string.format("%d BRICKS  /  %d MARBLES",
+                side.bricks_alive or 0, side.marbles_alive or 0)
+        end
+        love.graphics.setFont(fonts.label)
+        set_color(COLORS.opponent)
+        love.graphics.print(string.upper(view.opponent.name), desktop and 44 or 28, desktop and 112 or 84)
+        love.graphics.setFont(fonts.micro)
+        love.graphics.print(tally(b), desktop and 44 or 28, desktop and 136 or 102)
+        set_color(COLORS.player)
+        love.graphics.printf("YOUR COLLECTION", desktop and 780 or 28,
+            desktop and 112 or 693, desktop and 452 or 334, "right")
+        love.graphics.printf(tally(a), desktop and 780 or 28,
+            desktop and 136 or 710, desktop and 452 or 334, "right")
+        if desktop then panel(24, 688, 1232, 88, "walnut", 14) end
+        love.graphics.setFont(desktop and fonts.card or fonts.label)
+        set_color(COLORS.brass)
+        local label = replay and "BATTLE REPLAY"
+            or (battle.view.paused and "PAUSED" or "AUTOBATTLE")
+        local title = label .. string.format("  /  VOLLEY %02d", battle.exchange or 0)
+        love.graphics.printf(title, desktop and 48 or 20, desktop and 704 or 741,
+            desktop and 680 or 350, desktop and "left" or "center")
+        if desktop then
+            love.graphics.setFont(fonts.body)
+            set_color(COLORS.muted)
+            love.graphics.printf(replay and "Watch the same ricochets again."
+                or "Break every rival brick or outlast their marbles. Click a piece to pause and inspect.",
+                48, 736, 680, "left")
+        end
+        if replay then
+            draw_button("replay_next", "NEXT FRAME", COLORS.brass)
+            draw_button("replay_close", "RESULT", COLORS.player)
+        else
+            draw_button("battle_pause", battle.view.paused and "RESUME" or "PAUSE")
+            draw_button("battle_speed", tostring(battle.view.speed) .. "X")
+            draw_button("battle_mute", battle.view.muted and "MUTED" or "SOUND")
+            draw_button("battle_motion", battle.view.reduced_motion and "REDUCED" or "MOTION")
+        end
+        return
+    end
+    -- Detailed mechanics appear only on request while the battle is paused.
+    if mode() == "desktop" then panel(548, 96, 184, 568, "paper", 16)
+    else panel(16, 326, 358, 156, "paper", 12) end
     if mode() == "desktop" then
         love.graphics.setFont(fonts.label)
         set_color(COLORS.opponent)
@@ -2413,6 +2533,19 @@ local function draw_replay()
 end
 
 local function action_at(x, y)
+    if menu_page then
+        for _, action in ipairs(expedition_menu.actions(menu_context())) do
+            if x >= action.x and x <= action.x + action.width
+                and y >= action.y and y <= action.y + action.height then
+                return { id = "menu:" .. action.id }
+            end
+        end
+        return nil
+    end
+    for _, action in ipairs(session_actions()) do
+        local b = action.bounds
+        if x >= b.x and x <= b.x + b.width and y >= b.y and y <= b.y + b.height then return action end
+    end
     for index = #(view.actions or {}), 1, -1 do
         local action = view.actions[index]
         local ax, ay, width, height = action_bounds(action)
@@ -2644,6 +2777,35 @@ local function has_argument(args, wanted)
     return false
 end
 
+menu_context = function()
+    local width, height = base_size()
+    return { width = width, height = height, page = menu_page, focus = menu_focus,
+        can_resume = session_started, note = session_note, colors = COLORS, fonts = fonts,
+        brick = draw_brick, marble = draw_marble }
+end
+
+activate_menu = function(id)
+    audio_unlock()
+    if id == "resume" then
+        menu_page = nil
+    elseif id == "help" then menu_page, menu_focus = "help", 1
+    elseif id == "back" then menu_page, menu_focus = "home", 1
+    elseif id == "new" and session_started and app.model.run.phase ~= "result" then
+        menu_page, menu_focus = "confirm", 1
+    elseif id == "new" or id == "start" then
+        local seed = requested_run_seed or (session_started and run_util.next_seed(app.model.run.run_seed))
+            or run_util.normalize_seed(os.time() + math.floor(love.timer.getTime() * 1000))
+        requested_run_seed = nil
+        app = run_loop.new({ short_run = true, run_seed = seed,
+            muted = app.model.ui.muted, reduced_motion = app.model.ui.reduced_motion })
+        session_started, menu_page, last_save_signature = true, nil, nil
+        particles, trails, last_rule_callout, focused_action_id = {}, {}, nil, nil
+        refresh_view(); save_session()
+    end
+    print("COLLACK_MENU " .. id)
+    return true
+end
+
 function love.load(args)
     local touch = has_argument(args, "--touch")
     local desktop = has_argument(args, "--desktop")
@@ -2761,12 +2923,46 @@ function love.load(args)
     for _, font in pairs(fonts) do font:setLineHeight(art.type_scale.line_height) end
     local muted = setting_read("muted.setting", false)
     local reduced = setting_read("reduced-motion.setting", reduced_default)
+    if has_argument(args, "--saved-muted") then muted = true end
+    if has_argument(args, "--saved-sound") then muted = false end
+    if has_argument(args, "--saved-reduced") then reduced = true end
+    if has_argument(args, "--saved-motion") then reduced = false end
     app = run_loop.new({
         run_seed = 9125,
         short_run = true,
         muted = muted,
         reduced_motion = reduced,
     })
+    if verification_mode then menu_page = nil else menu_page = "home" end
+    if not verification_mode then
+        local encoded
+        for _, argument in ipairs(args or {}) do
+            encoded = argument:match("^%-%-saved%-run=(.+)$") or encoded
+            local seed = argument:match("^%-%-seed=(%d+)$")
+            if seed then requested_run_seed = run_util.normalize_seed(tonumber(seed)) end
+        end
+        if not encoded then
+            local info_ok, info = pcall(love.filesystem.getInfo, "expedition.save")
+            if info_ok and info and info.type == "file" then
+                local ok, data = pcall(love.filesystem.read, "expedition.save")
+                if ok and type(data) == "string" then encoded = data end
+            end
+        end
+        if encoded then
+            local ok, bytes = pcall(function()
+                local checksum, payload = encoded:match("^C1:(%x+):([%w%+/=]+)$")
+                assert(checksum and #checksum == 8 and #payload % 4 == 0, "Damaged save")
+                local compressed = love.data.decode("string", "base64", payload)
+                assert(run_session.storage_digest(compressed) == checksum, "Damaged save")
+                return love.data.decompress("string", "zlib", compressed)
+            end)
+            local restored = ok and run_session.restore(bytes, { muted = muted, reduced_motion = reduced })
+            if restored then
+                app, session_started = restored, true
+                session_note = "Welcome back. Fight " .. app.model.run.fight.index .. " of 3 is saved."
+            else session_note = "Your old save could not be opened. Start a new expedition to play." end
+        end
+    end
     local ok, bank = pcall(procedural_audio.new, art.audio)
     if ok then
         audio_bank = bank
@@ -2780,6 +2976,7 @@ function love.load(args)
 end
 
 function love.update(dt)
+    if menu_page then return end
     local effect_dt = verification_mode
         and app.model.run.phase == "battle"
         and app.model.ui.paused
@@ -2794,11 +2991,14 @@ function love.update(dt)
         -- batches; ordinary builds keep the real-time accumulator path.
         run_loop.advance(app, 16 * (app.model.ui.speed or 1))
     else
-        run_loop.update(app, dt)
+        -- A readable presentation clock; every collision still uses the same
+        -- canonical 120 Hz fixed steps. The speed control doubles this pace.
+        run_loop.update(app, dt * 0.25)
     end
     for _, event in ipairs(run_loop.drain_events(app)) do handle_event(event) end
     refresh_view()
     capture_motion()
+    save_session()
 end
 
 function love.draw()
@@ -2813,7 +3013,9 @@ function love.draw()
         love.graphics.translate(camera.x * camera_amount, camera.y * camera_amount)
     end
     draw_walnut(width, height)
-    if view.screen == "draft" then
+    if menu_page then
+        expedition_menu.draw(menu_context())
+    elseif view.screen == "draft" then
         if mode() == "desktop" then draw_draft_desktop() else draw_draft_phone() end
     elseif view.screen == "setup" then
         if mode() == "desktop" then draw_setup_desktop() else draw_setup_phone() end
@@ -2821,13 +3023,34 @@ function love.draw()
     elseif view.screen == "result" then draw_result()
     elseif view.screen == "replay" then draw_replay()
     end
+    if not menu_page then
+        for _, action in ipairs(session_actions()) do
+            local b = action.bounds
+            panel(b.x, b.y, b.width, b.height, "walnut", 8)
+            set_color(focused_action_id == action.id and COLORS.focus or COLORS.brass)
+            love.graphics.rectangle("line", b.x, b.y, b.width, b.height, 8, 8)
+            love.graphics.setFont(fonts.micro)
+            love.graphics.printf(action.label, b.x + 4, b.y + b.height / 2 - 6, b.width - 8, "center")
+        end
+    end
     love.graphics.pop()
 end
 
 function love.keypressed(key)
     audio_unlock()
+    if menu_page then
+        local actions = expedition_menu.actions(menu_context())
+        if key == "tab" or key == "down" then menu_focus = menu_focus % #actions + 1
+        elseif key == "up" then menu_focus = (menu_focus - 2) % #actions + 1
+        elseif key == "return" or key == "kpenter" then activate_menu(actions[menu_focus].id)
+        elseif key == "escape" then
+            if menu_page ~= "home" then menu_page, menu_focus = "home", 1
+            elseif session_started then menu_page = nil end
+        end
+        return
+    end
     if key == "escape" then
-        love.event.quit()
+        activate("session_menu", "keyboard")
     elseif key == "tab" or key == "down" then
         move_focus(1)
     elseif key == "up" then

@@ -1,6 +1,6 @@
 {
   "appId": "io.bobbyhiddn.collack",
-  "appName": "Collack Paddle",
+  "appName": "Collack",
   "webDir": "dist",
   "server": {
     "iosScheme": "file",
@@ -18,7 +18,7 @@
     }
   },
   "ios": {
-    "orientation": "landscape",
+    "orientation": "portrait",
     "contentInset": "always",
     "limitsNavigationsToAppBoundDomains": false
   }

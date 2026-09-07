@@ -32,6 +32,7 @@ jobs:
       - name: Run logic tests
         run: |
           lua5.1 tests/test_logic.lua
+          lua5.1 tests/test_session.lua
           lua5.1 targets/paddle/tests/test_logic.lua
 
   # -----------------------------------------------------------------
@@ -143,6 +144,7 @@ jobs:
           npm run test:shore-browser
           npm run verify:shore-local
           npm run verify:web
+          npm run verify:expedition
           npm run verify:paddle:browser
           CALLACK_CONTAINER_ENGINE=docker npm run verify:paddle:release:container
           npm run verify:evidence -- --working-tree --compare-tracked
@@ -161,6 +163,7 @@ jobs:
             dist/desktop
             dist/verification
             dist/deployed-verification
+            dist/expedition-verification
             dist/collack-spike.love
             dist/collack-paddle.love
           if-no-files-found: ignore
@@ -198,9 +201,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-
-      - name: Build candidate-owned paddle web bundle
-        run: ./scripts/build-paddle-web.sh
 
       - name: Wrap in Capacitor
         run: ./scripts/build-ios.sh

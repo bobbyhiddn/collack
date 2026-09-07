@@ -860,7 +860,11 @@ try {
   assert(address && typeof address !== "string", "static server did not bind a TCP port");
   const url = `http://127.0.0.1:${address.port}/`;
 
-  browser = await chromium.launch({ headless: true });
+  browser = await chromium.launch({
+    headless: true,
+    executablePath: process.env.CALLACK_BROWSER_EXECUTABLE || undefined,
+    args: ["--enable-unsafe-swiftshader"],
+  });
   const phoneContext = await browser.newContext({
     viewport: { width: 390, height: 844 },
     deviceScaleFactor: 1,

@@ -4,6 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "dev": "bash scripts/build-web.sh --dev && node scripts/serve-web.mjs",
+    "build": "bash scripts/build-web.sh",
+    "test": "lua5.1 tests/test_logic.lua && lua5.1 tests/test_session.lua && lua5.1 battle/tests/run_all.lua",
+    "test:session": "lua5.1 tests/test_session.lua",
+    "verify:expedition": "PLAYWRIGHT_BROWSERS_PATH=.playwright-browsers node scripts/verify-expedition.mjs",
     "build:paddle:web": "bash scripts/build-paddle-web.sh",
     "test:paddle": "lua5.1 targets/paddle/tests/test_logic.lua",
     "browser:install": "PLAYWRIGHT_BROWSERS_PATH=.playwright-browsers playwright install chromium",

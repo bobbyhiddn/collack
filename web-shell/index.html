@@ -14,7 +14,8 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#241A14">
-    <title>Callack Auto-Battler</title>
+    <title>Collack — Brickbreaker Autobattler</title>
+    <meta name="description" content="Build a formation, collect powerful marbles, and watch the ricochets decide. A brickbreaker autobattler with three rivals and a new upgrade after every victory.">
 
     <!-- love.js still ships theme/love.css; override the bits that fight responsiveness. -->
     <link rel="stylesheet" type="text/css" href="theme/love.css">
@@ -147,6 +148,9 @@
         <div id="loading-spinner"></div>
         <div id="loading-text">Loading…</div>
       </div>
+      <div id="save-warning" role="status" hidden style="position:fixed;bottom:0;left:0;right:0;padding:10px;background:#4a3022;color:#fff4de;font:14px sans-serif;text-align:center;z-index:10">
+        This browser could not save your expedition. Keep this page open to continue.
+      </div>
     </div>
 
     <script type='text/javascript'>
@@ -175,13 +179,46 @@
       if (HAS_TOUCH) LOVE_ARGS.push("--touch");
       if (DESKTOP_LAYOUT) LOVE_ARGS.push("--desktop");
       if (REDUCED_MOTION) LOVE_ARGS.push("--reduced-motion");
-      if (new URLSearchParams(window.location.search).get("verify") === "canonical") {
+      var QUERY = new URLSearchParams(window.location.search);
+      var VERIFY = QUERY.get("verify") === "canonical";
+      var SAVE_KEY = "collack.expedition.v1";
+      var PREF_KEY = "collack.preferences.v1";
+      if (VERIFY) {
         LOVE_ARGS.push("--verify-canonical");
+      } else {
+        if (/^\d{1,10}$/.test(QUERY.get("seed") || "")) LOVE_ARGS.push("--seed=" + QUERY.get("seed"));
+        try {
+          var saved = localStorage.getItem(SAVE_KEY);
+          if (saved && saved.length <= 8 * 1024 * 1024) LOVE_ARGS.push("--saved-run=" + saved);
+          var prefs = JSON.parse(localStorage.getItem(PREF_KEY) || "null");
+          if (prefs && typeof prefs.muted === "boolean") LOVE_ARGS.push(prefs.muted ? "--saved-muted" : "--saved-sound");
+          if (prefs && typeof prefs.reduced === "boolean") LOVE_ARGS.push(prefs.reduced ? "--saved-reduced" : "--saved-motion");
+        } catch (_) {
+          // Storage can be unavailable in private browsing; the game still runs.
+        }
+      }
+
+      function gamePrint(message) {
+        message = String(message);
+        if (!VERIFY && message.indexOf("COLLACK_SAVE ") === 0) {
+          try {
+            localStorage.setItem(SAVE_KEY, message.slice(13));
+            document.getElementById("save-warning").hidden = true;
+          } catch (_) { document.getElementById("save-warning").hidden = false; }
+          return;
+        }
+        if (!VERIFY && message.indexOf("COLLACK_PREF ") === 0) {
+          var values = message.slice(13).split(" ");
+          try { localStorage.setItem(PREF_KEY, JSON.stringify({ muted: values[0] === "true", reduced: values[1] === "true" })); } catch (_) {}
+          return;
+        }
+        console.log(message);
       }
 
       var Module = {
         arguments: LOVE_ARGS,
         INITIAL_MEMORY: 67108864,
+        print: gamePrint,
         printErr: console.error.bind(console),
         canvas: (function() {
           var canvas = document.getElementById('canvas');

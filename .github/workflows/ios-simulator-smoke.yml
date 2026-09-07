@@ -18,6 +18,7 @@ on:
       - 'scripts/test-lovejs-cache-boundary.mjs'
       - 'scripts/web-build-identity.mjs'
       - 'scripts/verify-paddle-package.mjs'
+      - 'scripts/verify-autobattler-package.mjs'
       - 'scripts/verify-ios-simulator.sh'
       - 'src/**'
       - 'targets/paddle/**'
