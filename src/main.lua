@@ -2912,15 +2912,26 @@ function love.load(args)
     end
     love.graphics.setDefaultFilter("linear", "linear")
     love.graphics.setLineStyle("rough")
-    fonts.micro = love.graphics.newFont(art.type_scale.micro)
-    fonts.meta = love.graphics.newFont(art.type_scale.meta)
-    fonts.label = love.graphics.newFont(art.type_scale.label)
-    fonts.body = love.graphics.newFont(art.type_scale.body)
-    fonts.card = love.graphics.newFont(art.type_scale.card_title)
-    fonts.section = love.graphics.newFont(art.type_scale.section)
-    fonts.display = love.graphics.newFont(art.type_scale.display)
-    fonts.result = love.graphics.newFont(art.type_scale.result)
-    for _, font in pairs(fonts) do font:setLineHeight(art.type_scale.line_height) end
+    local alphabet = {}
+    for code = 32, 126 do alphabet[#alphabet + 1] = string.char(code) end
+    local glyphs = table.concat(alphabet) .. "•·×—–…"
+    local function new_font(size)
+        local font = love.graphics.newFont(size)
+        font:setLineHeight(art.type_scale.line_height)
+        -- Populate each atlas before switching fonts or submitting draw batches.
+        -- WebKit can otherwise lose the first batch of lazily uploaded glyphs.
+        local warmup = love.graphics.newText(font, glyphs)
+        warmup:release()
+        return font
+    end
+    fonts.micro = new_font(art.type_scale.micro)
+    fonts.meta = new_font(art.type_scale.meta)
+    fonts.label = new_font(art.type_scale.label)
+    fonts.body = new_font(art.type_scale.body)
+    fonts.card = new_font(art.type_scale.card_title)
+    fonts.section = new_font(art.type_scale.section)
+    fonts.display = new_font(art.type_scale.display)
+    fonts.result = new_font(art.type_scale.result)
     local muted = setting_read("muted.setting", false)
     local reduced = setting_read("reduced-motion.setting", reduced_default)
     if has_argument(args, "--saved-muted") then muted = true end

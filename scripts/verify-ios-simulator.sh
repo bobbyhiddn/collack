@@ -34,7 +34,7 @@ if [ "$(uname -s)" != "Darwin" ]; then
     exit 1
 fi
 
-for command_name in git node npm pod xcodebuild xcrun shasum; do
+for command_name in git node npm pod xcodebuild xcrun shasum swift; do
     require_command "$command_name"
 done
 
@@ -157,6 +157,8 @@ esac
 sleep 10
 xcrun simctl io "$SIMULATOR_UDID" screenshot "$APP_SCREENSHOT"
 test -s "$APP_SCREENSHOT"
+swift "$ROOT/scripts/verify-ios-menu.swift" "$APP_SCREENSHOT" \
+    2>&1 | tee "$EVIDENCE_ROOT/menu-readability.log"
 xcrun simctl spawn "$SIMULATOR_UDID" log show \
     --last 5m \
     --style compact \

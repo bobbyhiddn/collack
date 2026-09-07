@@ -7,6 +7,7 @@ import { createHash } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
+import { canonicalPng } from "./canonical-png.mjs";
 import { evidenceSourceDigest } from "./evidence-source-digest.mjs";
 import {
   assertSourceWorkingTreeClean,
@@ -446,11 +447,11 @@ async function inspectAction(runtime, pointer, x, y, action, type, timeout = 20_
 }
 
 async function screenshot(runtime, name, options = {}) {
-  await runtime.page.screenshot({
-    path: path.join(verificationRoot, name),
+  const bytes = await runtime.page.screenshot({
     animations: "disabled",
     ...options,
   });
+  await writeFile(path.join(verificationRoot, name), canonicalPng(bytes));
 }
 
 async function waitForPhysics(label, minimum, timeout = 30_000) {

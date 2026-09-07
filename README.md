@@ -93,15 +93,18 @@ archive by URL, byte count, SHA-256, SHA-512/SRI, and every extracted runtime
 file used by the candidate-owned packager. `CALLACK_NODE_CACHE_DIR` can select
 only the archive storage directory: cache entries are authenticated before
 extraction, cached executables are never run, and stale, mixed, altered, or
-symlinked entries fail closed. The paddle browser verifier completes
+symlinked entries fail closed. The autobattler browser verifier completes
 the full flow at both 390×844 and 1280×800, validates moving canonical physics,
-and writes review captures to `dist/verification/`.
+and writes review captures to `dist/verification/`. Captures use a canonical
+lossless PNG encoding: identical pixels have identical evidence bytes across
+Chromium encoders, while even a one-pixel change still fails the strict gate.
 
 The iOS Simulator verifier always rebuilds the candidate-owned autobattler output,
 re-seeds and syncs
 the lockfile-pinned Capacitor project, builds with signing disabled, installs it
-on a clean available iPhone Simulator, and requires a launch marker emitted by
-the app process. Inspectable build logs, launch logs, identities, hashes, and a
+on a clean available iPhone Simulator, and requires both a launch marker and
+readable title, genre, and action labels in the actual screenshot. Inspectable
+build logs, launch logs, text-recognition results, identities, hashes, and a
 screenshot are written to `dist/ios-simulator-smoke/`. The
 `iOS Simulator smoke` workflow runs this secret-free path independently of the
 manually gated TestFlight job.

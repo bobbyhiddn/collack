@@ -135,6 +135,7 @@ jobs:
         run: |
           npm ci
           npx playwright install --with-deps chromium
+          node --test scripts/canonical-png.test.mjs
 
       - name: Verify packaged browser at phone and desktop viewports
         if: matrix.target == 'web'
