@@ -7,6 +7,7 @@ import { createHash } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
+import { canonicalPng } from "./canonical-png.mjs";
 import { evidenceSourceDigest } from "./evidence-source-digest.mjs";
 import {
   assertSourceWorkingTreeClean,
@@ -446,11 +447,11 @@ async function inspectAction(runtime, pointer, x, y, action, type, timeout = 20_
 }
 
 async function screenshot(runtime, name, options = {}) {
-  await runtime.page.screenshot({
-    path: path.join(verificationRoot, name),
+  const bytes = await runtime.page.screenshot({
     animations: "disabled",
     ...options,
   });
+  await writeFile(path.join(verificationRoot, name), canonicalPng(bytes));
 }
 
 async function waitForPhysics(label, minimum, timeout = 30_000) {
@@ -860,7 +861,11 @@ try {
   assert(address && typeof address !== "string", "static server did not bind a TCP port");
   const url = `http://127.0.0.1:${address.port}/`;
 
-  browser = await chromium.launch({ headless: true });
+  browser = await chromium.launch({
+    headless: true,
+    executablePath: process.env.CALLACK_BROWSER_EXECUTABLE || undefined,
+    args: ["--enable-unsafe-swiftshader"],
+  });
   const phoneContext = await browser.newContext({
     viewport: { width: 390, height: 844 },
     deviceScaleFactor: 1,

@@ -1,54 +1,89 @@
-# Callack Auto-Battler
+# Collack — Brickbreaker Autobattler
 
-Callack is a deterministic two-player marble-and-brick auto battler built with
-LÖVE/Lua. The pure engine in `battle/` advances a canonical fixed-timestep
-continuous world; `src/` renders interpolated snapshots and replays recorded
-canonical frames. The event log is an exact-tick audit/effect output, not a
-trajectory script.
+Build a defense, order your marbles, and let the ricochets decide. Collack is a
+single-player, three-rival expedition built with LÖVE/Lua. Both collections
+launch into one continuous arena: your marbles break enemy bricks while your
+formation protects your side. **Combat is automatic; there is no manual paddle.**
 
-The implementation follows
-[`ADR 0005`](docs/decisions/0005-continuous-vertical-slice.md) and the
-[`Battle Engine vertical slice`](docs/specs/battle-engine-vertical-slice.md):
-draft, setup, canonical continuous autobattle and recorded-state result/replay.
-The pure-Lua draft/setup controller and its presentation boundary are now
-implemented and documented in
-[`Draft and setup controller contract`](docs/specs/draft-setup-controller.md).
-The value-only battle API is documented in [`battle/README.md`](battle/README.md).
+## Play locally
 
-## Quick start
+Requires Node.js 20+, Bash, curl, zip, and unzip. The first build downloads the
+pinned LÖVE web runtime; no game server or account is needed.
 
 ```bash
-# Headless engine and presentation tests:
-lua5.1 battle/tests/run_all.lua
-lua5.1 tests/test_logic.lua
+npm ci
+npm run dev
+```
 
-# Inspect a deterministic battle:
-lua5.1 battle/cli.lua --seed 9125
+Open **http://127.0.0.1:8080**. `PORT=8321 npm run dev` selects another port.
+Re-run the command after source edits. The responsive canvas supports portrait
+phones and desktop windows. Add `?seed=9125` to start a reproducible expedition.
 
-# Build targets:
-./scripts/build-web.sh
-./scripts/build-paddle-web.sh
-lua5.1 targets/paddle/tests/test_logic.lua
-npm run verify:lovejs-cache
-npm run verify:paddle:release
-./scripts/verify-release-container.sh
-npm ci && npm run browser:install
-npm run verify:paddle:release:container
-npm run verify:web
-npm run verify:deployed
-./scripts/build-desktop.sh
+Choose **New Expedition**, place every brick (or use **Quick Arrange**), set
+your marble launch order, then **Start Autobattle**. Break all rival bricks or
+outlast their marbles to win. After each of the first two victories, inspect
+the three refit offers and choose one upgrade. Repair, replace, add, or reshape
+your collection, then face the next rival. Defeat ends the expedition; three
+victories complete it. Quick Arrange fills empty cells without moving your
+existing placements; it is a starting point, not an optimized strategy.
+
+Progress saves automatically at formation, refit, and result boundaries.
+**Continue Expedition** restores the saved run. Closing the game mid-battle
+returns you to that fight's last formation, with the same deterministic seed.
+Browser saves are local to the browser/site and are lost if site data is
+cleared. Native builds save in LÖVE's `collack-spike` user-data directory.
+Starting a new run asks before replacing an unfinished expedition.
+
+Tap/click a piece and a destination to arrange it, or drag it into place.
+During battle, tap a piece to pause and inspect; tap it again or press Resume
+to return to combat. The 1×/2× control changes viewing speed, not the outcome.
+Mute and reduced-motion preferences persist. Keyboard controls:
+
+- Tab / arrow keys, then Enter: navigate controls; Escape: menu.
+- Space: pause/resume; Right Arrow while battling: one simulation step.
+- M: mute; V: reduced motion; 1–3: inspect a refit offer.
+- On the result screen, R: recorded-frame replay; N: new seeded expedition.
+
+## Build and verify
+
+```bash
+# Lua 5.1 is needed for the headless tests.
+npm test
+
+# Production packaging requires a clean committed source tree.
+npm run build
+npm run browser:install
+npm run verify:expedition  # ordinary menu → three fights → save/reload/replay
+npm run verify:web         # exact-tick combat and rule inspection evidence
+
 ./scripts/build-desktop.sh --windows
+bash scripts/verify-desktop.sh  # Linux: needs Xvfb and xdotool
 ./scripts/build-ios.sh
 
-# macOS only: unsigned build, install, real process launch, logs, screenshot
+# macOS/Xcode only: unsigned build, install, launch, logs, screenshot
 ./scripts/verify-ios-simulator.sh
 ```
 
-The active auto-battler web result remains in `dist/web/`. The independent
-Touch Input deliverable is candidate-owned under `targets/paddle/` and builds
-to `dist/paddle-web/` through `scripts/build-paddle-web.sh`; neither target
-overwrites or relabels the other. Both use content-addressed JavaScript, data,
-and WebAssembly filenames.
+Web output is `dist/web/`; Linux and Windows packages are in `dist/desktop/`.
+On Linux, extract `collack-spike-linux-x86_64.tar.gz` and run
+`./collack-spike.x86_64`. Keep its bundled runtime and `.love` file beside it;
+neither a system LÖVE installation nor FUSE is required.
+The iOS wrapper ships this same **autobattler**, with portrait iPhone support.
+Normal-play screenshots and a check report go to `dist/expedition-verification/`.
+If your host needs a system Chrome, set `CALLACK_BROWSER_EXECUTABLE` to its
+executable path when running either autobattler browser verifier.
+`npm run dev` intentionally omits release provenance; do not deploy that preview.
+
+The pure engine in `battle/` owns deterministic 120 Hz continuous physics and
+combat rules. `src/` interpolates its snapshots; the readable presentation clock
+does not change physics. Recorded replays read the captured frames rather than
+inventing trajectories. The implementation follows
+[`ADR 0005`](docs/decisions/0005-continuous-vertical-slice.md), the
+[`vertical slice`](docs/specs/battle-engine-vertical-slice.md), and the
+[`draft/setup contract`](docs/specs/draft-setup-controller.md).
+See [`battle/README.md`](battle/README.md) for the value-only engine API.
+
+## Package integrity and mobile verification
 
 Each `callack-build-manifest.json` binds the exact Git revision/tree, explicit
 runtime target/path, source-file set, build recipe, authenticated toolchain, the
@@ -58,20 +93,30 @@ archive by URL, byte count, SHA-256, SHA-512/SRI, and every extracted runtime
 file used by the candidate-owned packager. `CALLACK_NODE_CACHE_DIR` can select
 only the archive storage directory: cache entries are authenticated before
 extraction, cached executables are never run, and stale, mixed, altered, or
-symlinked entries fail closed. The paddle browser verifier completes
+symlinked entries fail closed. The autobattler browser verifier completes
 the full flow at both 390×844 and 1280×800, validates moving canonical physics,
-and writes review captures to `dist/verification/`.
+and writes review captures to `dist/verification/`. Captures use a canonical
+lossless PNG encoding: identical pixels have identical evidence bytes across
+Chromium encoders, while even a one-pixel change still fails the strict gate.
 
-The iOS Simulator verifier always rebuilds the candidate-owned paddle output,
+The iOS Simulator verifier always rebuilds the candidate-owned autobattler output,
 re-seeds and syncs
 the lockfile-pinned Capacitor project, builds with signing disabled, installs it
-on a clean available iPhone Simulator, and requires a launch marker emitted by
-the app process. Inspectable build logs, launch logs, identities, hashes, and a
+on a clean available iPhone Simulator, and requires both a launch marker and
+readable title, genre, and action labels in the actual screenshot. Inspectable
+build logs, launch logs, text-recognition results, identities, hashes, and a
 screenshot are written to `dist/ios-simulator-smoke/`. The
 `iOS Simulator smoke` workflow runs this secret-free path independently of the
 manually gated TestFlight job.
 
-`npm run verify:deployed` independently exercises the paddle target at 390×844
+## Preserved paddle experiment
+
+`targets/paddle/` is a separate manual-paddle prototype, **not the Collack game
+or the default iOS target**. It is retained along with its historical release
+gates. `scripts/build-paddle-web.sh` writes only `dist/paddle-web/`; neither
+runtime overwrites or relabels the other.
+
+`npm run verify:deployed` independently exercises that paddle target at 390×844
 and desktop size. Before accepting the journey, it rebuilds
 `dist/paddle-web/callack-build-manifest.json` from the checked-out
 `targets/paddle` sources and fixed recipe, then requires the loaded HTML and
@@ -89,22 +134,7 @@ produce a passing exact-build verdict.
 CI rebuilds the checked-out head and rejects wrong bytes, mixed assets, stale or
 altered manifests, missing identity fields, and unexpected redirects.
 
-Touch or click the visible controls; drag a selected brick or marble onto a
-legal destination, or use the equivalent tap sequence. Tab and Enter navigate
-the same semantic actions. During battle, tap or click any marble or brick to
-inspect its owner, mechanic, and material state; activate it again to close the
-inspector. Space pauses and Right Arrow advances one exact fixed step. `M`
-toggles generated audio and `V` toggles reduced motion. On the result screen,
-`R` opens replay and `N` starts the next seeded run. Mute and reduced-motion
-preferences persist across runs.
-
-The first-time path teaches the board in place: draft cards distinguish moving
-marble attackers from stationary brick defenders, setup repeats those labels
-beside the pieces, and battle shows the marble-to-brick hit cue. The same copy
-explains that hits wear pieces down and that clearing all enemy bricks or
-marbles wins; it does not introduce manual battle control.
-
-## Paddle Fly release path
+### Paddle Fly release path
 
 The existing `deploy/fly/Dockerfile` and `deploy/fly/fly.toml` remain the
 auto-battler release path and consume only `dist/web`. The paddle release is a

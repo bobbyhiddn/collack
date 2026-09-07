@@ -32,6 +32,7 @@ jobs:
       - name: Run logic tests
         run: |
           lua5.1 tests/test_logic.lua
+          lua5.1 tests/test_session.lua
           lua5.1 targets/paddle/tests/test_logic.lua
 
   # -----------------------------------------------------------------
@@ -134,6 +135,7 @@ jobs:
         run: |
           npm ci
           npx playwright install --with-deps chromium
+          node --test scripts/canonical-png.test.mjs
 
       - name: Verify packaged browser at phone and desktop viewports
         if: matrix.target == 'web'
@@ -143,6 +145,7 @@ jobs:
           npm run test:shore-browser
           npm run verify:shore-local
           npm run verify:web
+          npm run verify:expedition
           npm run verify:paddle:browser
           CALLACK_CONTAINER_ENGINE=docker npm run verify:paddle:release:container
           npm run verify:evidence -- --working-tree --compare-tracked
@@ -151,7 +154,14 @@ jobs:
         if: matrix.target == 'desktop'
         run: ./scripts/build-desktop.sh --windows
 
+      - name: Launch packaged Linux game and verify native saving
+        if: matrix.target == 'desktop'
+        run: |
+          sudo apt-get install -y xvfb xdotool libgl1-mesa-dri
+          bash scripts/verify-desktop.sh
+
       - name: Upload artifact
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: collack-spike-${{ matrix.target }}
@@ -159,8 +169,10 @@ jobs:
             dist/web
             dist/paddle-web
             dist/desktop
+            dist/desktop-verification
             dist/verification
             dist/deployed-verification
+            dist/expedition-verification
             dist/collack-spike.love
             dist/collack-paddle.love
           if-no-files-found: ignore
@@ -198,9 +210,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-
-      - name: Build candidate-owned paddle web bundle
-        run: ./scripts/build-paddle-web.sh
 
       - name: Wrap in Capacitor
         run: ./scripts/build-ios.sh

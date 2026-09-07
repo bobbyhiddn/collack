@@ -20,6 +20,16 @@
 
 set -euo pipefail
 
+# A local preview carries no release manifest. Verified builds always use the
+# default path and still require an exact, clean committed source tree.
+DEV_BUILD=false
+if [ "${1:-}" = "--dev" ] && [ "$#" -eq 1 ]; then
+    DEV_BUILD=true
+elif [ "$#" -ne 0 ]; then
+    echo "Usage: $0 [--dev]" >&2
+    exit 1
+fi
+
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SRC="$ROOT/src"
 FINAL_OUT="$ROOT/dist/web"
@@ -230,7 +240,11 @@ find "$OUT" -type d -exec chmod 0755 {} +
 find "$OUT" -type f -exec chmod 0644 {} +
 
 bash "$ROOT/scripts/verify-web-assets.sh" "$OUT"
-node "$ROOT/scripts/generate-web-build-manifest.mjs" "$OUT" "$ROOT"
+if [ "$DEV_BUILD" = true ]; then
+    echo "[web] development preview: release manifest omitted"
+else
+    node "$ROOT/scripts/generate-web-build-manifest.mjs" "$OUT" "$ROOT"
+fi
 
 if [ -e "$FINAL_LOVE_ARCHIVE" ] || [ -L "$FINAL_LOVE_ARCHIVE" ]; then
     fail "web archive path changed during the authenticated build"

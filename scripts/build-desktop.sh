@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# build-desktop.sh — produce .love archive + fused Linux x86_64 binary.
+# build-desktop.sh — produce .love archive + portable Linux x86_64 bundle.
 # Bonus: produce Windows .exe via the cat-recipe if love-11.5-win64.zip is fetched.
 #
 # Output:
 #   dist/collack-spike.love
-#   dist/desktop/collack-spike.x86_64    (fused Linux AppImage; runs standalone)
+#   dist/desktop/collack-spike-linux-x86_64.tar.gz (extract, run collack-spike.x86_64)
 #   dist/desktop/collack-spike-win64.zip (if --windows flag passed)
 
 set -euo pipefail
@@ -57,11 +57,18 @@ if [ ! -f "$APPIMAGE" ]; then
     chmod +x "$APPIMAGE"
 fi
 
-# 3. Fuse: cat AppImage + .love → standalone binary (LÖVE auto-mounts trailing zip).
+# 3. A LÖVE AppImage extracts an inner executable: appending a .love file to
+# the outer AppImage does not fuse that inner runtime. Ship an explicit
+# launcher, pinned runtime, and game together so startup cannot lose the game.
 LINUX_BIN="$DESKTOP/collack-spike.x86_64"
-cat "$APPIMAGE" "$LOVE_ARCHIVE" > "$LINUX_BIN"
+cp "$ROOT/scripts/desktop-launcher.sh" "$LINUX_BIN"
+cp "$APPIMAGE" "$DESKTOP/love-${LOVE_VERSION}-x86_64.AppImage"
+cp "$LOVE_ARCHIVE" "$DESKTOP/collack-spike.love"
 chmod +x "$LINUX_BIN"
-echo "[desktop] built $LINUX_BIN ($(du -h "$LINUX_BIN" | cut -f1))"
+chmod +x "$DESKTOP/love-${LOVE_VERSION}-x86_64.AppImage"
+tar -C "$DESKTOP" -czf "$DESKTOP/collack-spike-linux-x86_64.tar.gz" \
+    collack-spike.x86_64 "love-${LOVE_VERSION}-x86_64.AppImage" collack-spike.love
+echo "[desktop] built portable Linux bundle (launcher + runtime + game)"
 
 # 4. Optional Windows build.
 if [ "${1:-}" = "--windows" ]; then

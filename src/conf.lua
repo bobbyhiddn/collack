@@ -12,7 +12,7 @@ function love.conf(t)
     t.version = "11.4"
     t.console = false
 
-    t.window.title = "Callack Auto-Battler"
+    t.window.title = "Collack — Brickbreaker Autobattler"
     t.window.icon = nil
     t.window.width = 390
     t.window.height = 844

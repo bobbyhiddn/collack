@@ -978,7 +978,10 @@ local function reward_choice(state, slot, operation, item, category, next_oppone
         art_id = item.art_id,
         details = category == "marble"
             and draft.marble_details(item)
-            or util.deep_copy(item.details),
+            or (category == "brick_kit" and {
+                bricks = { { name = item.name, family = item.family,
+                    behaviour = item.behaviour, hp = item.hp, max_hp = item.max_hp } },
+            } or util.deep_copy(item.details)),
         causal_attribution = {
             cause = "post_battle_choice",
             fight_index = state.fight.index,
