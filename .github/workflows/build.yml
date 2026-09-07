@@ -153,6 +153,12 @@ jobs:
         if: matrix.target == 'desktop'
         run: ./scripts/build-desktop.sh --windows
 
+      - name: Launch packaged Linux game and verify native saving
+        if: matrix.target == 'desktop'
+        run: |
+          sudo apt-get install -y xvfb xdotool libgl1-mesa-dri
+          bash scripts/verify-desktop.sh
+
       - name: Upload artifact
         if: always()
         uses: actions/upload-artifact@v4
@@ -162,6 +168,7 @@ jobs:
             dist/web
             dist/paddle-web
             dist/desktop
+            dist/desktop-verification
             dist/verification
             dist/deployed-verification
             dist/expedition-verification

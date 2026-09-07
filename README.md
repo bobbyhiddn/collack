@@ -57,6 +57,7 @@ npm run verify:expedition  # ordinary menu → three fights → save/reload/repl
 npm run verify:web         # exact-tick combat and rule inspection evidence
 
 ./scripts/build-desktop.sh --windows
+bash scripts/verify-desktop.sh  # Linux: needs Xvfb and xdotool
 ./scripts/build-ios.sh
 
 # macOS/Xcode only: unsigned build, install, launch, logs, screenshot
@@ -64,6 +65,9 @@ npm run verify:web         # exact-tick combat and rule inspection evidence
 ```
 
 Web output is `dist/web/`; Linux and Windows packages are in `dist/desktop/`.
+On Linux, extract `collack-spike-linux-x86_64.tar.gz` and run
+`./collack-spike.x86_64`. Keep its bundled runtime and `.love` file beside it;
+neither a system LÖVE installation nor FUSE is required.
 The iOS wrapper ships this same **autobattler**, with portrait iPhone support.
 Normal-play screenshots and a check report go to `dist/expedition-verification/`.
 If your host needs a system Chrome, set `CALLACK_BROWSER_EXECUTABLE` to its
