@@ -16,6 +16,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { verifyPaddleRelease } from "./verify-paddle-release.mjs";
+import { readBuildManifest, sourceIdentity, validateLocalBuild } from "./web-build-identity.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const paddleRoot = path.join(root, "dist", "paddle-web");
@@ -135,6 +136,13 @@ assert(releaseWrapper.includes("--image \"$REMOTE_REF\"")
     && !releaseWrapper.includes("--dockerfile"),
 "release wrapper can rebuild instead of consuming the validated digest");
 
+// Paddle packaging must preserve the current autobattler, not freeze that
+// game's bytes to a historical prototype forever. Authenticate the current
+// candidate first, then check it remains unchanged after the paddle gate.
+const webExpectation = await readBuildManifest(
+  path.join(webRoot, "callack-build-manifest.json"), root, await sourceIdentity(root),
+);
+await validateLocalBuild(webRoot, webExpectation.manifest);
 const exact = await verifyPaddleRelease(root, { quiet: true });
 assert(exact.manifest.target === "paddle-web", "positive release target is not paddle-web");
 assert(exact.manifest.outputPath === "dist/paddle-web",
@@ -148,8 +156,9 @@ assert(currentPaddleManifest.assetSetSha256
     === "bf1c77c2efb56c1a73635d0d6894855d4d49da9a6dd0ecf1261eec4e528b15dc",
 "paddle generated runtime bytes changed from the merged candidate");
 assert(currentWebManifest.assetSetSha256
-    === "b9997280830e617b5b419eaa965e51c28b1611909929d66160cacd332e2e4866",
-"auto-battler generated runtime bytes changed from the merged candidate");
+    === webExpectation.manifest.assetSetSha256,
+"paddle verification changed the current auto-battler runtime");
+await validateLocalBuild(webRoot, webExpectation.manifest);
 
 await expectFailure("dist/web artifact-path substitution", () => verifyPaddleRelease(root, {
   artifactRoot: webRoot,
