@@ -154,6 +154,7 @@ jobs:
         run: ./scripts/build-desktop.sh --windows
 
       - name: Upload artifact
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: collack-spike-${{ matrix.target }}

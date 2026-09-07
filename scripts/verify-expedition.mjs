@@ -168,11 +168,14 @@ try {
   await key("m", "CALLACK_ACTION toggle_mute");
   await key("v", "CALLACK_ACTION toggle_reduced_motion");
   await input(desktop, () => d.mouse.click(1122, 732), "CALLACK_ACTION lock_setup");
-  await until(d, () => desktop.logs.some((line) => line.startsWith("CALLACK_PHYSICS")),
-    "desktop marbles start moving", 15_000);
+  // Reduced motion deliberately disables trail telemetry, not the physics.
+  // Verify the rendered world still advances with that preference enabled.
+  const desktopBefore = digest(await d.locator("#canvas").screenshot());
+  await d.waitForTimeout(800);
+  check(desktopBefore !== digest(await d.locator("#canvas").screenshot()),
+    "Desktop marbles visibly move with reduced motion enabled");
   await key("Space", "CALLACK_ACTION battle_pause");
   await screenshot(desktop, "desktop-battle");
-  check(desktop.logs.some((line) => line.startsWith("CALLACK_PHYSICS")), "Desktop launches the same continuous arena");
   await desktopContext.close();
 
   // Storage-restricted browsers still play and display an honest save warning.
